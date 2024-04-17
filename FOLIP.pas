@@ -1,0 +1,442 @@
+{
+    Collect LOD Assets for Fallout 4.
+}
+unit FOLIP;
+
+//Create variables that will need to be used accross multiple functions/procedures.
+var
+    tlStats, tlMstt, tlFurn, tlActi, tlMswp, tlBasesWithLOD: TList;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths: TStringList;
+    iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
+
+const
+    sFolipMasterFileName = 'FOLIP Master.esm';
+    sFolipPluginFileName = 'FOLIP Patch.esp';
+    sFolipFileName = 'FOLIP - New LODs.esp';
+    sFO4LODGenFileName = 'FO4LODGen.esp';
+
+function Initialize:integer;
+{
+    This function is called at the beginning.
+}
+var
+    slContainers: TStringList;
+begin
+    CreateTLists;
+    TopLevelModPatternPaths;
+
+    //Create FOLIP plugins
+    if not CreatePlugins then Exit;
+
+    AddMessage('Collecting assets...');
+    //scan archives
+    slContainers := TStringList.Create;
+    ResourceContainerList(slContainers);
+    FilesInContainers(slContainers);
+    slContainers.Free;
+    //scan loose files
+    FilesInData;
+    AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' NIF files.');
+    AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' material files.');
+
+
+    AddMessage('Collecting records...');
+    CollectRecords;
+
+    //Assign lod models to STAT records.
+    //AddMessage('Assigning LOD models to STAT records...');
+    AssignLODModelsList;
+
+    //Apply lod material swaps.
+
+    //Add fake statics for MSTT, FURN, and ACTI that have lod.
+
+    //Fix bad mod lod edits.
+
+end;
+
+function Finalize: integer;
+{
+    This function is called at the end.
+}
+begin
+  tlStats.Free;
+  tlMstt.Free;
+  tlFurn.Free;
+  tlActi.Free;
+  tlMswp.Free;
+  tlBasesWithLOD.Free;
+
+  slNifFiles.Free;
+  slMatFiles.Free;
+  slTopLevelModPatternPaths.Free;
+end;
+
+procedure AssignLODModelsList;
+{
+    Assign lod models to STAT records.
+}
+var
+    i: integer;
+    s: IInterface;
+begin
+    for i := 0 to Pred(tlStats.Count) do begin
+        s := ObjectToElement(tlStats[i]);
+        AssignLODModels(s);
+    end;
+end;
+
+procedure AssignLODModels(s: IInterface);
+var
+    hasChanged: Boolean;
+    i, hasDistantLOD: integer;
+    n: IInterface;
+    colorRemap, lod4, lod8, lod16, lod32, model, olod4, olod8, olod16, olod32: string;
+    slTopPaths: TStringList;
+begin
+    hasChanged := False;
+
+    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
+    if LeftStr(model, 7) <> 'meshes\' then model := 'meshes\' + model;
+
+    slTopPaths := TStringList.Create;
+    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+        if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
+    end;
+
+    colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
+    if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
+
+    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+    olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
+    olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
+    olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
+    olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+    lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
+    lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
+    lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
+    lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
+    if lod4 <> olod4 then hasChanged := True
+    else if lod8 <> olod8 then hasChanged := True
+    else if lod16 <> olod16 then hasChanged := True
+    else if lod32 <> olod32 then hasChanged := True;
+    if hasDistantLOD = 0 then begin
+        if lod4 <> '' then hasDistantLOD := 1
+        else if lod8 <> '' then hasDistantLOD := 1
+        else if lod16 <> '' then hasDistantLOD := 1
+        else if lod32 <> '' then hasDistantLOD := 1;
+        if hasDistantLOD = 1 then hasChanged := True;
+    end;
+
+
+    if hasChanged then begin
+        AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
+        iCurrentPlugin := RefMastersDeterminePlugin(s);
+        n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
+        SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', hasDistantLOD);
+        Add(n, 'MNAM', True);
+        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', lod4);
+        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', lod8);
+        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', lod16);
+        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', lod32);
+    end;
+
+    slTopPaths.Free;
+end;
+
+function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
+{
+    Given a model and level, checks to see if an LOD model exists.
+}
+var
+    searchModel: string;
+    i, idx, sl: integer;
+    slPossibleLODPaths: TStringList;
+begin
+    slPossibleLODPaths := TStringList.Create;
+    for i := 0 to Pred(slTopPaths.Count) do begin
+        // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
+        searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
+        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod_0.nif
+        sl := Length(searchModel);
+        searchModel := LeftStr(searchModel, sl - 4) + colorRemap + '_lod';
+        slPossibleLODPaths.Add(searchModel + '_' + level + '.nif');
+        if level = '0' then slPossibleLODPaths.Add(searchModel + '.nif');
+    end;
+
+    for i := 0 to Pred(slPossibleLODPaths.Count) do begin
+        if slNifFiles.IndexOf(slPossibleLODPaths[i]) > -1 then begin
+            sl := Length(slPossibleLODPaths[i]);
+            Result := RightStr(slPossibleLODPaths[i], sl - 7);
+            slPossibleLODPaths.Free;
+            Exit;
+        end;
+    end;
+
+    Result := original;
+    slPossibleLODPaths.Free;
+end;
+
+procedure TopLevelModPatternPaths;
+{
+    Say you have a major mod that uses a top level pattern identifier, such as DLC01 for Automatron, for all of its assets.
+    We add these in this procedure so we know to use that pattern for identification of assets.
+}
+begin
+    slTopLevelModPatternPaths.Add('dlc01\');
+    slTopLevelModPatternPaths.Add('dlc02\');
+    slTopLevelModPatternPaths.Add('dlc03\');
+    slTopLevelModPatternPaths.Add('dlc04\');
+    slTopLevelModPatternPaths.Add('dlc05\');
+    slTopLevelModPatternPaths.Add('dlc06\');
+    slTopLevelModPatternPaths.Add('capitalwasteland\');
+
+    slTopLevelModPatternPaths.Add('');
+end;
+
+procedure CreateTLists;
+{
+    Create TLists.
+}
+begin
+    tlStats := TList.Create;
+    tlMstt := TList.Create;
+    tlFurn := TList.Create;
+    tlActi := TList.Create;
+    tlMswp := TList.Create;
+    tlBasesWithLOD := TList.Create;
+
+    slMatFiles := TStringList.Create;
+    slMatFiles.Duplicates := dupIgnore;
+    slNifFiles := TStringList.Create;
+    slNifFiles.Duplicates := dupIgnore;
+    slTopLevelModPatternPaths := TStringList.Create;
+end;
+
+procedure CollectRecords;
+{
+    Use this to collect all the record types you need to process over.
+    It will iterate over all files in the load order regardless of what is selected in xEdit.
+
+    This should be faster than iterating over all elements selected in the interface,
+    since it only will process the specified record groups.
+}
+var
+    i, j, idx: integer;
+    recordId: string;
+    f, g, r: IInterface;
+    slStats, slMstt, slFurn, slActi, slMswp: TStringList;
+begin
+    slStats := TStringList.Create;
+    slMstt := TStringList.Create;
+    slFurn := TStringList.Create;
+    slActi := TStringList.Create;
+    slMswp := TStringList.Create;
+
+    //Iterate over all files.
+    for i := 0 to Pred(FileCount) do begin
+        f := FileByIndex(i);
+
+        //STAT
+        g := GroupBySignature(f, 'STAT');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slStats.IndexOf(recordId);
+            if idx > -1 then continue
+            slStats.Add(recordId);
+            tlStats.Add(r);
+            //AssignLODModels(r);
+        end;
+
+        //MSTT
+        g := GroupBySignature(f, 'MSTT');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slMstt.IndexOf(recordId);
+            if idx > -1 then continue
+            slMstt.Add(recordId);
+            tlMstt.Add(r);
+        end;
+
+        //FURN
+        g := GroupBySignature(f, 'FURN');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slFurn.IndexOf(recordId);
+            if idx > -1 then continue
+            slFurn.Add(recordId);
+            tlFurn.Add(r);
+        end;
+
+        //ACTI
+        g := GroupBySignature(f, 'ACTI');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slActi.IndexOf(recordId);
+            if idx > -1 then continue
+            slActi.Add(recordId);
+            tlActi.Add(r);
+        end;
+
+        //MSWP
+        g := GroupBySignature(f, 'MSWP');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slMswp.IndexOf(recordId);
+            if idx > -1 then continue
+            slMswp.Add(recordId);
+            tlMswp.Add(r);
+        end;
+    end;
+
+    slStats.Free;
+    slMstt.Free;
+    slFurn.Free;
+    slActi.Free;
+    slMswp.Free;
+
+    AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
+    AddMessage('Found ' + IntToStr(tlMstt.Count) + ' MSTT records.');
+    AddMessage('Found ' + IntToStr(tlFurn.Count) + ' FURN records.');
+    AddMessage('Found ' + IntToStr(tlActi.Count) + ' ACTI records.');
+    AddMessage('Found ' + IntToStr(tlMswp.Count) + ' MSWP records.');
+end;
+
+procedure FilesInContainers(containers: TStringList);
+{
+    Retrieves the ba2 packed files.
+}
+var
+    slArchivedFiles: TStringList;
+    i: integer;
+    ext: string;
+begin
+    slArchivedFiles := TStringList.Create;
+    slArchivedFiles.Duplicates := dupIgnore;
+    for i := 0 to Pred(containers.Count) do ResourceList(containers[i], slArchivedFiles);
+    for i := 0 to Pred(slArchivedFiles.Count) do begin
+        ext := ExtractFileExt(slArchivedFiles[i]);
+        //limiting to the file types I need.
+        if SameText(ext, '.nif') then slNifFiles.Add(slArchivedFiles[i])
+        else if SameText(ext, '.bgsm') then slMatFiles.Add(slArchivedFiles[i])
+        else if SameText(ext, '.bgem') then slMatFiles.Add(slArchivedFiles[i]);
+    end;
+    slArchivedFiles.Free;
+end;
+
+procedure FilesInData;
+{
+    Retrieves the loose files in the data folder.
+}
+var
+    TDirectory: TDirectory;
+    files: TStringDynArray;
+    i: integer;
+begin
+    //limiting to the file types I need.
+    files := TDirectory.GetFiles(wbDataPath, '*.nif', soAllDirectories);
+    for i := 0 to Pred(Length(files)) do slNifFiles.Add(RemoveDataPath(files[i]));
+    files := TDirectory.GetFiles(wbDataPath, '*.bgsm', soAllDirectories);
+    for i := 0 to Pred(Length(files)) do slMatFiles.Add(RemoveDataPath(files[i]));
+    files := TDirectory.GetFiles(wbDataPath, '*.bgem', soAllDirectories);
+    for i := 0 to Pred(Length(files)) do slMatFiles.Add(RemoveDataPath(files[i]));
+end;
+
+function SimpleName(aName: string): string;
+{
+    Reduces the container name to the BA2 file name or 'Data'
+}
+begin
+    Result := ExtractFileName(aName);
+    if Result = '' then Result := 'Data';
+end;
+
+// Remove data path from file name.
+function RemoveDataPath(aName: string): string;
+{
+    Strips the Data folder path from the asset path.
+}
+begin
+    Result := StringReplace(aName, wbDataPath, '', [rfReplaceAll]);
+end;
+
+function RefMastersDeterminePlugin(r: IInterface): IInterface;
+{
+    Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
+}
+begin
+    AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+  	SortMasters(iFolipPluginFile);
+    Result := iFolipPluginFile;
+  {try
+    AddRequiredElementMasters(r, iFolipMasterFile, False, True);
+	SortMasters(iFolipMasterFile);
+	Result := iFolipMasterFile;
+  except
+    on E : Exception do begin
+      AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+  	  SortMasters(iFolipPluginFile);
+  	  Result := iFolipPluginFile;
+    end;
+  end;}
+end;
+
+function CreatePlugins: Boolean;
+{
+    Checks the plugins to ensure required mods are not missing.
+    Checks to make sure an old patch generated from this script is not present.
+    Creates the plugin files we need.
+}
+var
+    bFO4LODGen, bFolip: Boolean;
+    i: integer;
+    f: string;
+begin
+    bFO4LODGen := 0;
+    bFolip := 0;
+    for i := 0 to Pred(FileCount) do begin
+        f := GetFileName(FileByIndex(i));
+        if SameText(f, sFolipMasterFileName) then
+            iFolipMasterFile := FileByIndex(i)
+        else if SameText(f, sFolipPluginFileName) then
+            iFolipPluginFile := FileByIndex(i)
+        else if SameText(f, sFO4LODGenFileName) then
+            bFO4LODGen := 1
+        else if SameText(f, sFolipFileName) then
+            bFolip := 1;
+    end;
+    if not bFO4LODGen then begin
+        MessageDlg('Please install FO4LODGen Resources from https://www.nexusmods.com/fallout4/mods/80276 before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    if not bFolip then begin
+        MessageDlg('Please install Far Object LOD Improvement Project from https://www.nexusmods.com/fallout4/mods/61884 before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    if Assigned(iFolipMasterFile) then begin
+        MessageDlg(sFolipMasterFileName + ' found! Delete the old file before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    if Assigned(iFolipMasterFile) then begin
+        MessageDlg(sFolipPluginFileName + ' found! Delete the old file before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    //iFolipMasterFile := AddNewFileName(sFolipMasterFileName, True);
+    //AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
+    //SetIsESM(iFolipMasterFile, True);
+    iFolipPluginFile := AddNewFileName(sFolipPluginFileName, True);
+    AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
+
+    Result := 1;
+end;
+
+end.
