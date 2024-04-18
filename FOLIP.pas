@@ -36,8 +36,8 @@ begin
     slContainers.Free;
     //scan loose files
     FilesInData;
-    AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' NIF files.');
-    AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' material files.');
+    AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
+    AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
 
 
     AddMessage('Collecting records...');
@@ -146,7 +146,7 @@ end;
 
 function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
 {
-    Given a model and level, checks to see if an LOD model exists.
+    Given a model and level, checks to see if an LOD model exists and returns it.
 }
 var
     searchModel: string;
@@ -166,6 +166,7 @@ begin
 
     for i := 0 to Pred(slPossibleLODPaths.Count) do begin
         if slNifFiles.IndexOf(slPossibleLODPaths[i]) > -1 then begin
+            // Removes meshes/ from the file path
             sl := Length(slPossibleLODPaths[i]);
             Result := RightStr(slPossibleLODPaths[i], sl - 7);
             slPossibleLODPaths.Free;
@@ -314,17 +315,18 @@ procedure FilesInContainers(containers: TStringList);
 var
     slArchivedFiles: TStringList;
     i: integer;
-    ext: string;
+    f: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
     for i := 0 to Pred(containers.Count) do ResourceList(containers[i], slArchivedFiles);
     for i := 0 to Pred(slArchivedFiles.Count) do begin
-        ext := ExtractFileExt(slArchivedFiles[i]);
-        //limiting to the file types I need.
-        if SameText(ext, '.nif') then slNifFiles.Add(slArchivedFiles[i])
-        else if SameText(ext, '.bgsm') then slMatFiles.Add(slArchivedFiles[i])
-        else if SameText(ext, '.bgem') then slMatFiles.Add(slArchivedFiles[i]);
+        f := slArchivedFiles[i];
+        //materials or meshes
+        {if IsLODResourceModel(f) then slNifFiles.Add(f)
+        else if IsInLODDir(f, 'materials') then slMatFiles.Add(f);}
+        if IsInLODDir(f, 'materials') then slMatFiles.Add(f)
+        else if IsLODResourceModel(f) then slNifFiles.Add(f);
     end;
     slArchivedFiles.Free;
 end;
@@ -337,14 +339,18 @@ var
     TDirectory: TDirectory;
     files: TStringDynArray;
     i: integer;
+    f: string;
 begin
-    //limiting to the file types I need.
-    files := TDirectory.GetFiles(wbDataPath, '*.nif', soAllDirectories);
-    for i := 0 to Pred(Length(files)) do slNifFiles.Add(RemoveDataPath(files[i]));
-    files := TDirectory.GetFiles(wbDataPath, '*.bgsm', soAllDirectories);
-    for i := 0 to Pred(Length(files)) do slMatFiles.Add(RemoveDataPath(files[i]));
-    files := TDirectory.GetFiles(wbDataPath, '*.bgem', soAllDirectories);
-    for i := 0 to Pred(Length(files)) do slMatFiles.Add(RemoveDataPath(files[i]));
+    files := TDirectory.GetFiles(wbDataPath + '\materials', '*.*', soAllDirectories);
+    for i := 0 to Pred(Length(files)) do begin
+        f := RemoveDataPath(files[i]);
+        if IsInLODDir(f, 'materials') then slMatFiles.Add(f);
+    end;
+    files := TDirectory.GetFiles(wbDataPath + '\meshes', '*.nif', soAllDirectories);
+    for i := 0 to Pred(Length(files)) do begin
+        f := RemoveDataPath(files[i]);
+        if IsLODResourceModel(f) then slNifFiles.Add(f);
+    end;
 end;
 
 function SimpleName(aName: string): string;
@@ -437,6 +443,45 @@ begin
     AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
 
     Result := 1;
+end;
+
+function IsLODResourceModel(f: string): Boolean;
+{
+    Given the filename, returns true if it follows the naming convention for an LOD resource model:
+    _lod.nif
+    _lod_0.nif
+    _lod_1.nif
+    _lod_2.nif
+    _lod_3.nif
+}
+var
+    rf: string;
+begin
+    Result := False;
+    rf := RightStr(f, 10); //_lod_#.nif
+    if RightStr(f, 8) = '_lod.nif' then Result := True
+    else if rf = '_lod_0.nif' then Result := True
+    else if rf = '_lod_1.nif' then Result := True
+    else if rf = '_lod_2.nif' then Result := True
+    else if rf = '_lod_3.nif' then Result := True;
+end;
+
+function IsInLODDir(f, m: string): Boolean;
+{
+    Checks the file path to see if it is in an LOD resource directory location.
+    f is the file path.
+    m is used to differentiate meshes vs materials top level directory.
+}
+var
+    i: integer;
+begin
+    Result := False;
+    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+        if ContainsText(f, m + '\' + slTopLevelModPatternPaths[i] + 'lod\') then begin
+            Result := True;
+            Exit;
+        end;
+    end;
 end;
 
 end.
