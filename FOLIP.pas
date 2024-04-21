@@ -48,11 +48,11 @@ begin
     AddMessage('Assigning LOD models to STAT records...');
     AssignLODModelsList;
 
+    //Add fake statics for MSTT, FURN, and ACTI that have lod.
+
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(slStatLODMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
-
-    //Add fake statics for MSTT, FURN, and ACTI that have lod.
 
     //Fix bad mod lod edits.
 
@@ -83,26 +83,63 @@ procedure AssignLODMaterialsList;
     Assign lod materials to MSWP record.
 }
 var
-    i, si, msi: integer;
+    i, si, tp, sc: integer;
     m, substitutions, sub: IInterface;
-    editorID, originalMat, replacementMat: string;
+    colorRemap, originalMat, originalLODMat, replacementMat: string;
+    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals: TStringList;
+    hasLODOriginalMaterial: Boolean;
 begin
+    //store missing lod materials here
+    slMissingMaterials := TStringList.Create;
+
     for i := 0 to Pred(slStatLODMswp.Count) do begin
-        msi := slMswp.IndexOf(slStatLODMswp[i]);
-        if msi = -1 then AddMessage('error');
-        m := ObjectToElement(tlMswp[msi]);
-        editorID := GetElementEditValues(m, 'EDID');
-        AddMessage(editorID);
+        m := ObjectToElement(tlMswp[slMswp.IndexOf(slStatLODMswp[i])]);
+
+        //make a list of existing substitutions, which we will need to then check to make sure we don't add a duplicate substitution.
+        slExistingSubstitutions := TStringList.Create;
         substitutions := ElementByName(m, 'Material Substitutions');
+        //foreach substitution in substitutions
         for si := 0 to Pred(ElementCount(substitutions)) do begin
+            //the substitution
             sub := ElementByIndex(substitutions, si);
-            originalMat := GetElementEditValues(sub, 'BNAM - Original Material');
-            replacementMat := GetElementEditValues(sub, 'SNAM - Replacement Material');
-            AddMessage(originalMat);
+            if not ElementExists(sub, 'BNAM - Original Material') then continue;
+            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+            if originalMat = '' then continue;
+            if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
+            slExistingSubstitutions.Add(originalMat);
+        end;
+
+        //We need to loop through the substitutions again to actually do the work now that we know what the existing substitutions are.
+        //foreach substitution in substitutions
+        for si := 0 to Pred(ElementCount(substitutions)) do begin
+            //the substitution
+            sub := ElementByIndex(substitutions, si);
+            if not ElementExists(sub, 'BNAM - Original Material') then continue;
+            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+            if originalMat = '' then continue;
+            if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
+
+            slTopPaths := TStringList.Create;
+            for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+                if ContainsText(originalMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+            end;
+
+            colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
+            if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
+
+            hasLODOriginalMaterial := False;
+            slLODOriginals := TStringList.Create;
+            LODMaterial(originalMat, '', slTopPaths, slExistingSubstitutions, slLODOriginals);
+            if slLODOriginals.Count > 0 then hasLODOriginalMaterial := True;
+            if hasLODOriginalMaterial then ListStringsInStringList(slLODOriginals);
+
+            slLODOriginals.Free;
+            slTopPaths.Free;
         end;
     end;
-end;
 
+    slMissingMaterials.Free;
+end;
 
 procedure AssignLODModelsList;
 {
@@ -206,33 +243,65 @@ function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths
     Given a model and level, checks to see if an LOD model exists and returns it.
 }
 var
-    searchModel: string;
-    i, idx, sl: integer;
-    slPossibleLODPaths: TStringList;
+    searchModel, p1, p2: string;
+    i: integer;
 begin
-    slPossibleLODPaths := TStringList.Create;
     for i := 0 to Pred(slTopPaths.Count) do begin
         // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
-        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod_0.nif
-        sl := Length(searchModel);
-        searchModel := LeftStr(searchModel, sl - 4) + colorRemap + '_lod';
-        slPossibleLODPaths.Add(searchModel + '_' + level + '.nif');
-        if level = '0' then slPossibleLODPaths.Add(searchModel + '.nif');
-    end;
-
-    for i := 0 to Pred(slPossibleLODPaths.Count) do begin
-        if slNifFiles.IndexOf(slPossibleLODPaths[i]) > -1 then begin
-            // Removes meshes/ from the file path
-            sl := Length(slPossibleLODPaths[i]);
-            Result := RightStr(slPossibleLODPaths[i], sl - 7);
-            slPossibleLODPaths.Free;
+        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
+        searchModel := TrimLeftChars(searchModel, 4) + colorRemap + '_lod';
+        p1 := searchModel + '_' + level + '.nif';
+        if slNifFiles.IndexOf(p1) > -1 then begin
+            Result := TrimRightChars(p1, 7);
+            Exit;
+        end;
+        p2 := searchModel + '.nif';
+        if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
+            Result := TrimRightChars(p2, 7);
             Exit;
         end;
     end;
-
     Result := original;
-    slPossibleLODPaths.Free;
+end;
+
+procedure LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList);
+var
+    i: integer;
+    searchMaterial, p1, p2, p3: string;
+begin
+    // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
+    for i := 0 to Pred(slTopPaths.Count) do begin
+        // materials\dlc01\test.bgsm to materials\dlc01\lod\test.bgsm
+        searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
+        p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
+        if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
+            //sanity check
+            //AddMessage(TrimRightChars(p1, 10));
+            slPossibleLODPaths.Add(TrimRightChars(p1, 10));
+        end;
+        p2 := TrimLeftChars(searchMaterial, 5) + 'lod.bgsm';
+        if ((slMatFiles.IndexOf(p2) > -1) and (slExistingSubstitutions.IndexOf(p2) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
+        p3 := TrimLeftChars(searchMaterial, 5) + '_lod.bgsm';
+        if ((slMatFiles.IndexOf(p3) > -1) and (slExistingSubstitutions.IndexOf(p3) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
+    end;
+end;
+
+function TrimRightChars(s: string; chars: integer): string;
+begin
+    Result := RightStr(s, Length(s) - chars);
+end;
+
+function TrimLeftChars(s: string; chars: integer): string;
+begin
+    Result := LeftStr(s, Length(s) - chars);
+end;
+
+procedure ListStringsInStringList(sl: TStringList);
+var
+    i: integer;
+begin
+    for i := 0 to Pred(sl.Count) do AddMessage(sl[i]);
 end;
 
 procedure TopLevelModPatternPaths;
