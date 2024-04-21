@@ -83,17 +83,21 @@ procedure AssignLODMaterialsList;
     Assign lod materials to MSWP record.
 }
 var
-    i, si, tp, sc: integer;
+    i, si, tp, sc, cnt: integer;
     m, substitutions, sub: IInterface;
     colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
-    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements: TStringList;
+    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy: TStringList;
     hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
 begin
+    slDummy := TStringList.Create;
     //store missing lod materials here
     slMissingMaterials := TStringList.Create;
 
     for i := 0 to Pred(slStatLODMswp.Count) do begin
         m := ObjectToElement(tlMswp[slMswp.IndexOf(slStatLODMswp[i])]);
+
+        slLODSubOriginal := TStringList.Create;
+        slLODSubReplacement := TStringList.Create;
 
         //make a list of existing substitutions, which we will need to then check to make sure we don't add a duplicate substitution.
         slExistingSubstitutions := TStringList.Create;
@@ -138,7 +142,12 @@ begin
             if LeftStr(replacementMat, 10) <> 'materials\' then replacementMat := 'materials\' + replacementMat;
 
             colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
+            if ((originalMat = replacementMat) and (colorRemap = '9')) then begin
+                AddMessage(#9 + 'Original Material is the same as the Replacement Material: ' + #9 + originalMat + #9 + replacementMat + #9 + Name(m));
+                continue;
+            end;
             if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
+
 
             slTopPaths := TStringList.Create;
             for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
@@ -147,23 +156,36 @@ begin
 
             hasLODReplacementMaterial := False;
             slLODReplacements := TStringList.Create;
-            rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slMissingMaterials, slLODReplacements);
+            rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slDummy, slLODReplacements);
             slTopPaths.Free;
             if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
             if not hasLODReplacementMaterial then begin
-                AddMessage(shortName(m) + ' missing ' + rm + ' from ' + om);
+                slMissingMaterials.Add('Missing LOD replacement material ' + rm + ' from ' + om + #9 + Name(m));
                 continue;
             end;
             //ListStringsInStringList(slLODReplacements);
+
+
+            slLODSubOriginal.Add(slLODOriginals[0]);
+            slLODSubReplacement.Add(slLODReplacements[0]);
 
 
 
             slLODReplacements.Free;
             slLODOriginals.Free;
         end;
+
+        //continue if no changes are required.
+        for cnt := 0 to Pred(slLODSubOriginal.Count) do begin
+            AddMessage(ShortName(m) + #9 + slLODSubOriginal[cnt] + #9 + slLODSubReplacement[cnt]);
+        end;
+        slLODSubOriginal.Free;
+        slLODSubReplacement.Free;
     end;
 
+    ListStringsInStringList(slMissingMaterials);
     slMissingMaterials.Free;
+    slDummy.Free;
 end;
 
 procedure AssignLODModelsList;
@@ -247,7 +269,7 @@ begin
 
 
     if hasChanged then begin
-        AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
+        //AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
         iCurrentPlugin := RefMastersDeterminePlugin(s);
         n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
         SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', hasDistantLOD);
