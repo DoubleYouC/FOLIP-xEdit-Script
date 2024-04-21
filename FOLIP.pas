@@ -6,8 +6,10 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 var
     tlStats, tlMstt, tlFurn, tlActi, tlMswp, tlBasesWithLOD: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths: TStringList;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slStatLODMswp, slMswp: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
+    i: integer;
+    f: string;
 
 const
     sFolipMasterFileName = 'FOLIP Master.esm';
@@ -21,6 +23,7 @@ function Initialize:integer;
 }
 var
     slContainers: TStringList;
+    i: integer;
 begin
     CreateTLists;
     TopLevelModPatternPaths;
@@ -29,13 +32,11 @@ begin
     if not CreatePlugins then Exit;
 
     AddMessage('Collecting assets...');
-    //scan archives
+    //scan archives and loose files
     slContainers := TStringList.Create;
     ResourceContainerList(slContainers);
     FilesInContainers(slContainers);
     slContainers.Free;
-    //scan loose files
-    FilesInData;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
 
@@ -44,10 +45,12 @@ begin
     CollectRecords;
 
     //Assign lod models to STAT records.
-    //AddMessage('Assigning LOD models to STAT records...');
+    AddMessage('Assigning LOD models to STAT records...');
     AssignLODModelsList;
 
     //Apply lod material swaps.
+    AddMessage('Assigning LOD materials to ' + IntToStr(slStatLODMswp.Count) + ' material swaps.');
+    AssignLODMaterialsList;
 
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
 
@@ -67,26 +70,78 @@ begin
   tlMswp.Free;
   tlBasesWithLOD.Free;
 
+  slStatLODMswp.Free;
+
   slNifFiles.Free;
   slMatFiles.Free;
   slTopLevelModPatternPaths.Free;
+  slMswp.Free;
 end;
+
+procedure AssignLODMaterialsList;
+{
+    Assign lod materials to MSWP record.
+}
+var
+    i, si, msi: integer;
+    m, substitutions, sub: IInterface;
+    editorID, originalMat, replacementMat: string;
+begin
+    for i := 0 to Pred(slStatLODMswp.Count) do begin
+        msi := slMswp.IndexOf(slStatLODMswp[i]);
+        if msi = -1 then AddMessage('error');
+        m := ObjectToElement(tlMswp[msi]);
+        editorID := GetElementEditValues(m, 'EDID');
+        AddMessage(editorID);
+        substitutions := ElementByName(m, 'Material Substitutions');
+        for si := 0 to Pred(ElementCount(substitutions)) do begin
+            sub := ElementByIndex(substitutions, si);
+            originalMat := GetElementEditValues(sub, 'BNAM - Original Material');
+            replacementMat := GetElementEditValues(sub, 'SNAM - Replacement Material');
+            AddMessage(originalMat);
+        end;
+    end;
+end;
+
 
 procedure AssignLODModelsList;
 {
     Assign lod models to STAT records.
 }
 var
-    i: integer;
-    s: IInterface;
+    i, si: integer;
+    HasLOD: Boolean;
+    m, r, s: IInterface;
+    ms: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
         s := ObjectToElement(tlStats[i]);
-        AssignLODModels(s);
+        HasLOD := AssignLODModels(s);
+        //List relevant material swaps
+        if HasLOD then begin
+            //check for base material swap
+            if ElementExists(s, 'Model\MODS - Material Swap') then begin
+                ms := GetElementEditValues(s, 'Model\MODS - Material Swap');
+                if slStatLODMswp.IndexOf(ms) = -1 then slStatLODMswp.Add(ms);
+            end;
+
+            //check references for material swaps
+            m := MasterOrSelf(s);
+            for si := 0 to Pred(ReferencedByCount(m)) do begin
+                r := ReferencedByIndex(m, si);
+                if Signature(r) <> 'REFR' then continue;
+                if not IsWinningOverride(r) then continue;
+                if GetIsDeleted(r) then continue;
+                if not ElementExists(r, 'XMSP - Material Swap') then continue;
+                ms := GetElementEditValues(r, 'XMSP - Material Swap');
+                if slStatLODMswp.IndexOf(ms) > -1 then continue;
+                slStatLODMswp.Add(ms);
+            end;
+        end;
     end;
 end;
 
-procedure AssignLODModels(s: IInterface);
+function AssignLODModels(s: IInterface): Boolean;
 var
     hasChanged: Boolean;
     i, hasDistantLOD: integer;
@@ -140,6 +195,8 @@ begin
         SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', lod16);
         SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', lod32);
     end;
+    Result := False;
+    if hasDistantLOD = 1 then Result := True;
 
     slTopPaths.Free;
 end;
@@ -212,6 +269,8 @@ begin
     slNifFiles := TStringList.Create;
     slNifFiles.Duplicates := dupIgnore;
     slTopLevelModPatternPaths := TStringList.Create;
+    slStatLODMswp := TStringList.Create;
+    slMswp := TStringList.Create;
 end;
 
 procedure CollectRecords;
@@ -226,13 +285,12 @@ var
     i, j, idx: integer;
     recordId: string;
     f, g, r: IInterface;
-    slStats, slMstt, slFurn, slActi, slMswp: TStringList;
+    slStats, slMstt, slFurn, slActi: TStringList;
 begin
     slStats := TStringList.Create;
     slMstt := TStringList.Create;
     slFurn := TStringList.Create;
     slActi := TStringList.Create;
-    slMswp := TStringList.Create;
 
     //Iterate over all files.
     for i := 0 to Pred(FileCount) do begin
@@ -287,19 +345,19 @@ begin
         g := GroupBySignature(f, 'MSWP');
         for j := 0 to Pred(ElementCount(g)) do begin
             r := WinningOverride(ElementByIndex(g, j));
-            recordId := GetFileName(r) + #9 + ShortName(r);
+            recordId := ShortName(r);
             idx := slMswp.IndexOf(recordId);
             if idx > -1 then continue
             slMswp.Add(recordId);
             tlMswp.Add(r);
         end;
+
     end;
 
     slStats.Free;
     slMstt.Free;
     slFurn.Free;
     slActi.Free;
-    slMswp.Free;
 
     AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
     AddMessage('Found ' + IntToStr(tlMstt.Count) + ' MSTT records.');
@@ -329,46 +387,6 @@ begin
         else if IsLODResourceModel(f) then slNifFiles.Add(f);
     end;
     slArchivedFiles.Free;
-end;
-
-procedure FilesInData;
-{
-    Retrieves the loose files in the data folder.
-}
-var
-    TDirectory: TDirectory;
-    files: TStringDynArray;
-    i: integer;
-    f: string;
-begin
-    files := TDirectory.GetFiles(wbDataPath + '\materials', '*.*', soAllDirectories);
-    for i := 0 to Pred(Length(files)) do begin
-        f := RemoveDataPath(files[i]);
-        if IsInLODDir(f, 'materials') then slMatFiles.Add(f);
-    end;
-    files := TDirectory.GetFiles(wbDataPath + '\meshes', '*.nif', soAllDirectories);
-    for i := 0 to Pred(Length(files)) do begin
-        f := RemoveDataPath(files[i]);
-        if IsLODResourceModel(f) then slNifFiles.Add(f);
-    end;
-end;
-
-function SimpleName(aName: string): string;
-{
-    Reduces the container name to the BA2 file name or 'Data'
-}
-begin
-    Result := ExtractFileName(aName);
-    if Result = '' then Result := 'Data';
-end;
-
-// Remove data path from file name.
-function RemoveDataPath(aName: string): string;
-{
-    Strips the Data folder path from the asset path.
-}
-begin
-    Result := StringReplace(aName, wbDataPath, '', [rfReplaceAll]);
 end;
 
 function RefMastersDeterminePlugin(r: IInterface): IInterface;
@@ -459,11 +477,11 @@ var
 begin
     Result := False;
     rf := RightStr(f, 10); //_lod_#.nif
-    if RightStr(f, 8) = '_lod.nif' then Result := True
-    else if rf = '_lod_0.nif' then Result := True
+    if rf = '_lod_0.nif' then Result := True
     else if rf = '_lod_1.nif' then Result := True
     else if rf = '_lod_2.nif' then Result := True
-    else if rf = '_lod_3.nif' then Result := True;
+    else if rf = '_lod_3.nif' then Result := True
+    else if RightStr(f, 8) = '_lod.nif' then Result := True;
 end;
 
 function IsInLODDir(f, m: string): Boolean;
