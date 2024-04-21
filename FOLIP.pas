@@ -85,9 +85,9 @@ procedure AssignLODMaterialsList;
 var
     i, si, tp, sc: integer;
     m, substitutions, sub: IInterface;
-    colorRemap, originalMat, originalLODMat, replacementMat: string;
-    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals: TStringList;
-    hasLODOriginalMaterial: Boolean;
+    colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
+    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements: TStringList;
+    hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
 begin
     //store missing lod materials here
     slMissingMaterials := TStringList.Create;
@@ -115,6 +115,7 @@ begin
             //the substitution
             sub := ElementByIndex(substitutions, si);
             if not ElementExists(sub, 'BNAM - Original Material') then continue;
+            if not ElementExists(sub, 'SNAM - Replacement Material') then continue;
             originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
             if originalMat = '' then continue;
             if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
@@ -124,17 +125,41 @@ begin
                 if ContainsText(originalMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
             end;
 
+            hasLODOriginalMaterial := False;
+            slLODOriginals := TStringList.Create;
+            om := LODMaterial(originalMat, '', slTopPaths, slExistingSubstitutions, slLODOriginals);
+            slTopPaths.Free;
+            if slLODOriginals.Count > 0 then hasLODOriginalMaterial := True;
+            if not hasLODOriginalMaterial then continue;
+            //ListStringsInStringList(slLODOriginals);
+
+            replacementMat := LowerCase(GetElementEditValues(sub, 'SNAM - Replacement Material'));
+            if replacementMat = '' then continue;
+            if LeftStr(replacementMat, 10) <> 'materials\' then replacementMat := 'materials\' + replacementMat;
+
             colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
             if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
 
-            hasLODOriginalMaterial := False;
-            slLODOriginals := TStringList.Create;
-            LODMaterial(originalMat, '', slTopPaths, slExistingSubstitutions, slLODOriginals);
-            if slLODOriginals.Count > 0 then hasLODOriginalMaterial := True;
-            if hasLODOriginalMaterial then ListStringsInStringList(slLODOriginals);
+            slTopPaths := TStringList.Create;
+            for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+                if ContainsText(replacementMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+            end;
 
-            slLODOriginals.Free;
+            hasLODReplacementMaterial := False;
+            slLODReplacements := TStringList.Create;
+            rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slMissingMaterials, slLODReplacements);
             slTopPaths.Free;
+            if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
+            if not hasLODReplacementMaterial then begin
+                AddMessage(shortName(m) + ' missing ' + rm + ' from ' + om);
+                continue;
+            end;
+            //ListStringsInStringList(slLODReplacements);
+
+
+
+            slLODReplacements.Free;
+            slLODOriginals.Free;
         end;
     end;
 
@@ -265,16 +290,18 @@ begin
     Result := original;
 end;
 
-procedure LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList);
+function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList): string;
 var
     i: integer;
     searchMaterial, p1, p2, p3: string;
 begin
     // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
+    Result := '';
     for i := 0 to Pred(slTopPaths.Count) do begin
         // materials\dlc01\test.bgsm to materials\dlc01\lod\test.bgsm
         searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
         p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
+        if Result = '' then Result := p1;
         if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
             //sanity check
             //AddMessage(TrimRightChars(p1, 10));
