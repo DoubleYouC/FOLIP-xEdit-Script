@@ -217,9 +217,9 @@ procedure AssignLODModelsList;
     Assign lod models to STAT records.
 }
 var
-    i, si: integer;
+    i, si, cnt: integer;
     HasLOD: Boolean;
-    m, r, s: IInterface;
+    m, r, s, rCell: IInterface;
     ms: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
@@ -227,12 +227,7 @@ begin
         HasLOD := AssignLODModels(s);
         //List relevant material swaps
         if HasLOD then begin
-            //check for base material swap
-            if ElementExists(s, 'Model\MODS - Material Swap') then begin
-                ms := GetElementEditValues(s, 'Model\MODS - Material Swap');
-                if slStatLODMswp.IndexOf(ms) = -1 then slStatLODMswp.Add(ms);
-            end;
-
+            cnt := 0;
             //check references for material swaps
             m := MasterOrSelf(s);
             for si := 0 to Pred(ReferencedByCount(m)) do begin
@@ -240,10 +235,19 @@ begin
                 if Signature(r) <> 'REFR' then continue;
                 if not IsWinningOverride(r) then continue;
                 if GetIsDeleted(r) then continue;
+                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+                cnt := cnt + 1;
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
                 ms := GetElementEditValues(r, 'XMSP - Material Swap');
                 if slStatLODMswp.IndexOf(ms) > -1 then continue;
                 slStatLODMswp.Add(ms);
+            end;
+
+            //check for base material swap
+            if ((cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap'))) then begin
+                ms := GetElementEditValues(s, 'Model\MODS - Material Swap');
+                if slStatLODMswp.IndexOf(ms) = -1 then slStatLODMswp.Add(ms);
             end;
         end;
     end;
