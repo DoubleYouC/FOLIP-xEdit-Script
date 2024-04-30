@@ -83,8 +83,8 @@ procedure AssignLODMaterialsList;
     Assign lod materials to MSWP record.
 }
 var
-    i, si, tp, sc, cnt: integer;
-    m, substitutions, sub: IInterface;
+    i, si, tp, sc, cnt, n: integer;
+    m, mn, substitutions, sub: IInterface;
     colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
     slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy: TStringList;
     hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
@@ -176,8 +176,19 @@ begin
         end;
 
         //continue if no changes are required.
-        for cnt := 0 to Pred(slLODSubOriginal.Count) do begin
-            AddMessage(ShortName(m) + #9 + slLODSubOriginal[cnt] + #9 + slLODSubReplacement[cnt]);
+        cnt := slLODSubOriginal.Count;
+        if cnt < 1 then begin
+            slLODSubOriginal.Free;
+            slLODSubReplacement.Free;
+            continue;
+        end;
+
+        //Changes required, so add material swap to patch
+        iCurrentPlugin := RefMastersDeterminePlugin(m);
+        mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
+        for n := 0 to Pred(cnt) do begin
+            AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
+            AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
         end;
         slLODSubOriginal.Free;
         slLODSubReplacement.Free;
@@ -186,6 +197,19 @@ begin
     ListStringsInStringList(slMissingMaterials);
     slMissingMaterials.Free;
     slDummy.Free;
+end;
+
+procedure AddMaterialSwap(e: IInterface; om, rm: String);
+{
+    Given a material swap record e, add a new swap with om as the original material and rm as the replacement material.
+}
+var
+    substitutions, ms: IInterface;
+begin
+    substitutions := ElementByPath(e, 'Material Substitutions');
+    ms := ElementAssign(substitutions, HighInteger, nil, False);
+    SetElementNativeValues(ms, 'BNAM - Original Material', om);
+    SetElementNativeValues(ms, 'SNAM - Replacement Material', rm);
 end;
 
 procedure AssignLODModelsList;
