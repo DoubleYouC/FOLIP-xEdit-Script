@@ -10,6 +10,7 @@ var
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f: string;
+    joRules, joMswpMap: TJsonObject;
 
 const
     sFolipMasterFileName = 'FOLIP Master.esm';
@@ -25,7 +26,7 @@ var
     slContainers: TStringList;
     i: integer;
 begin
-    CreateTLists;
+    CreateObjects;
     TopLevelModPatternPaths;
 
     //Create FOLIP plugins
@@ -56,6 +57,7 @@ begin
 
     //Fix bad mod lod edits.
 
+    Result := 0;
 end;
 
 function Finalize: integer;
@@ -71,11 +73,15 @@ begin
   tlBasesWithLOD.Free;
 
   slStatLODMswp.Free;
-
   slNifFiles.Free;
   slMatFiles.Free;
   slTopLevelModPatternPaths.Free;
   slMswp.Free;
+
+  joRules.Free;
+  joMswpMap.Free;
+
+  Result := 0;
 end;
 
 procedure AssignLODMaterialsList;
@@ -253,128 +259,10 @@ begin
     end;
 end;
 
-function AssignLODModels(s: IInterface): Boolean;
-var
-    hasChanged: Boolean;
-    i, hasDistantLOD: integer;
-    n: IInterface;
-    colorRemap, lod4, lod8, lod16, lod32, model, olod4, olod8, olod16, olod32: string;
-    slTopPaths: TStringList;
-begin
-    hasChanged := False;
-
-    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
-    if LeftStr(model, 7) <> 'meshes\' then model := 'meshes\' + model;
-
-    slTopPaths := TStringList.Create;
-    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
-        if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
-    end;
-
-    colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
-    if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
-
-    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
-    olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
-    olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
-    olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
-    olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
-    lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
-    lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
-    lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
-    lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
-    if lod4 <> olod4 then hasChanged := True
-    else if lod8 <> olod8 then hasChanged := True
-    else if lod16 <> olod16 then hasChanged := True
-    else if lod32 <> olod32 then hasChanged := True;
-    if hasDistantLOD = 0 then begin
-        if lod4 <> '' then hasDistantLOD := 1
-        else if lod8 <> '' then hasDistantLOD := 1
-        else if lod16 <> '' then hasDistantLOD := 1
-        else if lod32 <> '' then hasDistantLOD := 1;
-        if hasDistantLOD = 1 then hasChanged := True;
-    end;
-
-
-    if hasChanged then begin
-        //AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
-        iCurrentPlugin := RefMastersDeterminePlugin(s);
-        n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
-        SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', hasDistantLOD);
-        Add(n, 'MNAM', True);
-        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', lod4);
-        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', lod8);
-        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', lod16);
-        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', lod32);
-    end;
-    Result := False;
-    if hasDistantLOD = 1 then Result := True;
-
-    slTopPaths.Free;
-end;
-
-function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
-{
-    Given a model and level, checks to see if an LOD model exists and returns it.
-}
-var
-    searchModel, p1, p2: string;
-    i: integer;
-begin
-    for i := 0 to Pred(slTopPaths.Count) do begin
-        // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
-        searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
-        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
-        searchModel := TrimLeftChars(searchModel, 4) + colorRemap + '_lod';
-        p1 := searchModel + '_' + level + '.nif';
-        if slNifFiles.IndexOf(p1) > -1 then begin
-            Result := TrimRightChars(p1, 7);
-            Exit;
-        end;
-        p2 := searchModel + '.nif';
-        if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
-            Result := TrimRightChars(p2, 7);
-            Exit;
-        end;
-    end;
-    Result := original;
-end;
-
-function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList): string;
-var
-    i: integer;
-    searchMaterial, p1, p2, p3: string;
-begin
-    // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
-    Result := '';
-    for i := 0 to Pred(slTopPaths.Count) do begin
-        // materials\dlc01\test.bgsm to materials\dlc01\lod\test.bgsm
-        searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
-        p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
-        if Result = '' then Result := p1;
-        if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
-            //sanity check
-            //AddMessage(TrimRightChars(p1, 10));
-            slPossibleLODPaths.Add(TrimRightChars(p1, 10));
-        end;
-        p2 := TrimLeftChars(searchMaterial, 5) + 'lod.bgsm';
-        if ((slMatFiles.IndexOf(p2) > -1) and (slExistingSubstitutions.IndexOf(p2) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
-        p3 := TrimLeftChars(searchMaterial, 5) + '_lod.bgsm';
-        if ((slMatFiles.IndexOf(p3) > -1) and (slExistingSubstitutions.IndexOf(p3) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
-    end;
-end;
-
-function TrimRightChars(s: string; chars: integer): string;
-begin
-    Result := RightStr(s, Length(s) - chars);
-end;
-
-function TrimLeftChars(s: string; chars: integer): string;
-begin
-    Result := LeftStr(s, Length(s) - chars);
-end;
-
 procedure ListStringsInStringList(sl: TStringList);
+{
+    Given a TStringList, add a message for all items in the list.
+}
 var
     i: integer;
 begin
@@ -398,11 +286,12 @@ begin
     slTopLevelModPatternPaths.Add('');
 end;
 
-procedure CreateTLists;
+procedure CreateObjects;
 {
-    Create TLists.
+    Create objects.
 }
 begin
+    //TLists
     tlStats := TList.Create;
     tlMstt := TList.Create;
     tlFurn := TList.Create;
@@ -410,6 +299,7 @@ begin
     tlMswp := TList.Create;
     tlBasesWithLOD := TList.Create;
 
+    //TStringLists
     slMatFiles := TStringList.Create;
     slMatFiles.Duplicates := dupIgnore;
     slNifFiles := TStringList.Create;
@@ -417,6 +307,10 @@ begin
     slTopLevelModPatternPaths := TStringList.Create;
     slStatLODMswp := TStringList.Create;
     slMswp := TStringList.Create;
+
+    //TJsonObjects
+    joRules := TJsonObject.Create;
+    joMswpMap := TJsonObject.Create;
 end;
 
 procedure CollectRecords;
@@ -533,6 +427,139 @@ begin
         else if IsLODResourceModel(f) then slNifFiles.Add(f);
     end;
     slArchivedFiles.Free;
+end;
+
+function AssignLODModels(s: IInterface): Boolean;
+var
+    hasChanged: Boolean;
+    i, hasDistantLOD: integer;
+    n: IInterface;
+    colorRemap, lod4, lod8, lod16, lod32, model, olod4, olod8, olod16, olod32: string;
+    slTopPaths: TStringList;
+begin
+    hasChanged := False;
+
+    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
+    if LeftStr(model, 7) <> 'meshes\' then model := 'meshes\' + model;
+
+    slTopPaths := TStringList.Create;
+    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+        if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
+    end;
+
+    colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
+    if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
+
+    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+    olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
+    olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
+    olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
+    olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+    lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
+    lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
+    lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
+    lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
+    if lod4 <> olod4 then hasChanged := True
+    else if lod8 <> olod8 then hasChanged := True
+    else if lod16 <> olod16 then hasChanged := True
+    else if lod32 <> olod32 then hasChanged := True;
+    if hasDistantLOD = 0 then begin
+        if lod4 <> '' then hasDistantLOD := 1
+        else if lod8 <> '' then hasDistantLOD := 1
+        else if lod16 <> '' then hasDistantLOD := 1
+        else if lod32 <> '' then hasDistantLOD := 1;
+        if hasDistantLOD = 1 then hasChanged := True;
+    end;
+
+
+    if hasChanged then begin
+        //AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
+        iCurrentPlugin := RefMastersDeterminePlugin(s);
+        n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
+        SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', hasDistantLOD);
+        Add(n, 'MNAM', True);
+        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', lod4);
+        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', lod8);
+        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', lod16);
+        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', lod32);
+    end;
+    Result := False;
+    if hasDistantLOD = 1 then Result := True;
+
+    slTopPaths.Free;
+end;
+
+
+
+function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
+{
+    Given a model and level, checks to see if an LOD model exists and returns it.
+}
+var
+    searchModel, p1, p2: string;
+    i: integer;
+begin
+
+    for i := 0 to Pred(slTopPaths.Count) do begin
+        // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
+        searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
+        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
+        searchModel := TrimLeftChars(searchModel, 4) + colorRemap + '_lod';
+        p1 := searchModel + '_' + level + '.nif';
+        if slNifFiles.IndexOf(p1) > -1 then begin
+            Result := TrimRightChars(p1, 7);
+            Exit;
+        end;
+        p2 := searchModel + '.nif';
+        if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
+            Result := TrimRightChars(p2, 7);
+            Exit;
+        end;
+    end;
+    Result := original;
+end;
+
+function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList): string;
+{
+    Checks to see if an LOD material exists and returns it.
+}
+var
+    i: integer;
+    searchMaterial, p1, p2, p3: string;
+begin
+    // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
+    Result := '';
+    for i := 0 to Pred(slTopPaths.Count) do begin
+        // materials\dlc01\test.bgsm to materials\dlc01\lod\test.bgsm
+        searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
+        p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
+        if Result = '' then Result := p1;
+        if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
+            //sanity check
+            //AddMessage(TrimRightChars(p1, 10));
+            slPossibleLODPaths.Add(TrimRightChars(p1, 10));
+        end;
+        p2 := TrimLeftChars(searchMaterial, 5) + 'lod.bgsm';
+        if ((slMatFiles.IndexOf(p2) > -1) and (slExistingSubstitutions.IndexOf(p2) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
+        p3 := TrimLeftChars(searchMaterial, 5) + '_lod.bgsm';
+        if ((slMatFiles.IndexOf(p3) > -1) and (slExistingSubstitutions.IndexOf(p3) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
+    end;
+end;
+
+function TrimRightChars(s: string; chars: integer): string;
+{
+    Removes characters from right of string;
+}
+begin
+    Result := RightStr(s, Length(s) - chars);
+end;
+
+function TrimLeftChars(s: string; chars: integer): string;
+{
+    Removes characters from left of string.
+}
+begin
+    Result := LeftStr(s, Length(s) - chars);
 end;
 
 function RefMastersDeterminePlugin(r: IInterface): IInterface;
