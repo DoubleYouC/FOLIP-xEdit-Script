@@ -483,13 +483,14 @@ end;
 
 function AssignLODModels(s: IInterface): Boolean;
 var
-    hasChanged: Boolean;
+    hasChanged, ruleOverride: Boolean;
     i, hasDistantLOD: integer;
     n: IInterface;
     colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
     slTopPaths: TStringList;
 begin
     hasChanged := False;
+    ruleOverride := False;
 
     omodel := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
 
@@ -515,12 +516,14 @@ begin
         lod8 := joRules.O[editorid].S['level1'];
         lod16 := joRules.O[editorid].S['level2'];
         lod32 := joRules.O[editorid].S['level3'];
+        if joRules.O[editorid].S['hasdistantlod'] = 'false' then AddMessage(editorID + #9 + 'FALSE');
     end
     else if joRules.Contains(omodel) then begin
         lod4 := joRules.O[omodel].S['level0'];
         lod8 := joRules.O[omodel].S['level1'];
         lod16 := joRules.O[omodel].S['level2'];
         lod32 := joRules.O[omodel].S['level3'];
+        if joRules.O[omodel].S['hasdistantlod'] = 'false' then AddMessage(editorID + #9 + 'FALSE');
     end
     else begin
         slTopPaths := TStringList.Create;
@@ -538,10 +541,6 @@ begin
     else if lod8 <> olod8 then hasChanged := True
     else if lod16 <> olod16 then hasChanged := True
     else if lod32 <> olod32 then hasChanged := True;
-    if ((lod4 + lod8 + lod16 + lod32 = '') and (hasDistantLOD = 1)) then begin
-        hasDistantLOD := 0;
-        hasChanged := True;
-    end;
     if hasDistantLOD = 0 then begin
         if lod4 <> '' then hasDistantLOD := 1
         else if lod8 <> '' then hasDistantLOD := 1
@@ -549,6 +548,8 @@ begin
         else if lod32 <> '' then hasDistantLOD := 1;
         if hasDistantLOD = 1 then hasChanged := True;
     end;
+
+    if ruleOverride then hasDistantLOD := 0;
 
 
     if hasChanged then begin
