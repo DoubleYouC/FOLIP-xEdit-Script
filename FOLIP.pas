@@ -429,41 +429,107 @@ begin
     slArchivedFiles.Free;
 end;
 
+procedure LoadRules(i: integer; f: string);
+{
+    Load LOD Rules and Material Swap Map JSON files
+}
+var
+    sub: TJsonObject;
+    c, a: integer;
+    j, key: string;
+    bFirstRuleJson, bFirstMswpJson: Boolean;
+begin
+    //LOD Rules
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - LODRules.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded LOD Rule File: ' + j);
+        if bFirstRuleJson then begin
+            bFirstRuleJson := False;
+            joRules.LoadFromResource(j);
+        end
+        else begin
+            sub := TJsonObject.Create;
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+                key := sub.Names[c];
+                joRules.O[key].S['hasdistantlod'] := sub.O[key].S['hasdistantlod'];
+                joRules.O[key].S['level0'] := sub.O[key].S['level0'];
+                joRules.O[key].S['level1'] := sub.O[key].S['level1'];
+                joRules.O[key].S['level2'] := sub.O[key].S['level2'];
+                joRules.O[key].S['level3'] := sub.O[key].S['level3'];
+            end;
+            sub.Free;
+        end;
+    end;
+    //Material Swap Maps
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - MaterialSwapMap.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded LOD Material Swap File: ' + j);
+        if bFirstMswpJson then begin
+            bFirstMswpJson := False;
+            joMswpMap.LoadFromResource(j);
+        end
+        else begin
+            sub := TJsonObject.Create;
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+            key := sub.Names[c];
+            for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
+            end;
+            sub.Free;
+        end;
+    end;
+end;
+
 function AssignLODModels(s: IInterface): Boolean;
 var
-    hasChanged: Boolean;
+    hasChanged, ruleOverride: Boolean;
     i, hasDistantLOD: integer;
     n: IInterface;
-    colorRemap, lod4, lod8, lod16, lod32, model, olod4, olod8, olod16, olod32: string;
+    colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32: string;
     slTopPaths: TStringList;
 begin
     hasChanged := False;
+    ruleOverride := False;
 
-    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
-    if LeftStr(model, 7) <> 'meshes\' then model := 'meshes\' + model;
+    omodel := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
 
-    slTopPaths := TStringList.Create;
-    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
-        if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
-    end;
+    if LeftStr(omodel, 7) <> 'meshes\' then model := 'meshes\' + omodel else model := omodel;
 
     colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
     if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
 
-    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
     olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
     olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
     olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
     olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
-    lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
-    lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
-    lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
-    lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
+
+    if joRules.Contains(omodel) then begin
+        ruleOverride := True;
+        if joRules.O[omodel].S['hasdistantlod'] = 'True' then hasDistantLOD := 1 else hasDistantLOD := 0;
+        lod4 := joRules.O[omodel].S['level0'];
+        lod8 := joRules.O[omodel].S['level1'];
+        lod16 := joRules.O[omodel].S['level2'];
+        lod32 := joRules.O[omodel].S['level3'];
+    end
+    else begin
+        hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+        slTopPaths := TStringList.Create;
+        for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+            if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
+        end;
+        lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
+        lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
+        lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
+        lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
+        slTopPaths.Free;
+    end;
+
     if lod4 <> olod4 then hasChanged := True
     else if lod8 <> olod8 then hasChanged := True
     else if lod16 <> olod16 then hasChanged := True
     else if lod32 <> olod32 then hasChanged := True;
-    if hasDistantLOD = 0 then begin
+    if ((hasDistantLOD = 0) and not ruleOverride) then begin
         if lod4 <> '' then hasDistantLOD := 1
         else if lod8 <> '' then hasDistantLOD := 1
         else if lod16 <> '' then hasDistantLOD := 1
@@ -485,8 +551,6 @@ begin
     end;
     Result := False;
     if hasDistantLOD = 1 then Result := True;
-
-    slTopPaths.Free;
 end;
 
 
@@ -548,7 +612,7 @@ end;
 
 function TrimRightChars(s: string; chars: integer): string;
 {
-    Removes characters from right of string;
+    Returns right string - chars
 }
 begin
     Result := RightStr(s, Length(s) - chars);
@@ -556,7 +620,7 @@ end;
 
 function TrimLeftChars(s: string; chars: integer): string;
 {
-    Removes characters from left of string.
+    Returns left string - chars
 }
 begin
     Result := LeftStr(s, Length(s) - chars);
@@ -590,22 +654,27 @@ function CreatePlugins: Boolean;
     Creates the plugin files we need.
 }
 var
-    bFO4LODGen, bFolip: Boolean;
+    bFO4LODGen, bFolip, bFirstRuleJson, bFirstMswpJson: Boolean;
     i: integer;
     f: string;
 begin
-    bFO4LODGen := 0;
-    bFolip := 0;
+    bFO4LODGen := False;
+    bFolip := False;
+    bFirstRuleJson := True;
+    bFirstMswpJson := True;
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
+
+        LoadRules(i, f);
+
         if SameText(f, sFolipMasterFileName) then
             iFolipMasterFile := FileByIndex(i)
         else if SameText(f, sFolipPluginFileName) then
             iFolipPluginFile := FileByIndex(i)
         else if SameText(f, sFO4LODGenFileName) then
-            bFO4LODGen := 1
+            bFO4LODGen := True
         else if SameText(f, sFolipFileName) then
-            bFolip := 1;
+            bFolip := True;
     end;
     if not bFO4LODGen then begin
         MessageDlg('Please install FO4LODGen Resources from https://www.nexusmods.com/fallout4/mods/80276 before continuing.', mtError, [mbOk], 0);
