@@ -486,7 +486,7 @@ var
     hasChanged, ruleOverride: Boolean;
     i, hasDistantLOD: integer;
     n: IInterface;
-    colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32: string;
+    colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
     slTopPaths: TStringList;
 begin
     hasChanged := False;
@@ -503,8 +503,17 @@ begin
     olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
     olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
     olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+    editorid := GetElementEditValues(s, 'EDID');
 
-    if joRules.Contains(omodel) then begin
+    if joRules.Contains(editorid) then begin
+        ruleOverride := True;
+        if joRules.O[editorid].S['hasdistantlod'] = 'True' then hasDistantLOD := 1 else hasDistantLOD := 0;
+        lod4 := joRules.O[editorid].S['level0'];
+        lod8 := joRules.O[editorid].S['level1'];
+        lod16 := joRules.O[editorid].S['level2'];
+        lod32 := joRules.O[editorid].S['level3'];
+    end
+    else if joRules.Contains(omodel) then begin
         ruleOverride := True;
         if joRules.O[omodel].S['hasdistantlod'] = 'True' then hasDistantLOD := 1 else hasDistantLOD := 0;
         lod4 := joRules.O[omodel].S['level0'];
