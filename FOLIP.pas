@@ -516,14 +516,14 @@ begin
         lod8 := joRules.O[editorid].S['level1'];
         lod16 := joRules.O[editorid].S['level2'];
         lod32 := joRules.O[editorid].S['level3'];
-        if joRules.O[editorid].S['hasdistantlod'] = 'false' then AddMessage(editorID + #9 + 'FALSE');
+        if joRules.O[editorid].S['hasdistantlod'] = 'false' then ruleOverride := True;
     end
     else if joRules.Contains(omodel) then begin
         lod4 := joRules.O[omodel].S['level0'];
         lod8 := joRules.O[omodel].S['level1'];
         lod16 := joRules.O[omodel].S['level2'];
         lod32 := joRules.O[omodel].S['level3'];
-        if joRules.O[omodel].S['hasdistantlod'] = 'false' then AddMessage(editorID + #9 + 'FALSE');
+        if joRules.O[omodel].S['hasdistantlod'] = 'false' then ruleOverride := True;
     end
     else begin
         slTopPaths := TStringList.Create;
