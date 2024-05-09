@@ -538,6 +538,10 @@ begin
     else if lod8 <> olod8 then hasChanged := True
     else if lod16 <> olod16 then hasChanged := True
     else if lod32 <> olod32 then hasChanged := True;
+    if ((lod4 + lod8 + lod16 + lod32 = '') and (hasDistantLOD = 1)) then begin
+        hasDistantLOD := 0;
+        hasChanged := True;
+    end;
     if hasDistantLOD = 0 then begin
         if lod4 <> '' then hasDistantLOD := 1
         else if lod8 <> '' then hasDistantLOD := 1
