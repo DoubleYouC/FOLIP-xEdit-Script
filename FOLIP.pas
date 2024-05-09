@@ -504,10 +504,16 @@ begin
     olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
     olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
     editorid := GetElementEditValues(s, 'EDID');
+    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+
+    if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
+        Result := False;
+        Exit;
+    end;
 
     if joRules.Contains(editorid) then begin
         ruleOverride := True;
-        if joRules.O[editorid].S['hasdistantlod'] = 'True' then hasDistantLOD := 1 else hasDistantLOD := 0;
+        if joRules.O[editorid].S['hasdistantlod'] = 'true' then hasDistantLOD := 1 else hasDistantLOD := 0;
         lod4 := joRules.O[editorid].S['level0'];
         lod8 := joRules.O[editorid].S['level1'];
         lod16 := joRules.O[editorid].S['level2'];
@@ -515,14 +521,13 @@ begin
     end
     else if joRules.Contains(omodel) then begin
         ruleOverride := True;
-        if joRules.O[omodel].S['hasdistantlod'] = 'True' then hasDistantLOD := 1 else hasDistantLOD := 0;
+        if joRules.O[omodel].S['hasdistantlod'] = 'true' then hasDistantLOD := 1 else hasDistantLOD := 0;
         lod4 := joRules.O[omodel].S['level0'];
         lod8 := joRules.O[omodel].S['level1'];
         lod16 := joRules.O[omodel].S['level2'];
         lod32 := joRules.O[omodel].S['level3'];
     end
     else begin
-        hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
         slTopPaths := TStringList.Create;
         for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
             if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
