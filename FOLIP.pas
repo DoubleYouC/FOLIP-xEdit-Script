@@ -89,7 +89,7 @@ procedure AssignLODMaterialsList;
     Assign lod materials to MSWP record.
 }
 var
-    i, si, tp, sc, cnt, n: integer;
+    i, si, tp, sc, cnt, n, oms: integer;
     m, mn, substitutions, sub: IInterface;
     colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
     slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy: TStringList;
@@ -171,11 +171,10 @@ begin
             end;
             //ListStringsInStringList(slLODReplacements);
 
-
-            slLODSubOriginal.Add(slLODOriginals[0]);
-            slLODSubReplacement.Add(slLODReplacements[0]);
-
-
+            for oms := 0 to Pred(slLODOriginals.Count) do begin
+                slLODSubOriginal.Add(slLODOriginals[oms]);
+                slLODSubReplacement.Add(slLODReplacements[0]);
+            end;
 
             slLODReplacements.Free;
             slLODOriginals.Free;
@@ -482,6 +481,9 @@ begin
 end;
 
 function AssignLODModels(s: IInterface): Boolean;
+{
+    Assigns LOD Models to Stat records.
+}
 var
     hasChanged, ruleOverride: Boolean;
     i, hasDistantLOD: integer;
@@ -507,6 +509,7 @@ begin
     hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
 
     if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
+        AddMessage(ShortName(s) + ' with editor ID ends in "nolod", so it will be skipped.');
         Result := False;
         Exit;
     end;
@@ -567,8 +570,6 @@ begin
     if hasDistantLOD = 1 then Result := True;
 end;
 
-
-
 function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
 {
     Given a model and level, checks to see if an LOD model exists and returns it.
@@ -602,7 +603,7 @@ function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstit
     Checks to see if an LOD material exists and returns it.
 }
 var
-    i: integer;
+    i, a: integer;
     searchMaterial, p1, p2, p3: string;
 begin
     // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
@@ -621,6 +622,9 @@ begin
         if ((slMatFiles.IndexOf(p2) > -1) and (slExistingSubstitutions.IndexOf(p2) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
         p3 := TrimLeftChars(searchMaterial, 5) + '_lod.bgsm';
         if ((slMatFiles.IndexOf(p3) > -1) and (slExistingSubstitutions.IndexOf(p3) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
+    end;
+    if joMswpMap.Contains(material) then begin
+        for a := 0 to Pred(joMswpMap.A[material].Count) do slPossibleLODPaths.Add(joMswpMap.A[material].S[a]);
     end;
 end;
 
