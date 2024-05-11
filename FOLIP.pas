@@ -5,7 +5,7 @@ unit FOLIP;
 
 //Create variables that will need to be used accross multiple functions/procedures.
 var
-    tlStats, tlMstt, tlFurn, tlActi, tlMswp, tlBasesWithLOD: TList;
+    tlStats, tlActiFurnMstt, tlMswp: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
@@ -50,10 +50,15 @@ begin
     AssignLODModelsList;
 
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
+    ProcessMSTT;
+
+    //Add Messages
+    ListStringsInStringList(slMessages);
 
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
+
 
     //Fix bad mod lod edits.
 
@@ -66,15 +71,13 @@ function Finalize: integer;
 }
 begin
   tlStats.Free;
-  tlMstt.Free;
-  tlFurn.Free;
-  tlActi.Free;
+  tlActiFurnMstt.Free;
   tlMswp.Free;
-  tlBasesWithLOD.Free;
 
   slNifFiles.Free;
   slMatFiles.Free;
   slTopLevelModPatternPaths.Free;
+  slMessages.Free;
 
   joRules.Free;
   joMswpMap.Free;
@@ -84,11 +87,64 @@ end;
 
 procedure ProcessMSTT;
 var
-    i: integer;
-    m: IInterface;
+    si, i, cnt: integer;
+    r, s, ms, rCell, fakeStatic, patchStatGroup: IInterface;
+    HasLOD, HasMS: Boolean;
+    joLOD: TJsonObject;
+    fakeStaticEditorId: string;
 begin
-    for i := 0 to Pred(tlMstt.Count) do begin
-        m := ObjectToElement(tlMstt[i]);
+    for i := 0 to Pred(tlActiFurnMstt.Count) do begin
+        s := ObjectToElement(tlActiFurnMstt[i]);
+        joLOD := TJsonObject.Create;
+        HasLOD := AssignLODModels(s, joLOD);
+
+        //AssignLODToStat(s, joLOD);
+
+        //Process references that have lod.
+        if HasLOD then begin
+            cnt := 0;
+
+            for si := 0 to Pred(ReferencedByCount(s)) do begin
+                r := ReferencedByIndex(s, si);
+                if Signature(r) <> 'REFR' then continue;
+                if not IsWinningOverride(r) then continue;
+                if GetIsDeleted(r) then continue;
+                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+
+                //This reference should get lod if it passes these checks.
+                cnt := cnt + 1;
+                //Perform these functions if this is the very first reference. We set up the base object and mat swap.
+                if cnt = 1 then begin
+                    //Add a new 'fake' STAT record which we will use to place LODs for these non-STAT records.
+                    iCurrentPlugin := RefMastersDeterminePlugin(s);
+                    patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
+                    HasMS := ElementExists(s, 'Model\MODS - Material Swap');
+
+                    //Add Fake STAT
+                    fakeStatic := Add(patchStatGroup, 'STAT', True);
+                    fakeStaticEditorId := SetEditorID(fakeStatic, 'FOLIP_' + EditorID(s) + '_FakeStatic');
+
+                    //Add base material swap
+                    if HasMS then begin
+                        ms := LinksTo(ElementByPath(s, 'Model\MODS'));
+                        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+                        Add(fakeStatic, 'XMSP', True);
+                        SetElementNativeValues(fakeStatic, 'XMSP', ms);
+                    end;
+
+                    //Add LOD models
+                    AssignLODToStat(fakeStatic, joLOD);
+                end;
+
+                //Add mat swap if it exists to list to check.
+                if not ElementExists(r, 'XMSP - Material Swap') then continue;
+                ms := LinksTo(ElementByPath(r, 'XMSP'));
+                if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+            end;
+        end;
+
+        joLOD.Free;
     end;
 end;
 
@@ -108,7 +164,7 @@ begin
     slMissingMaterials := TStringList.Create;
 
     for i := 0 to Pred(tlMswp.Count) do begin
-        m := ObjectToElement(tlMswp[i]);
+        m := WinningOverride(ObjectToElement(tlMswp[i]));
 
         slLODSubOriginal := TStringList.Create;
         slLODSubReplacement := TStringList.Create;
@@ -247,22 +303,16 @@ begin
         if HasLOD then begin
             cnt := ProcessReferences(s);
 
-            if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
-
             //check for base material swap
-            if ((cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap'))) then begin
-                ms := LinksTo(ElementByName(s, 'Model\MODS - Material Swap'));
+            if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
+                ms := LinksTo(ElementByPath(s, 'Model\MODS'));
                 if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
             end;
-        end
-        else begin
-            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] <> 0)) then AddMessage('WARNING WARNING WARNING ' + #9 + ShortName(s));
+
+            if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
         end;
         joLOD.Free;
     end;
-    ListStringsInStringList(slMessages);
-    slMessages.Free;
-    slMessages.Create;
 end;
 
 function ProcessReferences(s: IInterface;): integer;
@@ -280,9 +330,8 @@ begin
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         cnt := cnt + 1;
         if not ElementExists(r, 'XMSP - Material Swap') then continue;
-        ms := LinksTo(ElementByName(r, 'XMSP - Material Swap'));
-        if tlMswp.IndexOf(ms) > -1 then continue;
-        tlMswp.Add(ms);
+        ms := LinksTo(ElementByPath(r, 'XMSP'));
+        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
     end;
     Result := cnt;
 end;
@@ -338,11 +387,8 @@ procedure CreateObjects;
 begin
     //TLists
     tlStats := TList.Create;
-    tlMstt := TList.Create;
-    tlFurn := TList.Create;
-    tlActi := TList.Create;
+    tlActiFurnMstt := TList.Create;
     tlMswp := TList.Create;
-    tlBasesWithLOD := TList.Create;
 
     //TStringLists
     slMatFiles := TStringList.Create;
@@ -369,12 +415,10 @@ var
     i, j, idx: integer;
     recordId: string;
     f, g, r: IInterface;
-    slStats, slMstt, slFurn, slActi: TStringList;
+    slStats, slActiFurnMstt: TStringList;
 begin
     slStats := TStringList.Create;
-    slMstt := TStringList.Create;
-    slFurn := TStringList.Create;
-    slActi := TStringList.Create;
+    slActiFurnMstt := TStringList.Create;
 
     //Iterate over all files.
     for i := 0 to Pred(FileCount) do begin
@@ -397,10 +441,10 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             r := WinningOverride(ElementByIndex(g, j));
             recordId := GetFileName(r) + #9 + ShortName(r);
-            idx := slMstt.IndexOf(recordId);
+            idx := slActiFurnMstt.IndexOf(recordId);
             if idx > -1 then continue
-            slMstt.Add(recordId);
-            tlMstt.Add(r);
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
         end;
 
         //FURN
@@ -408,10 +452,10 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             r := WinningOverride(ElementByIndex(g, j));
             recordId := GetFileName(r) + #9 + ShortName(r);
-            idx := slFurn.IndexOf(recordId);
+            idx := slActiFurnMstt.IndexOf(recordId);
             if idx > -1 then continue
-            slFurn.Add(recordId);
-            tlFurn.Add(r);
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
         end;
 
         //ACTI
@@ -419,23 +463,19 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             r := WinningOverride(ElementByIndex(g, j));
             recordId := GetFileName(r) + #9 + ShortName(r);
-            idx := slActi.IndexOf(recordId);
+            idx := slActiFurnMstt.IndexOf(recordId);
             if idx > -1 then continue
-            slActi.Add(recordId);
-            tlActi.Add(r);
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
         end;
 
     end;
 
     slStats.Free;
-    slMstt.Free;
-    slFurn.Free;
-    slActi.Free;
+    slActiFurnMstt.Free;
 
     AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
-    AddMessage('Found ' + IntToStr(tlMstt.Count) + ' MSTT records.');
-    AddMessage('Found ' + IntToStr(tlFurn.Count) + ' FURN records.');
-    AddMessage('Found ' + IntToStr(tlActi.Count) + ' ACTI records.');
+    AddMessage('Found ' + IntToStr(tlActiFurnMstt.Count) + ' ACTI, FURN, and MSTT records.');
 end;
 
 procedure FilesInContainers(containers: TStringList);
@@ -557,6 +597,11 @@ var
 begin
     hasChanged := False;
     ruleOverride := False;
+    olod4 := '';
+    olod8 := '';
+    olod16 := '';
+    olod32 := '';
+    hasDistantLOD := 0;
 
     omodel := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
 
@@ -565,12 +610,16 @@ begin
     colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
     if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
 
-    olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
-    olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
-    olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
-    olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+    //Only STAT records have these. We use this function on other signatures that don't have these fields.
+    if Signature(s) = 'STAT' then begin
+        olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
+        olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
+        olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
+        olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+        hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+    end;
+
     editorid := GetElementEditValues(s, 'EDID');
-    hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
 
     if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
         slMessages.Add(ShortName(s) + ' - Editor ID ends in "nolod", so it will be skipped.');
