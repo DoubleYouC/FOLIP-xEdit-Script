@@ -6,7 +6,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 var
     tlStats, tlMstt, tlFurn, tlActi, tlMswp, tlBasesWithLOD: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slStatLODMswp, slMswp: TStringList;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f: string;
@@ -52,7 +52,7 @@ begin
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
 
     //Apply lod material swaps.
-    AddMessage('Assigning LOD materials to ' + IntToStr(slStatLODMswp.Count) + ' material swaps.');
+    AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
 
     //Fix bad mod lod edits.
@@ -72,11 +72,9 @@ begin
   tlMswp.Free;
   tlBasesWithLOD.Free;
 
-  slStatLODMswp.Free;
   slNifFiles.Free;
   slMatFiles.Free;
   slTopLevelModPatternPaths.Free;
-  slMswp.Free;
 
   joRules.Free;
   joMswpMap.Free;
@@ -109,15 +107,8 @@ begin
     //store missing lod materials here
     slMissingMaterials := TStringList.Create;
 
-    for i := 0 to Pred(slStatLODMswp.Count) do begin
-        try
-            m := ObjectToElement(tlMswp[slMswp.IndexOf(slStatLODMswp[i])]);
-        except
-            on E : Exception do begin
-                AddMessage(#9 + 'ERROR ERROR ERROR with ' + slStatLODMswp[i]);
-                continue;
-            end;
-        end;
+    for i := 0 to Pred(tlMswp.Count) do begin
+        m := ObjectToElement(tlMswp[i]);
 
         slLODSubOriginal := TStringList.Create;
         slLODSubReplacement := TStringList.Create;
@@ -241,8 +232,7 @@ procedure AssignLODModelsList;
 var
     i, cnt: integer;
     HasLOD: Boolean;
-    s: IInterface;
-    ms: string;
+    ms, s: IInterface;
     joLOD: TJsonObject;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
@@ -261,8 +251,8 @@ begin
 
             //check for base material swap
             if ((cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap'))) then begin
-                ms := GetElementEditValues(s, 'Model\MODS - Material Swap');
-                if slStatLODMswp.IndexOf(ms) = -1 then slStatLODMswp.Add(ms);
+                ms := LinksTo(ElementByName(s, 'Model\MODS - Material Swap'));
+                if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
             end;
         end
         else begin
@@ -270,13 +260,15 @@ begin
         end;
         joLOD.Free;
     end;
+    ListStringsInStringList(slMessages);
+    slMessages.Free;
+    slMessages.Create;
 end;
 
 function ProcessReferences(s: IInterface;): integer;
 var
     si, cnt: integer;
-    r, rCell: IInterface;
-    ms: string;
+    ms, r, rCell: IInterface;
 begin
     cnt := 0;
     for si := 0 to Pred(ReferencedByCount(s)) do begin
@@ -288,9 +280,9 @@ begin
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         cnt := cnt + 1;
         if not ElementExists(r, 'XMSP - Material Swap') then continue;
-        ms := GetElementEditValues(r, 'XMSP - Material Swap');
-        if slStatLODMswp.IndexOf(ms) > -1 then continue;
-        slStatLODMswp.Add(ms);
+        ms := LinksTo(ElementByName(r, 'XMSP - Material Swap'));
+        if tlMswp.IndexOf(ms) > -1 then continue;
+        tlMswp.Add(ms);
     end;
     Result := cnt;
 end;
@@ -317,7 +309,9 @@ procedure ListStringsInStringList(sl: TStringList);
 var
     i: integer;
 begin
+    AddMessage('=======================================================================================');
     for i := 0 to Pred(sl.Count) do AddMessage(sl[i]);
+    AddMessage('=======================================================================================');
 end;
 
 procedure TopLevelModPatternPaths;
@@ -356,8 +350,7 @@ begin
     slNifFiles := TStringList.Create;
     slNifFiles.Duplicates := dupIgnore;
     slTopLevelModPatternPaths := TStringList.Create;
-    slStatLODMswp := TStringList.Create;
-    slMswp := TStringList.Create;
+    slMessages := TStringList.Create;
 
     //TJsonObjects
     joRules := TJsonObject.Create;
@@ -432,17 +425,6 @@ begin
             tlActi.Add(r);
         end;
 
-        //MSWP
-        g := GroupBySignature(f, 'MSWP');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := ShortName(r);
-            idx := slMswp.IndexOf(recordId);
-            if idx > -1 then continue
-            slMswp.Add(recordId);
-            tlMswp.Add(r);
-        end;
-
     end;
 
     slStats.Free;
@@ -454,7 +436,6 @@ begin
     AddMessage('Found ' + IntToStr(tlMstt.Count) + ' MSTT records.');
     AddMessage('Found ' + IntToStr(tlFurn.Count) + ' FURN records.');
     AddMessage('Found ' + IntToStr(tlActi.Count) + ' ACTI records.');
-    AddMessage('Found ' + IntToStr(tlMswp.Count) + ' MSWP records.');
 end;
 
 procedure FilesInContainers(containers: TStringList);
@@ -464,16 +445,47 @@ procedure FilesInContainers(containers: TStringList);
 var
     slArchivedFiles: TStringList;
     i: integer;
-    f: string;
+    f, archive: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
-    for i := 0 to Pred(containers.Count) do ResourceList(containers[i], slArchivedFiles);
+    for i := 0 to Pred(containers.Count) do begin
+        archive := TrimRightChars(containers[i], Length(wbDataPath));
+        if ContainsText(archive, ' - Animations.ba2') then continue;
+        if ContainsText(archive, ' - Interface.ba2') then continue;
+        if ContainsText(archive, ' - MeshesExtra.ba2') then continue;
+        if ContainsText(archive, ' - Nvflex.ba2') then continue;
+        if ContainsText(archive, ' - Shaders.ba2') then continue;
+        if ContainsText(archive, ' - Sounds.ba2') then continue;
+        if ContainsText(archive, ' - Startup.ba2') then continue;
+        if ContainsText(archive, ' - Textures.ba2') then continue;
+        if ContainsText(archive, ' - Textures1.ba2') then continue;
+        if ContainsText(archive, ' - Textures2.ba2') then continue;
+        if ContainsText(archive, ' - Textures3.ba2') then continue;
+        if ContainsText(archive, ' - Textures4.ba2') then continue;
+        if ContainsText(archive, ' - Textures5.ba2') then continue;
+        if ContainsText(archive, ' - Textures6.ba2') then continue;
+        if ContainsText(archive, ' - Textures7.ba2') then continue;
+        if ContainsText(archive, ' - Textures8.ba2') then continue;
+        if ContainsText(archive, ' - Textures9.ba2') then continue;
+        if ContainsText(archive, ' - Voices.ba2') then continue;
+        if ContainsText(archive, ' - Voices_cn.ba2') then continue;
+        if ContainsText(archive, ' - Voices_de.ba2') then continue;
+        if ContainsText(archive, ' - Voices_en.ba2') then continue;
+        if ContainsText(archive, ' - Voices_es.ba2') then continue;
+        if ContainsText(archive, ' - Voices_esmx.ba2') then continue;
+        if ContainsText(archive, ' - Voices_fr.ba2') then continue;
+        if ContainsText(archive, ' - Voices_it.ba2') then continue;
+        if ContainsText(archive, ' - Voices_ja.ba2') then continue;
+        if ContainsText(archive, ' - Voices_pl.ba2') then continue;
+        if ContainsText(archive, ' - Voices_ptbr.ba2') then continue;
+        if ContainsText(archive, ' - Voices_ru.ba2') then continue;
+        if archive <> '' then AddMessage('Loaded archive: ' + archive);
+        ResourceList(containers[i], slArchivedFiles);
+    end;
     for i := 0 to Pred(slArchivedFiles.Count) do begin
         f := slArchivedFiles[i];
         //materials or meshes
-        {if IsLODResourceModel(f) then slNifFiles.Add(f)
-        else if IsInLODDir(f, 'materials') then slMatFiles.Add(f);}
         if IsInLODDir(f, 'materials') then slMatFiles.Add(f)
         else if IsLODResourceModel(f) then slNifFiles.Add(f);
     end;
@@ -561,7 +573,7 @@ begin
     hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
 
     if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
-        AddMessage(ShortName(s) + ' with editor ID ends in "nolod", so it will be skipped.');
+        slMessages.Add(ShortName(s) + ' - Editor ID ends in "nolod", so it will be skipped.');
         Result := False;
         Exit;
     end;
