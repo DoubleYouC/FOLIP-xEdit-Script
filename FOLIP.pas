@@ -84,6 +84,16 @@ begin
   Result := 0;
 end;
 
+procedure ProcessMSTT;
+var
+    i: integer;
+    m: IInterface;
+begin
+    for i := 0 to Pred(tlMstt.Count) do begin
+        m := ObjectToElement(tlMstt[i]);
+    end;
+end;
+
 procedure AssignLODMaterialsList;
 {
     Assign lod materials to MSWP record.
@@ -100,7 +110,14 @@ begin
     slMissingMaterials := TStringList.Create;
 
     for i := 0 to Pred(slStatLODMswp.Count) do begin
-        m := ObjectToElement(tlMswp[slMswp.IndexOf(slStatLODMswp[i])]);
+        try
+            m := ObjectToElement(tlMswp[slMswp.IndexOf(slStatLODMswp[i])]);
+        except
+            on E : Exception do begin
+                AddMessage(#9 + 'ERROR ERROR ERROR with ' + slStatLODMswp[i]);
+                continue;
+            end;
+        end;
 
         slLODSubOriginal := TStringList.Create;
         slLODSubReplacement := TStringList.Create;
@@ -192,7 +209,7 @@ begin
         iCurrentPlugin := RefMastersDeterminePlugin(m);
         mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
         for n := 0 to Pred(cnt) do begin
-            AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
+            //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
             AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
         end;
         slLODSubOriginal.Free;
@@ -222,40 +239,75 @@ procedure AssignLODModelsList;
     Assign lod models to STAT records.
 }
 var
-    i, si, cnt: integer;
+    i, cnt: integer;
     HasLOD: Boolean;
-    m, r, s, rCell: IInterface;
+    s: IInterface;
     ms: string;
+    joLOD: TJsonObject;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
         s := ObjectToElement(tlStats[i]);
-        HasLOD := AssignLODModels(s);
+        joLOD := TJsonObject.Create;
+        HasLOD := AssignLODModels(s, joLOD);
+
+        //Add lod change if the HasDistantLOD flag needs to be unset.
+        if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD);
+
         //List relevant material swaps
         if HasLOD then begin
-            cnt := 0;
-            //check references for material swaps
-            m := MasterOrSelf(s);
-            for si := 0 to Pred(ReferencedByCount(m)) do begin
-                r := ReferencedByIndex(m, si);
-                if Signature(r) <> 'REFR' then continue;
-                if not IsWinningOverride(r) then continue;
-                if GetIsDeleted(r) then continue;
-                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
-                cnt := cnt + 1;
-                if not ElementExists(r, 'XMSP - Material Swap') then continue;
-                ms := GetElementEditValues(r, 'XMSP - Material Swap');
-                if slStatLODMswp.IndexOf(ms) > -1 then continue;
-                slStatLODMswp.Add(ms);
-            end;
+            cnt := ProcessReferences(s);
+
+            if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
 
             //check for base material swap
             if ((cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap'))) then begin
                 ms := GetElementEditValues(s, 'Model\MODS - Material Swap');
                 if slStatLODMswp.IndexOf(ms) = -1 then slStatLODMswp.Add(ms);
             end;
+        end
+        else begin
+            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] <> 0)) then AddMessage('WARNING WARNING WARNING ' + #9 + ShortName(s));
         end;
+        joLOD.Free;
     end;
+end;
+
+function ProcessReferences(s: IInterface;): integer;
+var
+    si, cnt: integer;
+    r, rCell: IInterface;
+    ms: string;
+begin
+    cnt := 0;
+    for si := 0 to Pred(ReferencedByCount(s)) do begin
+        r := ReferencedByIndex(s, si);
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        if GetIsDeleted(r) then continue;
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        cnt := cnt + 1;
+        if not ElementExists(r, 'XMSP - Material Swap') then continue;
+        ms := GetElementEditValues(r, 'XMSP - Material Swap');
+        if slStatLODMswp.IndexOf(ms) > -1 then continue;
+        slStatLODMswp.Add(ms);
+    end;
+    Result := cnt;
+end;
+
+procedure AssignLODToStat(s: IInterface; joLOD: TJsonObject);
+var
+    n: IInterface;
+begin
+    //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
+    iCurrentPlugin := RefMastersDeterminePlugin(s);
+    n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
+    SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod']);
+    Add(n, 'MNAM', True);
+    SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
+    SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
+    SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
+    SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
 end;
 
 procedure ListStringsInStringList(sl: TStringList);
@@ -480,7 +532,7 @@ begin
     end;
 end;
 
-function AssignLODModels(s: IInterface): Boolean;
+function AssignLODModels(s: IInterface; joLOD: TJsonObject): Boolean;
 {
     Assigns LOD Models to Stat records.
 }
@@ -557,17 +609,13 @@ begin
 
     if hasChanged then begin
         //AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
-        iCurrentPlugin := RefMastersDeterminePlugin(s);
-        n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
-        SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', hasDistantLOD);
-        Add(n, 'MNAM', True);
-        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', lod4);
-        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', lod8);
-        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', lod16);
-        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', lod32);
+        joLOD.I['hasdistantlod'] := hasDistantLOD;
+        joLOD.S['level0'] := lod4;
+        joLOD.S['level1'] := lod8;
+        joLOD.S['level2'] := lod16;
+        joLOD.S['level3'] := lod32;
     end;
-    Result := False;
-    if hasDistantLOD = 1 then Result := True;
+    if hasDistantLOD <> 0 then Result := True else Result := False;
 end;
 
 function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
