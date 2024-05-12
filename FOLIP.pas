@@ -5,7 +5,7 @@ unit FOLIP;
 
 //Create variables that will need to be used accross multiple functions/procedures.
 var
-    tlStats, tlActiFurnMstt, tlMswp: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlCells: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
@@ -50,7 +50,7 @@ begin
     AssignLODModelsList;
 
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
-    ProcessMSTT;
+    ProcessActiFurnMstt;
 
     //Add Messages
     ListStringsInStringList(slMessages);
@@ -73,6 +73,7 @@ begin
   tlStats.Free;
   tlActiFurnMstt.Free;
   tlMswp.Free;
+  tlCells.Free;
 
   slNifFiles.Free;
   slMatFiles.Free;
@@ -85,13 +86,13 @@ begin
   Result := 0;
 end;
 
-procedure ProcessMSTT;
+procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
-    r, s, ms, rCell, fakeStatic, patchStatGroup: IInterface;
+    n, r, s, ms, rCell, fakeStatic, patchStatGroup: IInterface;
     HasLOD, HasMS: Boolean;
     joLOD: TJsonObject;
-    fakeStaticEditorId: string;
+    fakeStaticEditorId, fakeStaticFormID: string;
 begin
     for i := 0 to Pred(tlActiFurnMstt.Count) do begin
         s := ObjectToElement(tlActiFurnMstt[i]);
@@ -124,6 +125,7 @@ begin
                     //Add Fake STAT
                     fakeStatic := Add(patchStatGroup, 'STAT', True);
                     fakeStaticEditorId := SetEditorID(fakeStatic, 'FOLIP_' + EditorID(s) + '_FakeStatic');
+                    fakeStaticFormID := IntToHex(GetLoadOrderFormID(fakeStatic), 8);
 
                     //Add base material swap
                     if HasMS then begin
@@ -136,6 +138,18 @@ begin
                     //Add LOD models
                     AssignLODToStat(fakeStatic, joLOD);
                 end;
+
+                //Copy
+                if tlCells.IndexOf(rCell) < 0 then begin
+                    tlCells.Add(rCell);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell);
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                end;
+
+                //Copy duplicate of ref to patch and set base record to fakeStatic
+                iCurrentPlugin := RefMastersDeterminePlugin(r);
+                n := wbCopyElementToFile(r, iCurrentPlugin, True, True);
+                SetElementEditValues(n, 'NAME', fakeStaticFormID);
 
                 //Add mat swap if it exists to list to check.
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
@@ -389,6 +403,7 @@ begin
     tlStats := TList.Create;
     tlActiFurnMstt := TList.Create;
     tlMswp := TList.Create;
+    tlCells := TList.Create;
 
     //TStringLists
     slMatFiles := TStringList.Create;
@@ -823,10 +838,10 @@ begin
         Result := 0;
         Exit;
     end;
-    //iFolipMasterFile := AddNewFileName(sFolipMasterFileName, True);
+    //iFolipMasterFile := AddNewFileName(sFolipMasterFileName, False);
     //AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
     //SetIsESM(iFolipMasterFile, True);
-    iFolipPluginFile := AddNewFileName(sFolipPluginFileName, True);
+    iFolipPluginFile := AddNewFileName(sFolipPluginFileName, False);
     AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
 
     Result := 1;
