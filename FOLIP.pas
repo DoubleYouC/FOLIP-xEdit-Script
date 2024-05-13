@@ -251,8 +251,13 @@ begin
             //ListStringsInStringList(slLODReplacements);
 
             for oms := 0 to Pred(slLODOriginals.Count) do begin
-                slLODSubOriginal.Add(slLODOriginals[oms]);
-                slLODSubReplacement.Add(slLODReplacements[0]);
+                om := slLODOriginals[oms];
+                if slLODSubOriginal.IndexOf(om) > -1 then continue;
+                if slExistingSubstitutions.IndexOf('materials\' + om) > -1 then continue;
+                rm := slLODReplacements[0];
+                if om = rm then continue;
+                slLODSubOriginal.Add(om);
+                slLODSubReplacement.Add(rm);
             end;
 
             slLODReplacements.Free;
