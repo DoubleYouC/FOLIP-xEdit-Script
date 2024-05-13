@@ -754,7 +754,7 @@ begin
     if joMswpMap.Contains(searchMaterial) then begin
         for a := 0 to Pred(joMswpMap.A[searchMaterial].Count) do begin
             p4 := joMswpMap.A[searchMaterial].S[a];
-            if slExistingSubstitutions.IndexOf(p4) = -1 then slPossibleLODPaths.Add(p4);
+            if slExistingSubstitutions.IndexOf('materials\' + p4) = -1 then slPossibleLODPaths.Add(p4);
         end;
     end;
 end;
