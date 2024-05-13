@@ -240,7 +240,6 @@ begin
 
             hasLODReplacementMaterial := False;
             slLODReplacements := TStringList.Create;
-            slDummy.Add(slLODOriginals[0]);
             rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slDummy, slLODReplacements);
             slTopPaths.Free;
             if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
@@ -252,7 +251,6 @@ begin
             //ListStringsInStringList(slLODReplacements);
 
             for oms := 0 to Pred(slLODOriginals.Count) do begin
-
                 slLODSubOriginal.Add(slLODOriginals[oms]);
                 slLODSubReplacement.Add(slLODReplacements[0]);
             end;
