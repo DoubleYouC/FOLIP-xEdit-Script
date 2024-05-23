@@ -32,7 +32,7 @@ begin
     bSkip := False;
     CreateObjects;
     FetchRules;
-    OptionForm;
+    if not OptionForm then Exit;
 
     TopLevelModPatternPaths;
 
@@ -343,8 +343,7 @@ begin
     edlod16.Text := lod16;
     edlod32.Text := lod32;
 
-    if frmRule.ShowModal <> mrOk then
-      Exit;
+    if frmRule.ShowModal <> mrOk then Exit;
 
     key := edKey.Text;
     hasdistantlod := chkHasDistantLOD.Checked;
@@ -358,7 +357,7 @@ begin
   end;
 end;
 
-procedure OptionForm;
+function OptionForm: Boolean;
 var
     i: integer;
     mnRules: TPopupMenu;
@@ -451,7 +450,11 @@ begin
         pnl.Width := frm.Width - 20;
         pnl.Height := 2;
 
-        if frm.ShowModal <> mrOk then Exit;
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
 
     finally
         frm.Free;
