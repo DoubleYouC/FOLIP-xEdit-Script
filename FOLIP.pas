@@ -10,7 +10,8 @@ var
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f: string;
-    joRules, joMswpMap: TJsonObject;
+    bSaveUserRules, bUserRulesChanged: Boolean;
+    joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
 
@@ -25,14 +26,17 @@ function Initialize:integer;
     This function is called at the beginning.
 }
 var
-    bSkip : Boolean;
+    bSkip: Boolean;
     slContainers: TStringList;
     i: integer;
 begin
-    bSkip := False;
+    bSkip := True;
+    bUserRulesChanged := False;
     CreateObjects;
     FetchRules;
-    if not OptionForm then Exit;
+
+    bSaveUserRules := OptionForm;
+    if not bSaveUserRules then Exit;
 
     TopLevelModPatternPaths;
 
@@ -91,6 +95,14 @@ begin
 
     joRules.Free;
     joMswpMap.Free;
+
+    //Save user rules
+    if bSaveUserRules and bUserRulesChanged then begin
+        AddMessage('Saving ' + IntToStr(joUserRules.Count) + ' user rule(s) to ' + wbDataPath + 'FOLIP\UserRules.json');
+        joUserRules.SaveToFile(wbDataPath + 'FOLIP\UserRules.json', False, TEncoding.UTF8, True);
+    end;
+
+    joUserRules.Free;
 
     Result := 0;
 end;
@@ -152,6 +164,9 @@ begin
     joRules.O[key].S['level2'] := lod16;
     joRules.O[key].S['level3'] := lod32;
 
+    joUserRules.O[key].Assign(joRules.O[key]);
+    bUserRulesChanged := True;
+
     lvRules.Items.Count := joRules.Count;
     lvRules.Refresh;
 end;
@@ -182,6 +197,9 @@ begin
     joRules.O[key].S['level1'] := lod8;
     joRules.O[key].S['level2'] := lod16;
     joRules.O[key].S['level3'] := lod32;
+
+    joUserRules.O[key].Assign(joRules.O[key]);
+    bUserRulesChanged := True;
 
     lvRules.Items.Count := joRules.Count;
     lvRules.Refresh;
@@ -928,7 +946,7 @@ begin
     slArchivedFiles.Free;
 end;
 
-procedure LoadRules(i: integer; f: string);
+procedure LoadRules(f: string);
 {
     Load LOD Rules and Material Swap Map JSON files
 }
@@ -951,11 +969,7 @@ begin
             sub.LoadFromResource(j);
             for c := 0 to Pred(sub.Count) do begin
                 key := sub.Names[c];
-                joRules.O[key].S['hasdistantlod'] := sub.O[key].S['hasdistantlod'];
-                joRules.O[key].S['level0'] := sub.O[key].S['level0'];
-                joRules.O[key].S['level1'] := sub.O[key].S['level1'];
-                joRules.O[key].S['level2'] := sub.O[key].S['level2'];
-                joRules.O[key].S['level3'] := sub.O[key].S['level3'];
+                joRules.O[key].Assign(sub.O[key]);
             end;
             sub.Free;
         end;
@@ -1181,13 +1195,22 @@ procedure FetchRules;
     Loads the Rule JSON files.
 }
 var
-    i: integer;
-    f, key: string;
-    sub: TJsonObject;
+    c, i: integer;
+    f, j, key: string;
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
-        LoadRules(i, f);
+        LoadRules(f);
+    end;
+    j := 'FOLIP\UserRules.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded LOD Rule File: ' + j);
+        joUserRules := TJsonObject.Create;
+        joUserRules.LoadFromResource(j);
+        for c := 0 to Pred(joUserRules.Count) do begin
+            key := joUserRules.Names[c];
+            joRules.O[key].Assign(joUserRules.O[key]);
+        end;
     end;
     SortJSONObjectKeys(joRules);
 end;
