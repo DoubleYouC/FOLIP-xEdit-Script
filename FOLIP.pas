@@ -10,7 +10,7 @@ var
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f: string;
-    bFakeStatics, bSaveUserRules, bUserRulesChanged: Boolean;
+    bFakeStatics, bForceLOD8, bSaveUserRules, bUserRulesChanged: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
@@ -31,25 +31,32 @@ var
     slContainers: TStringList;
     i: integer;
 begin
+    // This is a dev switch. Don't use.
     bSkip := False;
+
+    //Used to tell the Rule Editor whether or not to save changes.
     bSaveUserRules := False;
     bUserRulesChanged := False;
+
+    //Set default options.
     bFakeStatics := True;
+    bForceLOD8 := False;
 
     CreateObjects;
     FetchRules;
-
-    if not MainMenuForm then Exit;
-
     TopLevelModPatternPaths;
 
+    //Display the main menu. If the user presses the cancel button, exit.
+    if not MainMenuForm then Exit;
+
+    //Dev switch to skip the rest in case I press the Start button.
     if bSkip then Exit;
 
     //Create FOLIP plugins
     if not CreatePlugins then Exit;
 
     AddMessage('Collecting assets...');
-    //scan archives and loose files
+    //Scan archives and loose files.
     slContainers := TStringList.Create;
     ResourceContainerList(slContainers);
     FilesInContainers(slContainers);
@@ -397,7 +404,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics: TCheckBox;
+    chkFakeStatics, chkForceLOD8: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -444,10 +451,19 @@ begin
         chkFakeStatics.Parent := gbOptions;
         chkFakeStatics.Left := 16;
         chkFakeStatics.Top := 32;
-        chkFakeStatics.Width := 200;
+        chkFakeStatics.Width := 120;
         chkFakeStatics.Caption := 'Create Fake Statics';
         chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT) references to receive LOD' + #13#10 + 'by creating invisible static reference duplicates with LOD attached.';
         chkFakeStatics.ShowHint := True;
+
+        chkForceLOD8 := TCheckBox.Create(gbOptions);
+        chkForceLOD8.Parent := gbOptions;
+        chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 16;
+        chkForceLOD8.Top := 32;
+        chkForceLOD8.Width := 120;
+        chkForceLOD8.Caption := 'Force LOD8';
+        chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,' + #13#10 + 'this will use the LOD4 model in LOD8. Use this for increased LOD distance at the cose of some performance, but better than increasing the fBlockLevel0Distance.';
+        chkForceLOD8.ShowHint := True;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
@@ -472,6 +488,7 @@ begin
         pnl.Height := 2;
 
         chkFakeStatics.Checked := bFakeStatics;
+        chkForceLOD8.Checked := bForceLOD8;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -480,6 +497,7 @@ begin
         else Result := True;
 
         bFakeStatics := chkFakeStatics.Checked;
+        bForceLOD8 := chkForceLOD8.Checked;
 
     finally
         frm.Free;
@@ -1150,22 +1168,23 @@ begin
 
     editorid := GetElementEditValues(s, 'EDID');
 
-    if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
-        slMessages.Add(ShortName(s) + ' - Editor ID ends in "nolod", so it will be skipped.');
-        Result := False;
-        Exit;
-    end;
-
     if joRules.Contains(editorid) then begin
         lod4 := joRules.O[editorid].S['level0'];
         lod8 := joRules.O[editorid].S['level1'];
+        if bForceLOD8 and (lod8 = '') and (lod4 <> '') then lod8 := lod4;
         lod16 := joRules.O[editorid].S['level2'];
         lod32 := joRules.O[editorid].S['level3'];
         if joRules.O[editorid].S['hasdistantlod'] = 'false' then ruleOverride := True;
     end
+    else if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
+        slMessages.Add(ShortName(s) + ' - Editor ID ends in "nolod", so it will be skipped.');
+        Result := False;
+        Exit;
+    end
     else if joRules.Contains(omodel) then begin
         lod4 := joRules.O[omodel].S['level0'];
         lod8 := joRules.O[omodel].S['level1'];
+        if bForceLOD8 and (lod8 = '') and (lod4 <> '') then lod8 := lod4;
         lod16 := joRules.O[omodel].S['level2'];
         lod32 := joRules.O[omodel].S['level3'];
         if joRules.O[omodel].S['hasdistantlod'] = 'false' then ruleOverride := True;
@@ -1177,10 +1196,12 @@ begin
         end;
         lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
         lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
+        if bForceLOD8 and (lod8 = '') and (lod4 <> '') then lod8 := lod4;
         lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
         lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
         slTopPaths.Free;
     end;
+
 
     if lod4 <> olod4 then hasChanged := True
     else if lod8 <> olod8 then hasChanged := True
