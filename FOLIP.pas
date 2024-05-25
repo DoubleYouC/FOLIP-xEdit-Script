@@ -14,6 +14,7 @@ var
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
+    btnRuleOk, btnRuleCancel: TButton;
 
 const
     sFolipMasterFileName = 'FOLIP Master.esm';
@@ -31,12 +32,13 @@ var
     i: integer;
 begin
     bSkip := True;
+    bSaveUserRules := False;
     bUserRulesChanged := False;
+
     CreateObjects;
     FetchRules;
 
-    bSaveUserRules := OptionForm;
-    if not bSaveUserRules then Exit;
+    if not MainMenuForm then Exit;
 
     TopLevelModPatternPaths;
 
@@ -105,14 +107,6 @@ begin
     joUserRules.Free;
 
     Result := 0;
-end;
-
-procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
-{
-    Close form handler.
-}
-begin
-    if TForm(Sender).ModalResult <> mrOk then Exit;
 end;
 
 procedure lvRulesData(Sender: TObject; Item: TListItem);
@@ -210,11 +204,18 @@ procedure RulesMenuDeleteClick(Sender: TObject);
     Delete rule
 }
 var
-    idx: integer;
+    idx, uidx: integer;
+    key: string;
 begin
     if not Assigned(lvRules.Selected) then Exit;
     idx := lvRules.Selected.Index;
+    key := joRules.Names[idx];
     joRules.Delete(idx);
+    uidx := joUserRules.IndexOf(key);
+    if uidx > -1 then begin
+        joUserRules.Delete(uidx);
+        bUserRulesChanged := True;
+    end;
     lvRules.Items.Count := joRules.Count;
     lvRules.Refresh;
 end;
@@ -265,6 +266,15 @@ begin
         MessageDlg('Mesh/EditorID must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
+end;
+
+procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close form handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit
+    else bSaveUserRules := True;
 end;
 
 function EditRuleForm(var key, lod4, lod8, lod16, lod32: string; var hasdistantlod: Boolean): Boolean;
@@ -375,21 +385,18 @@ begin
   end;
 end;
 
-function OptionForm: Boolean;
+function MainMenuForm: Boolean;
 var
-    i: integer;
-    mnRules: TPopupMenu;
-    MenuItem: TMenuItem;
-    lbl: TLabel;
-    pnl: TPanel;
     frm: TForm;
-    btnOk, btnCancel: TButton;
-    gbOptions: TGroupBox;
+    btnRuleEditor, btnStart, btnCancel: TButton;
+    pnl: TPanel;
+    picFolip: TPicture;
+    fImage: TImage;
 begin
     frm := TForm.Create(nil);
     try
         frm.Caption := 'FOLIP xEdit Patcher';
-        frm.Width := 1200;
+        frm.Width := 600;
         frm.Height := 600;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
@@ -397,12 +404,110 @@ begin
         frm.OnClose := frmOptionsFormClose;
         frm.OnKeyDown := FormKeyDown;
 
+        picFolip := TPicture.Create;
+        picFolip.LoadFromFile(ScriptsPath() + 'FOLIP\FOLIP.jpg');
+
+        fImage := TImage.Create(frm);
+		fImage.Picture := picFolip;
+		fImage.Parent := frm;
+        fImage.Width := 576;
+		fImage.Height := 278;
+		fImage.Left := 8;
+		fImage.Top := 12;
+
+        btnRuleEditor := TButton.Create(frm);
+        btnRuleEditor.Parent := frm;
+        btnRuleEditor.Caption := 'Rule Editor';
+        btnRuleEditor.OnClick := OptionForm;
+        btnRuleEditor.Top := fImage.Top + fImage.Height + 12;
+        btnRuleEditor.Font.Size := 16;
+        btnRuleEditor.Width := 150;
+        btnRuleEditor.Height := 75;
+        btnRuleEditor.Left := (frm.Width - btnRuleEditor.Width)/2;
+
+
+        btnStart := TButton.Create(frm);
+        btnStart.Parent := frm;
+        btnStart.Caption := 'Start';
+        btnStart.ModalResult := mrOk;
+        btnStart.Top := frm.Height - 70;
+
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnStart.Top;
+
+        btnStart.Left := (frm.Width - btnStart.Width - btnCancel.Width - 8)/2;
+        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
+
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := 8;
+        pnl.Top := btnStart.Top - 12;
+        pnl.Width := frm.Width - 20;
+        pnl.Height := 2;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+procedure frmResize(Sender: TObject);
+{
+    Handle resizing of elements in the rule menu.
+}
+var
+    frm: TForm;
+begin
+    try
+        frm := TForm(Sender);
+        lvRules.Width := frm.Width - 36;
+        lvRules.Left := (frm.Width - lvRules.Width)/2;
+        lvRules.Height := frm.Height - 110;
+
+        btnRuleOk.Top := frm.Height - 70;
+        btnRuleCancel.Top := btnRuleOk.Top;
+        btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
+        btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
+    except
+        frm := TForm(Sender);
+    end;
+end;
+
+function OptionForm: Boolean;
+var
+    i: integer;
+    mnRules: TPopupMenu;
+    MenuItem: TMenuItem;
+    lbl: TLabel;
+    frm: TForm;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Rule Editor';
+        frm.Width := 1200;
+        frm.Height := 600;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsSizeable;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+        frm.OnResize := frmResize;
+
         lvRules := TListView.Create(frm);
         lvRules.Parent := frm;
-        lvRules.Left := 10;
+
         lvRules.Top := 24;
-        lvRules.Width := frm.Width - 35;
-        lvRules.Height := 420;
+        lvRules.Width := frm.Width - 36;
+        lvRules.Left := (frm.Width - lvRules.Width)/2;
+        lvRules.Height := frm.Height - 110;
         lvRules.ReadOnly := True;
         lvRules.ViewStyle := vsReport;
         lvRules.RowSelect := True;
@@ -440,33 +545,20 @@ begin
         MenuItem.OnClick := RulesMenuEditClick;
         mnRules.Items.Add(MenuItem);
 
-        gbOptions := TGroupBox.Create(frm);
-        gbOptions.Parent := frm;
-        gbOptions.Left := lvRules.Left;
-        gbOptions.Top := lvRules.Top + lvRules.Height + 10;
-        gbOptions.Width := lvRules.Width;
-        gbOptions.Height := 50;
-        gbOptions.Caption := 'Options';
+        btnRuleOk := TButton.Create(frm);
+        btnRuleOk.Parent := frm;
+        btnRuleOk.Caption := 'OK';
+        btnRuleOk.ModalResult := mrOk;
+        btnRuleOk.Top := frm.Height - 70;
 
-        btnOk := TButton.Create(frm);
-        btnOk.Parent := frm;
-        btnOk.Caption := 'OK';
-        btnOk.ModalResult := mrOk;
-        btnOk.Left := frm.Width - 190;
-        btnOk.Top := frm.Height - 70;
+        btnRuleCancel := TButton.Create(frm);
+        btnRuleCancel.Parent := frm;
+        btnRuleCancel.Caption := 'Cancel';
+        btnRuleCancel.ModalResult := mrCancel;
+        btnRuleCancel.Top := btnRuleOk.Top;
 
-        btnCancel := TButton.Create(frm); btnCancel.Parent := frm;
-        btnCancel.Caption := 'Cancel';
-        btnCancel.ModalResult := mrCancel;
-        btnCancel.Left := btnOk.Left + btnOk.Width + 8;
-        btnCancel.Top := btnOk.Top;
-
-        pnl := TPanel.Create(frm);
-        pnl.Parent := frm;
-        pnl.Left := 8;
-        pnl.Top := btnOk.Top - 12;
-        pnl.Width := frm.Width - 20;
-        pnl.Height := 2;
+        btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
+        btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
