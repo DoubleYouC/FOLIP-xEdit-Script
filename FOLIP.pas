@@ -10,7 +10,7 @@ var
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f: string;
-    bSaveUserRules, bUserRulesChanged: Boolean;
+    bFakeStatics, bSaveUserRules, bUserRulesChanged: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
@@ -31,9 +31,10 @@ var
     slContainers: TStringList;
     i: integer;
 begin
-    bSkip := True;
+    bSkip := False;
     bSaveUserRules := False;
     bUserRulesChanged := False;
+    bFakeStatics := True;
 
     CreateObjects;
     FetchRules;
@@ -65,7 +66,7 @@ begin
     AssignLODModelsList;
 
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
-    ProcessActiFurnMstt;
+    if bFakeStatics then ProcessActiFurnMstt;
 
     //Add Messages
     ListStringsInStringList(slMessages);
@@ -386,18 +387,23 @@ begin
 end;
 
 function MainMenuForm: Boolean;
+{
+    Main menu form.
+}
 var
     frm: TForm;
     btnRuleEditor, btnStart, btnCancel: TButton;
     pnl: TPanel;
     picFolip: TPicture;
     fImage: TImage;
+    gbOptions: TGroupBox;
+    chkFakeStatics: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
         frm.Caption := 'FOLIP xEdit Patcher';
         frm.Width := 600;
-        frm.Height := 600;
+        frm.Height := 550;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
         frm.KeyPreview := True;
@@ -415,16 +421,33 @@ begin
 		fImage.Left := 8;
 		fImage.Top := 12;
 
+        gbOptions := TGroupBox.Create(frm);
+        gbOptions.Parent := frm;
+        gbOptions.Left := 10;
+        gbOptions.Top := fImage.Top + fImage.Height + 10;
+        gbOptions.Width := frm.Width - 30;
+        gbOptions.Caption := 'Options';
+
         btnRuleEditor := TButton.Create(frm);
         btnRuleEditor.Parent := frm;
         btnRuleEditor.Caption := 'Rule Editor';
         btnRuleEditor.OnClick := OptionForm;
-        btnRuleEditor.Top := fImage.Top + fImage.Height + 12;
         btnRuleEditor.Font.Size := 16;
         btnRuleEditor.Width := 150;
         btnRuleEditor.Height := 75;
         btnRuleEditor.Left := (frm.Width - btnRuleEditor.Width)/2;
 
+        gbOptions.Height := frm.Height - fImage.Height - fImage.Top - btnRuleEditor.Height - 116;
+        btnRuleEditor.Top := gbOptions.Top + gbOptions.Height + 12;
+
+        chkFakeStatics := TCheckBox.Create(gbOptions);
+        chkFakeStatics.Parent := gbOptions;
+        chkFakeStatics.Left := 16;
+        chkFakeStatics.Top := 32;
+        chkFakeStatics.Width := 200;
+        chkFakeStatics.Caption := 'Create Fake Statics';
+        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT) references to receive LOD' + #13#10 + 'by creating invisible static reference duplicates with LOD attached.';
+        chkFakeStatics.ShowHint := True;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
@@ -445,14 +468,18 @@ begin
         pnl.Parent := frm;
         pnl.Left := 8;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := frm.Width - 20;
+        pnl.Width := frm.Width - 26;
         pnl.Height := 2;
+
+        chkFakeStatics.Checked := bFakeStatics;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
             Exit;
         end
         else Result := True;
+
+        bFakeStatics := chkFakeStatics.Checked;
 
     finally
         frm.Free;
