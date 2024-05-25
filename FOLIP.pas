@@ -6,11 +6,11 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 var
     tlStats, tlActiFurnMstt, tlMswp, tlCells: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages: TStringList;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
-    f: string;
-    bFakeStatics, bForceLOD8, bSaveUserRules, bUserRulesChanged: Boolean;
+    f, sFolipPluginFileName: string;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bSaveUserRules, bUserRulesChanged: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
@@ -18,7 +18,6 @@ var
 
 const
     sFolipMasterFileName = 'FOLIP Master.esm';
-    sFolipPluginFileName = 'FOLIP Patch.esp';
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
 
@@ -34,6 +33,9 @@ begin
     // This is a dev switch. Don't use.
     bSkip := False;
 
+    // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
+    bReportMissingLOD := False;
+
     //Used to tell the Rule Editor whether or not to save changes.
     bSaveUserRules := False;
     bUserRulesChanged := False;
@@ -41,6 +43,9 @@ begin
     //Set default options.
     bFakeStatics := True;
     bForceLOD8 := False;
+
+    //Default plugin name.
+    sFolipPluginFileName := 'FOLIP - Before Generation';
 
     CreateObjects;
     FetchRules;
@@ -76,7 +81,10 @@ begin
     if bFakeStatics then ProcessActiFurnMstt;
 
     //Add Messages
+    slMessages.Sort;
     ListStringsInStringList(slMessages);
+    slFullLODMessages.Sort;
+    ListStringsInStringList(slFullLODMessages);
 
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
@@ -102,6 +110,7 @@ begin
     slMatFiles.Free;
     slTopLevelModPatternPaths.Free;
     slMessages.Free;
+    slFullLODMessages.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -400,6 +409,7 @@ function MainMenuForm: Boolean;
 var
     frm: TForm;
     btnRuleEditor, btnStart, btnCancel: TButton;
+    edPluginName: TEdit;
     pnl: TPanel;
     picFolip: TPicture;
     fImage: TImage;
@@ -433,27 +443,38 @@ begin
         gbOptions.Left := 10;
         gbOptions.Top := fImage.Top + fImage.Height + 10;
         gbOptions.Width := frm.Width - 30;
-        gbOptions.Caption := 'Options';
+        gbOptions.Caption := 'FOLIP - Before Generation';
+        gbOptions.Height := 104;
 
-        btnRuleEditor := TButton.Create(frm);
-        btnRuleEditor.Parent := frm;
+        btnRuleEditor := TButton.Create(gbOptions);
+        btnRuleEditor.Parent := gbOptions;
         btnRuleEditor.Caption := 'Rule Editor';
         btnRuleEditor.OnClick := OptionForm;
-        btnRuleEditor.Font.Size := 16;
-        btnRuleEditor.Width := 150;
-        btnRuleEditor.Height := 75;
-        btnRuleEditor.Left := (frm.Width - btnRuleEditor.Width)/2;
+        //btnRuleEditor.Font.Size := 16;
+        btnRuleEditor.Width := 100;
+        //btnRuleEditor.Height := 75;
+        btnRuleEditor.Left := 8;
+        btnRuleEditor.Top := 72;
 
-        gbOptions.Height := frm.Height - fImage.Height - fImage.Top - btnRuleEditor.Height - 116;
-        btnRuleEditor.Top := gbOptions.Top + gbOptions.Height + 12;
+        edPluginName := TEdit.Create(gbOptions);
+        edPluginName.Parent := gbOptions;
+        edPluginName.Name := 'edPluginName';
+        edPluginName.Left := 104;
+        edPluginName.Top := 30;
+        edPluginName.Width := 180;
+        edPluginName.Hint := 'Sets the output plugin name for the patch.';
+        edPluginName.ShowHint := True;
+        CreateLabel(gbOptions, 16, edPluginName.Top + 4, 'Output Plugin:');
 
         chkFakeStatics := TCheckBox.Create(gbOptions);
         chkFakeStatics.Parent := gbOptions;
-        chkFakeStatics.Left := 16;
+        chkFakeStatics.Left := edPluginName.Left + edPluginName.Width + 16;
         chkFakeStatics.Top := 32;
         chkFakeStatics.Width := 120;
         chkFakeStatics.Caption := 'Create Fake Statics';
-        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT) references to receive LOD' + #13#10 + 'by creating invisible static reference duplicates with LOD attached.';
+        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT)'
+            + #13#10 + 'references to receive LOD by creating invisible static reference'
+            + #13#10 + 'duplicates with LOD attached.';
         chkFakeStatics.ShowHint := True;
 
         chkForceLOD8 := TCheckBox.Create(gbOptions);
@@ -462,33 +483,37 @@ begin
         chkForceLOD8.Top := 32;
         chkForceLOD8.Width := 120;
         chkForceLOD8.Caption := 'Force LOD8';
-        chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,' + #13#10 + 'this will use the LOD4 model in LOD8. Use this for increased LOD distance at the cose of some performance, but better than increasing the fBlockLevel0Distance.';
+        chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,'
+            + #13#10 + 'this will use the LOD4 model in LOD8. Use this for increased'
+            + #13#10 + 'LOD distance at the cost of some performance. This is better than'
+            + #13#10 + 'increasing the fBlockLevel0Distance.';
         chkForceLOD8.ShowHint := True;
 
-        btnStart := TButton.Create(frm);
-        btnStart.Parent := frm;
+        btnStart := TButton.Create(gbOptions);
+        btnStart.Parent := gbOptions;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := frm.Height - 70;
+        btnStart.Top := 72;
 
-        btnCancel := TButton.Create(frm);
-        btnCancel.Parent := frm;
+        btnCancel := TButton.Create(gbOptions);
+        btnCancel.Parent := gbOptions;
         btnCancel.Caption := 'Cancel';
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
 
-        btnStart.Left := (frm.Width - btnStart.Width - btnCancel.Width - 8)/2;
+        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
         btnCancel.Left := btnStart.Left + btnStart.Width + 8;
 
-        pnl := TPanel.Create(frm);
-        pnl.Parent := frm;
+        pnl := TPanel.Create(gbOptions);
+        pnl.Parent := gbOptions;
         pnl.Left := 8;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := frm.Width - 26;
+        pnl.Width := gbOptions.Width - 16;
         pnl.Height := 2;
 
         chkFakeStatics.Checked := bFakeStatics;
         chkForceLOD8.Checked := bForceLOD8;
+        edPluginName.Text := sFolipPluginFileName;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -498,6 +523,7 @@ begin
 
         bFakeStatics := chkFakeStatics.Checked;
         bForceLOD8 := chkForceLOD8.Checked;
+        sFolipPluginFileName := edPluginName.Text;
 
     finally
         frm.Free;
@@ -948,6 +974,7 @@ begin
     slNifFiles.Duplicates := dupIgnore;
     slTopLevelModPatternPaths := TStringList.Create;
     slMessages := TStringList.Create;
+    slFullLODMessages := TStringList.Create;
 
     //TJsonObjects
     joRules := TJsonObject.Create;
@@ -1137,7 +1164,7 @@ function AssignLODModels(s: IInterface; joLOD: TJsonObject): Boolean;
 }
 var
     hasChanged, ruleOverride: Boolean;
-    i, hasDistantLOD: integer;
+    i, hasDistantLOD, xBnd, yBnd, zBnd: integer;
     n: IInterface;
     colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
     slTopPaths: TStringList;
@@ -1200,8 +1227,18 @@ begin
         lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
         lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
         slTopPaths.Free;
-    end;
 
+        //If no lod4 model has been specified, report a list of models that would possibly benefit from having lod.
+        if bReportMissingLOD and
+        7575(lod4 = '') and (LowerCase(RightStr(editorid, 3)) <> 'lod') then begin
+            xBnd := Abs(GetElementNativeValues(s, 'OBND\X1')) + GetElementNativeValues(s, 'OBND\X2');
+            yBnd := Abs(GetElementNativeValues(s, 'OBND\Y1')) + GetElementNativeValues(s, 'OBND\Y2');
+            zBnd := Abs(GetElementNativeValues(s, 'OBND\Z1')) + GetElementNativeValues(s, 'OBND\Z2');
+            if (xBnd > 300) or (yBnd > 300) or (zBnd > 300) then begin
+                slFullLODMessages.Add(ShortName(s) + ' with object bounds of ' + IntToStr(xBnd) + 'x' + IntToStr(yBnd) + 'x' + IntToStr(zBnd) + ' has no lod.');
+            end;
+        end;
+    end;
 
     if lod4 <> olod4 then hasChanged := True
     else if lod8 <> olod8 then hasChanged := True
@@ -1243,17 +1280,22 @@ begin
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
         // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
         searchModel := TrimLeftChars(searchModel, 4) + colorRemap + '_lod';
+
+        //p1 is for specific level lod like 'model_lod_1.nif'
         p1 := searchModel + '_' + level + '.nif';
         if slNifFiles.IndexOf(p1) > -1 then begin
             Result := TrimRightChars(p1, 7);
             Exit;
         end;
+
+        //p2 is for non-specific level lod like 'model_lod.nif'
         p2 := searchModel + '.nif';
         if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
             Result := TrimRightChars(p2, 7);
             Exit;
         end;
     end;
+    //If you made it this far, no lod models were found using the expected paths, so return the original specified lod model in the record, if any.
     Result := original;
 end;
 
@@ -1406,7 +1448,7 @@ begin
 
         if SameText(f, sFolipMasterFileName) then
             iFolipMasterFile := FileByIndex(i)
-        else if SameText(f, sFolipPluginFileName) then
+        else if SameText(f, sFolipPluginFileName + '.esp') then
             iFolipPluginFile := FileByIndex(i)
         else if SameText(f, sFO4LODGenFileName) then
             bFO4LODGen := True
@@ -1423,20 +1465,20 @@ begin
         Result := 0;
         Exit;
     end;
-    if Assigned(iFolipMasterFile) then begin
+    {if Assigned(iFolipMasterFile) then begin
         MessageDlg(sFolipMasterFileName + ' found! Delete the old file before continuing.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
-    end;
+    end;}
     if Assigned(iFolipMasterFile) then begin
-        MessageDlg(sFolipPluginFileName + ' found! Delete the old file before continuing.', mtError, [mbOk], 0);
+        MessageDlg(sFolipPluginFileName + '.esp found! Delete the old file before continuing.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
     end;
     //iFolipMasterFile := AddNewFileName(sFolipMasterFileName, False);
     //AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
     //SetIsESM(iFolipMasterFile, True);
-    iFolipPluginFile := AddNewFileName(sFolipPluginFileName, False);
+    iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
     AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
 
     Result := 1;
