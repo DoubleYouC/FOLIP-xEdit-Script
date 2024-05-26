@@ -921,7 +921,7 @@ procedure AssignLODToStat(s: IInterface; joLOD: TJsonObject);
 var
     n: IInterface;
 begin
-    //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
+    AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s);
     n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
     SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod']);
@@ -1069,6 +1069,7 @@ begin
         if archive <> '' then AddMessage('Loaded archive: ' + archive);
         ResourceList(containers[i], slArchivedFiles);
     end;
+    AddMessage('Please wait while we detect all LOD assets...');
     for i := 0 to Pred(slArchivedFiles.Count) do begin
         f := slArchivedFiles[i];
         //materials or meshes
@@ -1197,8 +1198,7 @@ begin
         slTopPaths.Free;
 
         //If no lod4 model has been specified, report a list of models that would possibly benefit from having lod.
-        if bReportMissingLOD and
-        7575(lod4 = '') and (LowerCase(RightStr(editorid, 3)) <> 'lod') then begin
+        if bReportMissingLOD and (lod4 = '') and (LowerCase(RightStr(editorid, 3)) <> 'lod') then begin
             xBnd := Abs(GetElementNativeValues(s, 'OBND\X1')) + GetElementNativeValues(s, 'OBND\X2');
             yBnd := Abs(GetElementNativeValues(s, 'OBND\Y1')) + GetElementNativeValues(s, 'OBND\Y2');
             zBnd := Abs(GetElementNativeValues(s, 'OBND\Z1')) + GetElementNativeValues(s, 'OBND\Z2');
