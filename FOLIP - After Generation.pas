@@ -20,7 +20,7 @@ var
 begin
     slStats := TStringList.Create;
     tlStats := TList.Create;
-    sFolipPluginFileName := 'FOLIP - After Generation'
+    sFolipPluginFileName := 'FOLIP - After Generation';
 
     if not MainMenuForm then Exit;
 
@@ -153,6 +153,34 @@ begin
     finally
         frm.Free;
     end;
+end;
+
+procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+{
+    Cancel if Escape key is pressed.
+}
+begin
+    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
+end;
+
+procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close form handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit
+end;
+
+function CreateLabel(aParent: TControl; x, y: Integer; aCaption: string): TLabel;
+{
+    Create a label.
+}
+begin
+    Result := TLabel.Create(aParent);
+    Result.Parent := aParent;
+    Result.Left := x;
+    Result.Top := y;
+    Result.Caption := aCaption;
 end;
 
 function RefMastersDeterminePlugin(r: IInterface): IInterface;
