@@ -3,7 +3,9 @@
 }
 unit FOLIP;
 
+// ----------------------------------------------------
 //Create variables that will need to be used accross multiple functions/procedures.
+// ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlCells: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
@@ -21,18 +23,15 @@ const
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
 
+// ----------------------------------------------------
+// Main functions and procedures go up immediately below.
+// ----------------------------------------------------
+
 function Initialize:integer;
 {
     This function is called at the beginning.
 }
-var
-    bSkip: Boolean;
-    slContainers: TStringList;
-    i: integer;
 begin
-    // This is a dev switch. Don't use.
-    bSkip := False;
-
     // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
     bReportMissingLOD := False;
 
@@ -52,11 +51,15 @@ begin
     TopLevelModPatternPaths;
 
     //Display the main menu. If the user presses the cancel button, exit.
-    if not MainMenuForm then Exit;
+    if MainMenuForm then BeforeGeneration;
 
-    //Dev switch to skip the rest in case I press the Start button.
-    if bSkip then Exit;
+    Result := 0;
+end;
 
+procedure BeforeGeneration;
+var
+    slContainers: TStringList;
+begin
     //Create FOLIP plugins
     if not CreatePlugins then Exit;
 
@@ -68,7 +71,6 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
-
 
     AddMessage('Collecting records...');
     CollectRecords;
@@ -89,11 +91,6 @@ begin
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
-
-
-    //Fix bad mod lod edits.
-
-    Result := 0;
 end;
 
 function Finalize: integer;
@@ -124,6 +121,379 @@ begin
     joUserRules.Free;
 
     Result := 0;
+end;
+
+procedure CreateObjects;
+{
+    Create objects.
+}
+begin
+    //TLists
+    tlStats := TList.Create;
+    tlActiFurnMstt := TList.Create;
+    tlMswp := TList.Create;
+    tlCells := TList.Create;
+
+    //TStringLists
+    slMatFiles := TStringList.Create;
+    slMatFiles.Duplicates := dupIgnore;
+    slNifFiles := TStringList.Create;
+    slNifFiles.Duplicates := dupIgnore;
+    slTopLevelModPatternPaths := TStringList.Create;
+    slMessages := TStringList.Create;
+    slFullLODMessages := TStringList.Create;
+
+    //TJsonObjects
+    joRules := TJsonObject.Create;
+    joMswpMap := TJsonObject.Create;
+end;
+
+// ----------------------------------------------------
+// UI functions and procedures go below.
+// ----------------------------------------------------
+
+function MainMenuForm: Boolean;
+{
+    Main menu form.
+}
+var
+    frm: TForm;
+    btnRuleEditor, btnStart, btnCancel: TButton;
+    edPluginName: TEdit;
+    pnl: TPanel;
+    picFolip: TPicture;
+    fImage: TImage;
+    gbOptions: TGroupBox;
+    chkFakeStatics, chkForceLOD8: TCheckBox;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'FOLIP xEdit Patcher';
+        frm.Width := 600;
+        frm.Height := 480;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsDialog;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+
+        picFolip := TPicture.Create;
+        picFolip.LoadFromFile(ScriptsPath() + 'FOLIP\FOLIP.jpg');
+
+        fImage := TImage.Create(frm);
+		fImage.Picture := picFolip;
+		fImage.Parent := frm;
+        fImage.Width := 576;
+		fImage.Height := 278;
+		fImage.Left := 8;
+		fImage.Top := 12;
+
+        gbOptions := TGroupBox.Create(frm);
+        gbOptions.Parent := frm;
+        gbOptions.Left := 10;
+        gbOptions.Top := fImage.Top + fImage.Height + 24;
+        gbOptions.Width := frm.Width - 30;
+        gbOptions.Caption := 'FOLIP - Before Generation';
+        gbOptions.Height := 104;
+
+        btnRuleEditor := TButton.Create(gbOptions);
+        btnRuleEditor.Parent := gbOptions;
+        btnRuleEditor.Caption := 'Rule Editor';
+        btnRuleEditor.OnClick := RuleEditor;
+        btnRuleEditor.Width := 100;
+        btnRuleEditor.Left := 8;
+        btnRuleEditor.Top := 72;
+
+        edPluginName := TEdit.Create(gbOptions);
+        edPluginName.Parent := gbOptions;
+        edPluginName.Name := 'edPluginName';
+        edPluginName.Left := 104;
+        edPluginName.Top := 30;
+        edPluginName.Width := 180;
+        edPluginName.Hint := 'Sets the output plugin name for the patch.';
+        edPluginName.ShowHint := True;
+        CreateLabel(gbOptions, 16, edPluginName.Top + 4, 'Output Plugin:');
+
+        chkFakeStatics := TCheckBox.Create(gbOptions);
+        chkFakeStatics.Parent := gbOptions;
+        chkFakeStatics.Left := edPluginName.Left + edPluginName.Width + 16;
+        chkFakeStatics.Top := 32;
+        chkFakeStatics.Width := 120;
+        chkFakeStatics.Caption := 'Create Fake Statics';
+        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT)'
+            + #13#10 + 'references to receive LOD by creating invisible static reference'
+            + #13#10 + 'duplicates with LOD attached.';
+        chkFakeStatics.ShowHint := True;
+
+        chkForceLOD8 := TCheckBox.Create(gbOptions);
+        chkForceLOD8.Parent := gbOptions;
+        chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 16;
+        chkForceLOD8.Top := 32;
+        chkForceLOD8.Width := 120;
+        chkForceLOD8.Caption := 'Force LOD8';
+        chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,'
+            + #13#10 + 'this will use the LOD4 model in LOD8. Use this for increased'
+            + #13#10 + 'LOD distance at the cost of some performance. This is better than'
+            + #13#10 + 'increasing the fBlockLevel0Distance.';
+        chkForceLOD8.ShowHint := True;
+
+        btnStart := TButton.Create(gbOptions);
+        btnStart.Parent := gbOptions;
+        btnStart.Caption := 'Start';
+        btnStart.ModalResult := mrOk;
+        btnStart.Top := 72;
+
+        btnCancel := TButton.Create(gbOptions);
+        btnCancel.Parent := gbOptions;
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnStart.Top;
+
+        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
+        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
+
+        pnl := TPanel.Create(gbOptions);
+        pnl.Parent := gbOptions;
+        pnl.Left := 8;
+        pnl.Top := btnStart.Top - 12;
+        pnl.Width := gbOptions.Width - 16;
+        pnl.Height := 2;
+
+        chkFakeStatics.Checked := bFakeStatics;
+        chkForceLOD8.Checked := bForceLOD8;
+        edPluginName.Text := sFolipPluginFileName;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
+
+        bFakeStatics := chkFakeStatics.Checked;
+        bForceLOD8 := chkForceLOD8.Checked;
+        sFolipPluginFileName := edPluginName.Text;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+{
+    Cancel if Escape key is pressed.
+}
+begin
+    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
+end;
+
+procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close form handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit
+    else bSaveUserRules := True;
+end;
+
+// ----------------------------------------------------
+// Rules menu
+
+function RuleEditor: Boolean;
+var
+    i: integer;
+    mnRules: TPopupMenu;
+    MenuItem: TMenuItem;
+    lbl: TLabel;
+    frm: TForm;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Rule Editor';
+        frm.Width := 1200;
+        frm.Height := 600;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsSizeable;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+        frm.OnResize := frmResize;
+
+        lvRules := TListView.Create(frm);
+        lvRules.Parent := frm;
+
+        lvRules.Top := 24;
+        lvRules.Width := frm.Width - 36;
+        lvRules.Left := (frm.Width - lvRules.Width)/2;
+        lvRules.Height := frm.Height - 110;
+        lvRules.ReadOnly := True;
+        lvRules.ViewStyle := vsReport;
+        lvRules.RowSelect := True;
+        lvRules.DoubleBuffered := True;
+        lvRules.Columns.Add.Caption := 'Mesh / EditorID';
+        lvRules.Columns[0].Width := 400;
+        lvRules.Columns.Add.Caption := 'HasDistantLOD';
+        lvRules.Columns[1].Width := 95;
+        lvRules.Columns.Add.Caption := 'LOD4';
+        lvRules.Columns[2].Width := 400;
+        lvRules.Columns.Add.Caption := 'LOD8';
+        lvRules.Columns[3].Width := 90;
+        lvRules.Columns.Add.Caption := 'LOD16';
+        lvRules.Columns[4].Width := 60;
+        lvRules.Columns.Add.Caption := 'LOD32';
+        lvRules.Columns[5].Width := 60;
+        lvRules.OwnerData := True;
+        lvRules.OnData := lvRulesData;
+        lvRules.OnDblClick := lvRulesDblClick;
+        lvRules.Items.Count := joRules.Count;
+        CreateLabel(frm, 16, lvRules.Top - 20, 'Mesh/EditorID Rule LOD Assignments');
+
+        mnRules := TPopupMenu.Create(frm);
+        lvRules.PopupMenu := mnRules;
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Add';
+        MenuItem.OnClick := RulesMenuAddClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := RulesMenuDeleteClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Edit';
+        MenuItem.OnClick := RulesMenuEditClick;
+        mnRules.Items.Add(MenuItem);
+
+        btnRuleOk := TButton.Create(frm);
+        btnRuleOk.Parent := frm;
+        btnRuleOk.Caption := 'OK';
+        btnRuleOk.ModalResult := mrOk;
+        btnRuleOk.Top := frm.Height - 70;
+
+        btnRuleCancel := TButton.Create(frm);
+        btnRuleCancel.Parent := frm;
+        btnRuleCancel.Caption := 'Cancel';
+        btnRuleCancel.ModalResult := mrCancel;
+        btnRuleCancel.Top := btnRuleOk.Top;
+
+        btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
+        btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+function EditRuleForm(var key, lod4, lod8, lod16, lod32: string; var hasdistantlod: Boolean): Boolean;
+var
+    frmRule: TForm;
+    pnl: TPanel;
+    btnOk, btnCancel: TButton;
+    edKey, edHasDistantLOD, edlod4, edlod8, edlod16, edlod32: TEdit;
+    chkHasDistantLOD: TCheckBox;
+begin
+  frmRule := TForm.Create(nil);
+  try
+    frmRule.Caption := 'Mesh/EditorID Rule';
+    frmRule.Width := 600;
+    frmRule.Height := 300;
+    frmRule.Position := poMainFormCenter;
+    frmRule.BorderStyle := bsDialog;
+    frmRule.KeyPreview := True;
+    frmRule.OnKeyDown := FormKeyDown;
+    frmRule.OnClose := frmRuleFormClose;
+
+    edKey := TEdit.Create(frmRule);
+    edKey.Parent := frmRule;
+    edKey.Name := 'edKey';
+    edKey.Left := 120;
+    edKey.Top := 12;
+    edKey.Width := frmRule.Width - 140;
+    CreateLabel(frmRule, 16, edKey.Top + 4, 'Mesh or EditorID');
+
+    chkHasDistantLOD := TCheckBox.Create(frmRule);
+    chkHasDistantLOD.Parent := frmRule;
+    chkHasDistantLOD.Left := 16;
+    chkHasDistantLOD.Top := edKey.Top + 32;
+    chkHasDistantLOD.Width := 200;
+    chkHasDistantLOD.Caption := 'Has Distant LOD';
+
+    edlod4 := TEdit.Create(frmRule);
+    edlod4.Parent := frmRule;
+    edlod4.Name := 'edlod4';
+    edlod4.Left := 120;
+    edlod4.Top := chkHasDistantLOD.Top + 28;
+    edlod4.Width := frmRule.Width - 140;
+    CreateLabel(frmRule, 16, edlod4.Top + 4, 'LOD4');
+
+    edlod8 := TEdit.Create(frmRule);
+    edlod8.Parent := frmRule;
+    edlod8.Name := 'edlod8';
+    edlod8.Left := 120;
+    edlod8.Top := edlod4.Top + 28;
+    edlod8.Width := frmRule.Width - 140;
+    CreateLabel(frmRule, 16, edlod8.Top + 4, 'LOD8');
+
+    edlod16 := TEdit.Create(frmRule);
+    edlod16.Parent := frmRule;
+    edlod16.Name := 'edlod16';
+    edlod16.Left := 120;
+    edlod16.Top := edlod8.Top + 28;
+    edlod16.Width := frmRule.Width - 140;
+    CreateLabel(frmRule, 16, edlod16.Top + 4, 'LOD16');
+
+    edlod32 := TEdit.Create(frmRule);
+    edlod32.Parent := frmRule;
+    edlod32.Name := 'edlod32';
+    edlod32.Left := 120;
+    edlod32.Top := edlod16.Top + 28;
+    edlod32.Width := frmRule.Width - 140;
+    CreateLabel(frmRule, 16, edlod32.Top + 4, 'LOD32');
+
+    btnOk := TButton.Create(frmRule);
+    btnOk.Parent := frmRule;
+    btnOk.Caption := 'OK';
+    btnOk.ModalResult := mrOk;
+    btnOk.Left := frmRule.Width - 176;
+    btnOk.Top := frmRule.Height - 62;
+
+    btnCancel := TButton.Create(frmRule);
+    btnCancel.Parent := frmRule;
+    btnCancel.Caption := 'Cancel';
+    btnCancel.ModalResult := mrCancel;
+    btnCancel.Left := btnOk.Left + btnOk.Width + 8;
+    btnCancel.Top := btnOk.Top;
+
+    pnl := TPanel.Create(frmRule);
+    pnl.Parent := frmRule;
+    pnl.Left := 8;
+    pnl.Top := btnOk.Top - 12;
+    pnl.Width := frmRule.Width - 20;
+    pnl.Height := 2;
+
+    edKey.Text := key;
+    chkHasDistantLOD.Checked := hasdistantlod;
+    edlod4.Text := lod4;
+    edlod8.Text := lod8;
+    edlod16.Text := lod16;
+    edlod32.Text := lod32;
+
+    if frmRule.ShowModal <> mrOk then Exit;
+
+    key := edKey.Text;
+    hasdistantlod := chkHasDistantLOD.Checked;
+    lod4 := edlod4.Text;
+    lod8 := edlod8.Text;
+    lod16 := edlod16.Text;
+    lod32 := edlod32.Text;
+    Result := True;
+  finally
+    frmRule.Free;
+  end;
 end;
 
 procedure lvRulesData(Sender: TObject; Item: TListItem);
@@ -237,42 +607,6 @@ begin
     lvRules.Refresh;
 end;
 
-function CreateLabel(aParent: TControl; x, y: Integer; aCaption: string): TLabel;
-{
-    Create a label.
-}
-begin
-    Result := TLabel.Create(aParent);
-    Result.Parent := aParent;
-    Result.Left := x;
-    Result.Top := y;
-    Result.Caption := aCaption;
-end;
-
-procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-{
-    Cancel if Escape key is pressed.
-}
-begin
-    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
-end;
-
-function BoolToStr(b: boolean): string;
-{
-    Given a boolean, return a string.
-}
-begin
-    if b then Result := 'true' else Result := 'false';
-end;
-
-function StrToBool(str: string): boolean;
-{
-    Given a string, return a boolean.
-}
-begin
-    if str = 'true' then Result := True else Result := False;
-end;
-
 procedure frmRuleFormClose(Sender: TObject; var Action: TCloseAction);
 {
     Close rule edit menu handler.
@@ -282,251 +616,6 @@ begin
     if TEdit(TForm(Sender).FindComponent('edKey')).Text = '' then begin
         MessageDlg('Mesh/EditorID must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
-    end;
-end;
-
-procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
-{
-    Close form handler.
-}
-begin
-    if TForm(Sender).ModalResult <> mrOk then Exit
-    else bSaveUserRules := True;
-end;
-
-function EditRuleForm(var key, lod4, lod8, lod16, lod32: string; var hasdistantlod: Boolean): Boolean;
-var
-    frmRule: TForm;
-    pnl: TPanel;
-    btnOk, btnCancel: TButton;
-    edKey, edHasDistantLOD, edlod4, edlod8, edlod16, edlod32: TEdit;
-    chkHasDistantLOD: TCheckBox;
-begin
-  frmRule := TForm.Create(nil);
-  try
-    frmRule.Caption := 'Mesh/EditorID Rule';
-    frmRule.Width := 600;
-    frmRule.Height := 300;
-    frmRule.Position := poMainFormCenter;
-    frmRule.BorderStyle := bsDialog;
-    frmRule.KeyPreview := True;
-    frmRule.OnKeyDown := FormKeyDown;
-    frmRule.OnClose := frmRuleFormClose;
-
-    edKey := TEdit.Create(frmRule);
-    edKey.Parent := frmRule;
-    edKey.Name := 'edKey';
-    edKey.Left := 120;
-    edKey.Top := 12;
-    edKey.Width := frmRule.Width - 140;
-    CreateLabel(frmRule, 16, edKey.Top + 4, 'Mesh or EditorID');
-
-    chkHasDistantLOD := TCheckBox.Create(frmRule);
-    chkHasDistantLOD.Parent := frmRule;
-    chkHasDistantLOD.Left := 16;
-    chkHasDistantLOD.Top := edKey.Top + 32;
-    chkHasDistantLOD.Width := 200;
-    chkHasDistantLOD.Caption := 'Has Distant LOD';
-
-    edlod4 := TEdit.Create(frmRule);
-    edlod4.Parent := frmRule;
-    edlod4.Name := 'edlod4';
-    edlod4.Left := 120;
-    edlod4.Top := chkHasDistantLOD.Top + 28;
-    edlod4.Width := frmRule.Width - 140;
-    CreateLabel(frmRule, 16, edlod4.Top + 4, 'LOD4');
-
-    edlod8 := TEdit.Create(frmRule);
-    edlod8.Parent := frmRule;
-    edlod8.Name := 'edlod8';
-    edlod8.Left := 120;
-    edlod8.Top := edlod4.Top + 28;
-    edlod8.Width := frmRule.Width - 140;
-    CreateLabel(frmRule, 16, edlod8.Top + 4, 'LOD8');
-
-    edlod16 := TEdit.Create(frmRule);
-    edlod16.Parent := frmRule;
-    edlod16.Name := 'edlod16';
-    edlod16.Left := 120;
-    edlod16.Top := edlod8.Top + 28;
-    edlod16.Width := frmRule.Width - 140;
-    CreateLabel(frmRule, 16, edlod16.Top + 4, 'LOD16');
-
-    edlod32 := TEdit.Create(frmRule);
-    edlod32.Parent := frmRule;
-    edlod32.Name := 'edlod32';
-    edlod32.Left := 120;
-    edlod32.Top := edlod16.Top + 28;
-    edlod32.Width := frmRule.Width - 140;
-    CreateLabel(frmRule, 16, edlod32.Top + 4, 'LOD32');
-
-    btnOk := TButton.Create(frmRule);
-    btnOk.Parent := frmRule;
-    btnOk.Caption := 'OK';
-    btnOk.ModalResult := mrOk;
-    btnOk.Left := frmRule.Width - 176;
-    btnOk.Top := frmRule.Height - 62;
-
-    btnCancel := TButton.Create(frmRule);
-    btnCancel.Parent := frmRule;
-    btnCancel.Caption := 'Cancel';
-    btnCancel.ModalResult := mrCancel;
-    btnCancel.Left := btnOk.Left + btnOk.Width + 8;
-    btnCancel.Top := btnOk.Top;
-
-    pnl := TPanel.Create(frmRule);
-    pnl.Parent := frmRule;
-    pnl.Left := 8;
-    pnl.Top := btnOk.Top - 12;
-    pnl.Width := frmRule.Width - 20;
-    pnl.Height := 2;
-
-    edKey.Text := key;
-    chkHasDistantLOD.Checked := hasdistantlod;
-    edlod4.Text := lod4;
-    edlod8.Text := lod8;
-    edlod16.Text := lod16;
-    edlod32.Text := lod32;
-
-    if frmRule.ShowModal <> mrOk then Exit;
-
-    key := edKey.Text;
-    hasdistantlod := chkHasDistantLOD.Checked;
-    lod4 := edlod4.Text;
-    lod8 := edlod8.Text;
-    lod16 := edlod16.Text;
-    lod32 := edlod32.Text;
-    Result := True;
-  finally
-    frmRule.Free;
-  end;
-end;
-
-function MainMenuForm: Boolean;
-{
-    Main menu form.
-}
-var
-    frm: TForm;
-    btnRuleEditor, btnStart, btnCancel: TButton;
-    edPluginName: TEdit;
-    pnl: TPanel;
-    picFolip: TPicture;
-    fImage: TImage;
-    gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8: TCheckBox;
-begin
-    frm := TForm.Create(nil);
-    try
-        frm.Caption := 'FOLIP xEdit Patcher';
-        frm.Width := 600;
-        frm.Height := 550;
-        frm.Position := poMainFormCenter;
-        frm.BorderStyle := bsDialog;
-        frm.KeyPreview := True;
-        frm.OnClose := frmOptionsFormClose;
-        frm.OnKeyDown := FormKeyDown;
-
-        picFolip := TPicture.Create;
-        picFolip.LoadFromFile(ScriptsPath() + 'FOLIP\FOLIP.jpg');
-
-        fImage := TImage.Create(frm);
-		fImage.Picture := picFolip;
-		fImage.Parent := frm;
-        fImage.Width := 576;
-		fImage.Height := 278;
-		fImage.Left := 8;
-		fImage.Top := 12;
-
-        gbOptions := TGroupBox.Create(frm);
-        gbOptions.Parent := frm;
-        gbOptions.Left := 10;
-        gbOptions.Top := fImage.Top + fImage.Height + 10;
-        gbOptions.Width := frm.Width - 30;
-        gbOptions.Caption := 'FOLIP - Before Generation';
-        gbOptions.Height := 104;
-
-        btnRuleEditor := TButton.Create(gbOptions);
-        btnRuleEditor.Parent := gbOptions;
-        btnRuleEditor.Caption := 'Rule Editor';
-        btnRuleEditor.OnClick := OptionForm;
-        //btnRuleEditor.Font.Size := 16;
-        btnRuleEditor.Width := 100;
-        //btnRuleEditor.Height := 75;
-        btnRuleEditor.Left := 8;
-        btnRuleEditor.Top := 72;
-
-        edPluginName := TEdit.Create(gbOptions);
-        edPluginName.Parent := gbOptions;
-        edPluginName.Name := 'edPluginName';
-        edPluginName.Left := 104;
-        edPluginName.Top := 30;
-        edPluginName.Width := 180;
-        edPluginName.Hint := 'Sets the output plugin name for the patch.';
-        edPluginName.ShowHint := True;
-        CreateLabel(gbOptions, 16, edPluginName.Top + 4, 'Output Plugin:');
-
-        chkFakeStatics := TCheckBox.Create(gbOptions);
-        chkFakeStatics.Parent := gbOptions;
-        chkFakeStatics.Left := edPluginName.Left + edPluginName.Width + 16;
-        chkFakeStatics.Top := 32;
-        chkFakeStatics.Width := 120;
-        chkFakeStatics.Caption := 'Create Fake Statics';
-        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT)'
-            + #13#10 + 'references to receive LOD by creating invisible static reference'
-            + #13#10 + 'duplicates with LOD attached.';
-        chkFakeStatics.ShowHint := True;
-
-        chkForceLOD8 := TCheckBox.Create(gbOptions);
-        chkForceLOD8.Parent := gbOptions;
-        chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 16;
-        chkForceLOD8.Top := 32;
-        chkForceLOD8.Width := 120;
-        chkForceLOD8.Caption := 'Force LOD8';
-        chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,'
-            + #13#10 + 'this will use the LOD4 model in LOD8. Use this for increased'
-            + #13#10 + 'LOD distance at the cost of some performance. This is better than'
-            + #13#10 + 'increasing the fBlockLevel0Distance.';
-        chkForceLOD8.ShowHint := True;
-
-        btnStart := TButton.Create(gbOptions);
-        btnStart.Parent := gbOptions;
-        btnStart.Caption := 'Start';
-        btnStart.ModalResult := mrOk;
-        btnStart.Top := 72;
-
-        btnCancel := TButton.Create(gbOptions);
-        btnCancel.Parent := gbOptions;
-        btnCancel.Caption := 'Cancel';
-        btnCancel.ModalResult := mrCancel;
-        btnCancel.Top := btnStart.Top;
-
-        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
-        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
-
-        pnl := TPanel.Create(gbOptions);
-        pnl.Parent := gbOptions;
-        pnl.Left := 8;
-        pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width - 16;
-        pnl.Height := 2;
-
-        chkFakeStatics.Checked := bFakeStatics;
-        chkForceLOD8.Checked := bForceLOD8;
-        edPluginName.Text := sFolipPluginFileName;
-
-        if frm.ShowModal <> mrOk then begin
-            Result := False;
-            Exit;
-        end
-        else Result := True;
-
-        bFakeStatics := chkFakeStatics.Checked;
-        bForceLOD8 := chkForceLOD8.Checked;
-        sFolipPluginFileName := edPluginName.Text;
-
-    finally
-        frm.Free;
     end;
 end;
 
@@ -552,95 +641,9 @@ begin
     end;
 end;
 
-function OptionForm: Boolean;
-var
-    i: integer;
-    mnRules: TPopupMenu;
-    MenuItem: TMenuItem;
-    lbl: TLabel;
-    frm: TForm;
-begin
-    frm := TForm.Create(nil);
-    try
-        frm.Caption := 'Rule Editor';
-        frm.Width := 1200;
-        frm.Height := 600;
-        frm.Position := poMainFormCenter;
-        frm.BorderStyle := bsSizeable;
-        frm.KeyPreview := True;
-        frm.OnClose := frmOptionsFormClose;
-        frm.OnKeyDown := FormKeyDown;
-        frm.OnResize := frmResize;
-
-        lvRules := TListView.Create(frm);
-        lvRules.Parent := frm;
-
-        lvRules.Top := 24;
-        lvRules.Width := frm.Width - 36;
-        lvRules.Left := (frm.Width - lvRules.Width)/2;
-        lvRules.Height := frm.Height - 110;
-        lvRules.ReadOnly := True;
-        lvRules.ViewStyle := vsReport;
-        lvRules.RowSelect := True;
-        lvRules.DoubleBuffered := True;
-        lvRules.Columns.Add.Caption := 'Mesh / EditorID';
-        lvRules.Columns[0].Width := 400;
-        lvRules.Columns.Add.Caption := 'HasDistantLOD';
-        lvRules.Columns[1].Width := 95;
-        lvRules.Columns.Add.Caption := 'LOD4';
-        lvRules.Columns[2].Width := 400;
-        lvRules.Columns.Add.Caption := 'LOD8';
-        lvRules.Columns[3].Width := 90;
-        lvRules.Columns.Add.Caption := 'LOD16';
-        lvRules.Columns[4].Width := 60;
-        lvRules.Columns.Add.Caption := 'LOD32';
-        lvRules.Columns[5].Width := 60;
-        lvRules.OwnerData := True;
-        lvRules.OnData := lvRulesData;
-        lvRules.OnDblClick := lvRulesDblClick;
-        lvRules.Items.Count := joRules.Count;
-        CreateLabel(frm, 16, lvRules.Top - 20, 'Mesh/EditorID Rule LOD Assignments');
-
-        mnRules := TPopupMenu.Create(frm);
-        lvRules.PopupMenu := mnRules;
-        MenuItem := TMenuItem.Create(mnRules);
-        MenuItem.Caption := 'Add';
-        MenuItem.OnClick := RulesMenuAddClick;
-        mnRules.Items.Add(MenuItem);
-        MenuItem := TMenuItem.Create(mnRules);
-        MenuItem.Caption := 'Delete';
-        MenuItem.OnClick := RulesMenuDeleteClick;
-        mnRules.Items.Add(MenuItem);
-        MenuItem := TMenuItem.Create(mnRules);
-        MenuItem.Caption := 'Edit';
-        MenuItem.OnClick := RulesMenuEditClick;
-        mnRules.Items.Add(MenuItem);
-
-        btnRuleOk := TButton.Create(frm);
-        btnRuleOk.Parent := frm;
-        btnRuleOk.Caption := 'OK';
-        btnRuleOk.ModalResult := mrOk;
-        btnRuleOk.Top := frm.Height - 70;
-
-        btnRuleCancel := TButton.Create(frm);
-        btnRuleCancel.Parent := frm;
-        btnRuleCancel.Caption := 'Cancel';
-        btnRuleCancel.ModalResult := mrCancel;
-        btnRuleCancel.Top := btnRuleOk.Top;
-
-        btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
-        btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
-
-        if frm.ShowModal <> mrOk then begin
-            Result := False;
-            Exit;
-        end
-        else Result := True;
-
-    finally
-        frm.Free;
-    end;
-end;
+// ----------------------------------------------------
+// Record processing Functions and Procedures go below.
+// ----------------------------------------------------
 
 procedure ProcessActiFurnMstt;
 var
@@ -927,18 +930,6 @@ begin
     SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
 end;
 
-procedure ListStringsInStringList(sl: TStringList);
-{
-    Given a TStringList, add a message for all items in the list.
-}
-var
-    i: integer;
-begin
-    AddMessage('=======================================================================================');
-    for i := 0 to Pred(sl.Count) do AddMessage(sl[i]);
-    AddMessage('=======================================================================================');
-end;
-
 procedure TopLevelModPatternPaths;
 {
     Say you have a major mod that uses a top level pattern identifier, such as DLC01 for Automatron, for all of its assets.
@@ -954,31 +945,6 @@ begin
     slTopLevelModPatternPaths.Add('capitalwasteland\');
 
     slTopLevelModPatternPaths.Add('');
-end;
-
-procedure CreateObjects;
-{
-    Create objects.
-}
-begin
-    //TLists
-    tlStats := TList.Create;
-    tlActiFurnMstt := TList.Create;
-    tlMswp := TList.Create;
-    tlCells := TList.Create;
-
-    //TStringLists
-    slMatFiles := TStringList.Create;
-    slMatFiles.Duplicates := dupIgnore;
-    slNifFiles := TStringList.Create;
-    slNifFiles.Duplicates := dupIgnore;
-    slTopLevelModPatternPaths := TStringList.Create;
-    slMessages := TStringList.Create;
-    slFullLODMessages := TStringList.Create;
-
-    //TJsonObjects
-    joRules := TJsonObject.Create;
-    joMswpMap := TJsonObject.Create;
 end;
 
 procedure CollectRecords;
@@ -1335,22 +1301,6 @@ begin
     end;
 end;
 
-function TrimRightChars(s: string; chars: integer): string;
-{
-    Returns right string - chars
-}
-begin
-    Result := RightStr(s, Length(s) - chars);
-end;
-
-function TrimLeftChars(s: string; chars: integer): string;
-{
-    Returns left string - chars
-}
-begin
-    Result := LeftStr(s, Length(s) - chars);
-end;
-
 function RefMastersDeterminePlugin(r: IInterface): IInterface;
 {
     Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
@@ -1395,37 +1345,6 @@ begin
         end;
     end;
     SortJSONObjectKeys(joRules);
-end;
-
-procedure SortJSONObjectKeys(JSONObj: TJsonObject);
-{
-    Sorts JSON keys alphabetically.
-}
-var
-    SortedKeys: TStringList;
-    Key: string;
-    NewJSONObj: TJsonObject;
-    i: integer;
-begin
-    // Create a sorted list of keys
-    SortedKeys := TStringList.Create;
-    NewJSONObj := TJsonObject.Create;
-    try
-        for i := 0 to Pred(JSONObj.Count) do SortedKeys.Add(JSONObj.Names[i]);
-        SortedKeys.Sort; // Sort the keys alphabetically
-
-        for i := 0 to Pred(SortedKeys.Count) do begin
-            Key := SortedKeys[i];
-            NewJSONObj.O[Key].Assign(JSONObj.O[Key]);
-        end;
-
-        // Replace the original JSONObj with the sorted one
-        JSONObj.Clear;
-        JSONObj.Assign(NewJSONObj);
-    finally
-        SortedKeys.Free;
-        NewJSONObj.Free;
-    end;
 end;
 
 function CreatePlugins: Boolean;
@@ -1520,6 +1439,97 @@ begin
             Result := True;
             Exit;
         end;
+    end;
+end;
+
+// ----------------------------------------------------
+// Generic Functions and Procedures go below.
+// ----------------------------------------------------
+
+function BoolToStr(b: boolean): string;
+{
+    Given a boolean, return a string.
+}
+begin
+    if b then Result := 'true' else Result := 'false';
+end;
+
+function StrToBool(str: string): boolean;
+{
+    Given a string, return a boolean.
+}
+begin
+    if str = 'true' then Result := True else Result := False;
+end;
+
+function TrimRightChars(s: string; chars: integer): string;
+{
+    Returns right string - chars
+}
+begin
+    Result := RightStr(s, Length(s) - chars);
+end;
+
+function TrimLeftChars(s: string; chars: integer): string;
+{
+    Returns left string - chars
+}
+begin
+    Result := LeftStr(s, Length(s) - chars);
+end;
+
+procedure ListStringsInStringList(sl: TStringList);
+{
+    Given a TStringList, add a message for all items in the list.
+}
+var
+    i: integer;
+begin
+    AddMessage('=======================================================================================');
+    for i := 0 to Pred(sl.Count) do AddMessage(sl[i]);
+    AddMessage('=======================================================================================');
+end;
+
+function CreateLabel(aParent: TControl; x, y: Integer; aCaption: string): TLabel;
+{
+    Create a label.
+}
+begin
+    Result := TLabel.Create(aParent);
+    Result.Parent := aParent;
+    Result.Left := x;
+    Result.Top := y;
+    Result.Caption := aCaption;
+end;
+
+procedure SortJSONObjectKeys(JSONObj: TJsonObject);
+{
+    Sorts JSON keys alphabetically.
+}
+var
+    SortedKeys: TStringList;
+    Key: string;
+    NewJSONObj: TJsonObject;
+    i: integer;
+begin
+    // Create a sorted list of keys
+    SortedKeys := TStringList.Create;
+    NewJSONObj := TJsonObject.Create;
+    try
+        for i := 0 to Pred(JSONObj.Count) do SortedKeys.Add(JSONObj.Names[i]);
+        SortedKeys.Sort; // Sort the keys alphabetically
+
+        for i := 0 to Pred(SortedKeys.Count) do begin
+            Key := SortedKeys[i];
+            NewJSONObj.O[Key].Assign(JSONObj.O[Key]);
+        end;
+
+        // Replace the original JSONObj with the sorted one
+        JSONObj.Clear;
+        JSONObj.Assign(NewJSONObj);
+    finally
+        SortedKeys.Free;
+        NewJSONObj.Free;
     end;
 end;
 
