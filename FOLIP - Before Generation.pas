@@ -67,7 +67,9 @@ end;
 procedure BeforeGeneration;
 var
     slContainers: TStringList;
+    bSkip: Boolean;
 begin
+    bSkip := False;
     //Create FOLIP plugins
     if not CreatePlugins then Exit;
 
@@ -79,6 +81,8 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
+
+    if bSkip then Exit;
 
     AddMessage('Collecting records...');
     CollectRecords;
@@ -230,9 +234,9 @@ begin
         chkFakeStatics.Top := 32;
         chkFakeStatics.Width := 120;
         chkFakeStatics.Caption := 'Create Fake Statics';
-        chkFakeStatics.Hint := 'Allows activator (ACTI), furniture (FURN), and moveable static (MSTT)'
-            + #13#10 + 'references to receive LOD by creating invisible static reference'
-            + #13#10 + 'duplicates with LOD attached.';
+        chkFakeStatics.Hint := 'Allows activator (ACTI), door (DOOR), furniture (FURN),'
+            + #13#10 + 'and moveable static (MSTT) references to receive LOD by creating'
+            + #13#10 + 'invisible static reference duplicates with LOD attached.';
         chkFakeStatics.ShowHint := True;
 
         chkForceLOD8 := TCheckBox.Create(gbOptions);
@@ -1023,6 +1027,17 @@ begin
             tlActiFurnMstt.Add(r);
         end;
 
+        //DOOR
+        g := GroupBySignature(f, 'DOOR');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slActiFurnMstt.IndexOf(recordId);
+            if idx > -1 then continue
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
+        end;
+
     end;
 
     slStats.Free;
@@ -1040,6 +1055,7 @@ var
     slArchivedFiles: TStringList;
     i: integer;
     f, archive: string;
+    nif: TwbNifFile;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
@@ -1078,11 +1094,22 @@ begin
         ResourceList(containers[i], slArchivedFiles);
     end;
     AddMessage('Please wait while we detect all LOD assets...');
+    slArchivedFiles.Sort;
+
     for i := 0 to Pred(slArchivedFiles.Count) do begin
         f := slArchivedFiles[i];
+
         //materials or meshes
         if IsInLODDir(f, 'materials') then slMatFiles.Add(f)
-        else if IsLODResourceModel(f) then slNifFiles.Add(f);
+        else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
+            slNifFiles.Add(f);
+            nif := TwbNifFile.Create;
+            try
+                nif.LoadFromResource(f);
+            finally
+                nif.free;
+            end;
+        end;
     end;
     slArchivedFiles.Free;
 end;
@@ -1426,6 +1453,7 @@ var
     rf: string;
 begin
     Result := False;
+    f := LowerCase(f);
     rf := RightStr(f, 10); //_lod_#.nif
     if rf = '_lod_0.nif' then Result := True
     else if rf = '_lod_1.nif' then Result := True
