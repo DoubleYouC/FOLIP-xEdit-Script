@@ -91,6 +91,8 @@ begin
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
+
+    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
 end;
 
 function Finalize: integer;
