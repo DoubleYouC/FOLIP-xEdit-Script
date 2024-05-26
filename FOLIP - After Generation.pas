@@ -8,6 +8,7 @@ var
     sFolipPluginFileName : string;
     slStats : TStringList;
     tlStats : TList;
+    bLightPlugin : Boolean;
 
 function Initialize:integer;
 {
@@ -21,6 +22,7 @@ begin
     slStats := TStringList.Create;
     tlStats := TList.Create;
     sFolipPluginFileName := 'FOLIP - After Generation';
+    bLightPlugin := True;
 
     if not MainMenuForm then Exit;
 
@@ -42,7 +44,7 @@ begin
         end;
     end;
 
-    iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', True);
+    iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', bLightPlugin);
     AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
 
     for i := 0 to Pred(tlStats.Count) do begin
@@ -78,7 +80,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8: TCheckBox;
+    chkLightPlugin: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -120,6 +122,15 @@ begin
         edPluginName.ShowHint := True;
         CreateLabel(gbOptions, 16, edPluginName.Top + 4, 'Output Plugin:');
 
+        chkLightPlugin := TCheckBox.Create(gbOptions);
+        chkLightPlugin.Parent := gbOptions;
+        chkLightPlugin.Left := edPluginName.Left + edPluginName.Width + 16;
+        chkLightPlugin.Top := 32;
+        chkLightPlugin.Width := 120;
+        chkLightPlugin.Caption := 'Flag as ESL';
+        chkLightPlugin.Hint := 'Flags the output plugin as ESL.';
+        chkLightPlugin.ShowHint := True;
+
         btnStart := TButton.Create(gbOptions);
         btnStart.Parent := gbOptions;
         btnStart.Caption := 'Start';
@@ -143,6 +154,7 @@ begin
         pnl.Height := 2;
 
         edPluginName.Text := sFolipPluginFileName;
+        chkLightPlugin.Checked := bLightPlugin;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -151,6 +163,7 @@ begin
         else Result := True;
 
         sFolipPluginFileName := edPluginName.Text;
+        bLightPlugin := chkLightPlugin.Checked;
 
     finally
         frm.Free;
