@@ -51,6 +51,7 @@ begin
         n := wbCopyElementToFile(r, p, False, True);
         SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
     end;
+    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
 end;
 
@@ -61,6 +62,7 @@ function Finalize: integer;
 begin
     slStats.Free;
     tlStats.Free;
+
     Result := 0;
 end;
 
