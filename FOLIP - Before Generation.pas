@@ -1053,11 +1053,14 @@ procedure FilesInContainers(containers: TStringList);
 }
 var
     slArchivedFiles: TStringList;
-    i, j: integer;
-    f, archive, tp: string;
+    tsUV: TStrings;
+    i, j, k, vertexCount: integer;
+    f, archive, tp, uv, u, v: string;
     nif: TwbNifFile;
     bgsm: TwbBGSMFile;
-    el: TdfElement;
+    el, arr, vertex: TdfElement;
+    block, b: TwbNifBlock;
+    bUVInRange: Boolean;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
@@ -1125,9 +1128,33 @@ begin
         end
         else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
             slNifFiles.Add(f);
+            //AddMessage(f);
             nif := TwbNifFile.Create;
             try
                 nif.LoadFromResource(f);
+                bUVInRange := False;
+                // iterate over all nif blocks
+                for j := 0 to Pred(nif.BlocksCount) do begin
+                    block := nif.Blocks[j];
+                    if not block.IsNiObject('BSTriShape', True) then continue;
+                    vertexCount := block.NativeValues['Num Vertices'];
+                    if vertexCount < 1 then continue;
+                    arr := block.Elements['Vertex Data'];
+                    for k := 0 to Pred(vertexCount) do begin
+                        vertex := arr[k];
+                        uv := vertex.EditValues['UV'];
+                        if Length(uv) < 1 then break;
+                        tsUV := SplitString(uv, ' ');
+                        u := tsUV[0];
+                        v := tsUV[1];
+                        if StrToFloatDef(u, 9) < -0.1 then break;
+                        if StrToFloatDef(u, 9) > 1.1 then break;
+                        if StrToFloatDef(v, 9) < -0.1 then break;
+                        if StrToFloatDef(v, 9) > 1.1 then break;
+                        bUVInRange := True;
+                    end;
+                end;
+                if not bUVInRange then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
             finally
                 nif.free;
             end;
