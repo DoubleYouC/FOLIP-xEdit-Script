@@ -1215,8 +1215,8 @@ begin
         for j := 0 to Pred(nif.BlocksCount) do begin
             block := nif.Blocks[j];
             bIsTrishape := False;
-            if ContainsText(block.Name, 'BSTriShape') then bIsTrishape := True;
-            if ContainsText(block.Name, 'BSMeshLODTriShape') then bIsTrishape := True;
+            //if ContainsText(block.Name, 'BSTriShape') then bIsTrishape := True;
+            //if ContainsText(block.Name, 'BSMeshLODTriShape') then bIsTrishape := True;
             if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
             if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
             if not bIsTrishape then continue;
