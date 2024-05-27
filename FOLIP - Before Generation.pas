@@ -1198,7 +1198,7 @@ function MeshOutsideUVRange(f: string): Boolean;
 }
 var
     tsUV: TStrings;
-    j, k, vertexCount: integer;
+    j, k, vertexCount, iTimesOutsideRange: integer;
     uv, u, v: string;
     nif: TwbNifFile;
     arr, vertex: TdfElement;
@@ -1206,6 +1206,7 @@ var
     bWasEverAbleToCheck, bIsTrishape: boolean;
 begin
     bWasEverAbleToCheck := False;
+    iTimesOutsideRange := 0;
     nif := TwbNifFile.Create;
     Result := True;
     try
@@ -1214,6 +1215,8 @@ begin
         for j := 0 to Pred(nif.BlocksCount) do begin
             block := nif.Blocks[j];
             bIsTrishape := False;
+            if ContainsText(block.Name, 'BSTriShape') then bIsTrishape := True;
+            if ContainsText(block.Name, 'BSMeshLODTriShape') then bIsTrishape := True;
             if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
             if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
             if not bIsTrishape then continue;
@@ -1228,11 +1231,14 @@ begin
                 tsUV := SplitString(uv, ' ');
                 u := tsUV[0];
                 v := tsUV[1];
-                if StrToFloatDef(u, 9) < -0.1 then break;
-                if StrToFloatDef(u, 9) > 1.1 then break;
-                if StrToFloatDef(v, 9) < -0.1 then break;
-                if StrToFloatDef(v, 9) > 1.1 then break;
-                Result := False;
+                if StrToFloatDef(u, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(u, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(v, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(v, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if iTimesOutsideRange = 0 then Result := False else begin
+                    Result := True;
+                    Exit;
+                end;
             end;
         end;
     finally
