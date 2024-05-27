@@ -4,7 +4,6 @@
     TODO:
     * Check if object is in a settlement and scrappable. Test to see if LOD Respects Enable State flag works on scrapped items like they do for Enable Markers. It may require persistence, and only would work in Fallout4.esm
     * Handle existing Enable Parents that are Opposite the Enable Marker as regards LOD Respects Enable State Flag, as the game isn't able to interpret the opposite method for lod.
-    * Check if LOD model's UVs are within proper 0 to 1 UV scale.
     * Automatic handling of missing LOD materials
         * Create Missing Material
         * Create TexGen Rule
