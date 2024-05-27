@@ -1053,9 +1053,11 @@ procedure FilesInContainers(containers: TStringList);
 }
 var
     slArchivedFiles: TStringList;
-    i: integer;
-    f, archive: string;
+    i, j: integer;
+    f, archive, tp: string;
     nif: TwbNifFile;
+    bgsm: TwbBGSMFile;
+    el: TdfElement;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
@@ -1100,7 +1102,27 @@ begin
         f := slArchivedFiles[i];
 
         //materials or meshes
-        if IsInLODDir(f, 'materials') then slMatFiles.Add(f)
+        if IsInLODDir(f, 'materials') then begin
+            slMatFiles.Add(f);
+            bgsm := TwbBGSMFile.Create;
+            try
+                bgsm.LoadFromResource(f);
+                el := bgsm.Elements['Textures'];
+                for j := 0 to Pred(el.Count) do begin
+                    tp := el[j].EditValue;
+                    if Length(tp) < 4 then continue;
+                    if ContainsText(tp, 'lod') then continue;
+                    if ContainsText(tp, 'grad.dds') then continue;
+                    if ContainsText(tp, 'grad_d.dds') then continue;
+                    if ContainsText(tp, 'grad01.dds') then continue;
+                    if ContainsText(tp, 'cubemap') then continue;
+                    AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
+                    break;
+                end;
+            finally
+                bgsm.free;
+            end;
+        end
         else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
             slNifFiles.Add(f);
             nif := TwbNifFile.Create;
