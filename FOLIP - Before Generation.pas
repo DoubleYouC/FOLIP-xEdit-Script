@@ -20,7 +20,7 @@ var
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
     f, sFolipPluginFileName: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bSaveUserRules, bUserRulesChanged: Boolean;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
@@ -42,6 +42,10 @@ function Initialize:integer;
 begin
     // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
     bReportMissingLOD := False;
+    // This is used to report if a LOD material appears to be using a non-LOD texture.
+    bReportNonLODMaterials := False;
+    // This is used to report if a LOD mesh appears to have UVs outside of range.
+    bReportUVs := False;
 
     //Used to tell the Rule Editor whether or not to save changes.
     bSaveUserRules := False;
@@ -178,13 +182,13 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8: TCheckBox;
+    chkFakeStatics, chkForceLOD8, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
         frm.Caption := 'FOLIP xEdit Patcher';
         frm.Width := 600;
-        frm.Height := 480;
+        frm.Height := 540;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
         frm.KeyPreview := True;
@@ -208,7 +212,7 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - Before Generation';
-        gbOptions.Height := 104;
+        gbOptions.Height := 144;
 
         btnRuleEditor := TButton.Create(gbOptions);
         btnRuleEditor.Parent := gbOptions;
@@ -216,7 +220,7 @@ begin
         btnRuleEditor.OnClick := RuleEditor;
         btnRuleEditor.Width := 100;
         btnRuleEditor.Left := 8;
-        btnRuleEditor.Top := 72;
+        btnRuleEditor.Top := 100;
 
         edPluginName := TEdit.Create(gbOptions);
         edPluginName.Parent := gbOptions;
@@ -242,7 +246,7 @@ begin
         chkForceLOD8 := TCheckBox.Create(gbOptions);
         chkForceLOD8.Parent := gbOptions;
         chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 16;
-        chkForceLOD8.Top := 32;
+        chkForceLOD8.Top := chkFakeStatics.Top;
         chkForceLOD8.Width := 120;
         chkForceLOD8.Caption := 'Force LOD8';
         chkForceLOD8.Hint := 'If an object has a LOD4 model assigned but not a LOD8 model,'
@@ -251,11 +255,44 @@ begin
             + #13#10 + 'increasing the fBlockLevel0Distance.';
         chkForceLOD8.ShowHint := True;
 
+        chkReportNonLODMaterials := TCheckBox.Create(gbOptions);
+        chkReportNonLODMaterials.Parent := gbOptions;
+        chkReportNonLODMaterials.Left := 16;
+        chkReportNonLODMaterials.Top := chkForceLOD8.Top + 30;
+        chkReportNonLODMaterials.Width := 120;
+        chkReportNonLODMaterials.Caption := 'Report Materials';
+        chkReportNonLODMaterials.Hint := 'Adds warnings to LOD materials that appear to be'
+            + #13#10 + 'using non-LOD textures. This is for information'
+            + #13#10 + 'purposes only and has no visual benefit.';
+        chkReportNonLODMaterials.ShowHint := True;
+
+        chkReportUVs := TCheckBox.Create(gbOptions);
+        chkReportUVs.Parent := gbOptions;
+        chkReportUVs.Left := chkReportNonLODMaterials.Left + chkReportNonLODMaterials.Width + 16;
+        chkReportUVs.Top := chkReportNonLODMaterials.Top;
+        chkReportUVs.Width := 120;
+        chkReportUVs.Caption := 'Report UVs';
+        chkReportUVs.Hint := 'Adds warnings to LOD meshes that appear to be'
+            + #13#10 + 'outside the 0 to 1 UV range. This is for information'
+            + #13#10 + 'purposes only and has no visual benefit.';
+        chkReportUVs.ShowHint := True;
+
+        chkReportMissingLOD := TCheckBox.Create(gbOptions);
+        chkReportMissingLOD.Parent := gbOptions;
+        chkReportMissingLOD.Left := chkFakeStatics.Left;
+        chkReportMissingLOD.Top := chkReportUVs.Top;
+        chkReportMissingLOD.Width := 200;
+        chkReportMissingLOD.Caption := 'Report Large Objects without LOD';
+        chkReportMissingLOD.Hint := 'Adds messages about large objects'
+            + #13#10 + 'that do not have LOD. This is for information'
+            + #13#10 + 'purposes only and has no visual benefit.';
+        chkReportMissingLOD.ShowHint := True;
+
         btnStart := TButton.Create(gbOptions);
         btnStart.Parent := gbOptions;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := 72;
+        btnStart.Top := btnRuleEditor.Top;
 
         btnCancel := TButton.Create(gbOptions);
         btnCancel.Parent := gbOptions;
@@ -273,9 +310,13 @@ begin
         pnl.Width := gbOptions.Width - 16;
         pnl.Height := 2;
 
+        edPluginName.Text := sFolipPluginFileName;
         chkFakeStatics.Checked := bFakeStatics;
         chkForceLOD8.Checked := bForceLOD8;
-        edPluginName.Text := sFolipPluginFileName;
+        chkReportNonLODMaterials.Checked := bReportNonLODMaterials;
+        chkReportUVs.Checked := bReportUVs;
+        chkReportMissingLOD.Checked := bReportMissingLOD;
+
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -283,9 +324,12 @@ begin
         end
         else Result := True;
 
+        sFolipPluginFileName := edPluginName.Text;
         bFakeStatics := chkFakeStatics.Checked;
         bForceLOD8 := chkForceLOD8.Checked;
-        sFolipPluginFileName := edPluginName.Text;
+        bReportNonLODMaterials := chkReportNonLODMaterials.Checked;
+        bReportUVs := chkReportUVs.Checked;
+        bReportMissingLOD := chkReportMissingLOD.Checked;
 
     finally
         frm.Free;
@@ -665,12 +709,13 @@ var
     n, r, s, ms, rCell, fakeStatic, patchStatGroup: IInterface;
     HasLOD, HasMS: Boolean;
     joLOD: TJsonObject;
-    fakeStaticEditorId, fakeStaticFormID: string;
+    fakeStaticEditorId, fakeStaticFormID, sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlActiFurnMstt.Count) do begin
+        sMissingLodMessage := '';
         s := ObjectToElement(tlActiFurnMstt[i]);
         joLOD := TJsonObject.Create;
-        HasLOD := AssignLODModels(s, joLOD);
+        HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
         //AssignLODToStat(s, joLOD);
 
@@ -729,6 +774,9 @@ begin
                 ms := LinksTo(ElementByPath(r, 'XMSP'));
                 if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
             end;
+        end
+        else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
+            if IsObjectUsedInExterior(s) then slFullLODMessages.Add(sMissingLodMessage);
         end;
 
         joLOD.Free;
@@ -883,11 +931,13 @@ var
     HasLOD: Boolean;
     ms, s: IInterface;
     joLOD: TJsonObject;
+    sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
+        sMissingLodMessage := '';
         s := ObjectToElement(tlStats[i]);
         joLOD := TJsonObject.Create;
-        HasLOD := AssignLODModels(s, joLOD);
+        HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
         //Add lod change if the HasDistantLOD flag needs to be unset.
         if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD);
@@ -903,9 +953,34 @@ begin
             end;
 
             if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
+        end
+        else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
+            if IsObjectUsedInExterior(s) then slFullLODMessages.Add(sMissingLodMessage);
         end;
         joLOD.Free;
     end;
+end;
+
+function IsObjectUsedInExterior(s: IInterface): boolean;
+var
+    si, cnt: integer;
+    r, rCell: IInterface;
+begin
+    cnt := 0;
+
+    for si := 0 to Pred(ReferencedByCount(s)) do begin
+        r := ReferencedByIndex(s, si);
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        if GetIsDeleted(r) then continue;
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+
+        //This reference should get lod if it passes these checks.
+        cnt := cnt + 1;
+        break;
+    end;
+    if cnt > 0 then Result := True else Result := False;
 end;
 
 function ProcessReferences(s: IInterface;): integer;
@@ -991,7 +1066,6 @@ begin
             if idx > -1 then continue
             slStats.Add(recordId);
             tlStats.Add(r);
-            //AssignLODModels(r);
         end;
 
         //MSTT
@@ -1055,12 +1129,10 @@ var
     slArchivedFiles: TStringList;
     tsUV: TStrings;
     i, j, k, vertexCount: integer;
-    f, archive, tp, uv, u, v: string;
+    f, archive, uv, u, v: string;
     nif: TwbNifFile;
-    bgsm: TwbBGSMFile;
-    el, arr, vertex: TdfElement;
+    arr, vertex: TdfElement;
     block, b: TwbNifBlock;
-    bUVInRange: Boolean;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
@@ -1107,60 +1179,90 @@ begin
         //materials or meshes
         if IsInLODDir(f, 'materials') then begin
             slMatFiles.Add(f);
-            bgsm := TwbBGSMFile.Create;
-            try
-                bgsm.LoadFromResource(f);
-                el := bgsm.Elements['Textures'];
-                for j := 0 to Pred(el.Count) do begin
-                    tp := el[j].EditValue;
-                    if Length(tp) < 4 then continue;
-                    if ContainsText(tp, 'lod') then continue;
-                    if ContainsText(tp, 'grad.dds') then continue;
-                    if ContainsText(tp, 'grad_d.dds') then continue;
-                    if ContainsText(tp, 'grad01.dds') then continue;
-                    if ContainsText(tp, 'cubemap') then continue;
-                    AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
-                    break;
-                end;
-            finally
-                bgsm.free;
-            end;
+            if not bReportNonLODMaterials then continue;
+            if MatHasNonLodTexture(f) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
         end
         else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
             slNifFiles.Add(f);
+            if not bReportUVs then continue;
             //AddMessage(f);
-            nif := TwbNifFile.Create;
-            try
-                nif.LoadFromResource(f);
-                bUVInRange := False;
-                // iterate over all nif blocks
-                for j := 0 to Pred(nif.BlocksCount) do begin
-                    block := nif.Blocks[j];
-                    if not block.IsNiObject('BSTriShape', True) then continue;
-                    vertexCount := block.NativeValues['Num Vertices'];
-                    if vertexCount < 1 then continue;
-                    arr := block.Elements['Vertex Data'];
-                    for k := 0 to Pred(vertexCount) do begin
-                        vertex := arr[k];
-                        uv := vertex.EditValues['UV'];
-                        if Length(uv) < 1 then break;
-                        tsUV := SplitString(uv, ' ');
-                        u := tsUV[0];
-                        v := tsUV[1];
-                        if StrToFloatDef(u, 9) < -0.1 then break;
-                        if StrToFloatDef(u, 9) > 1.1 then break;
-                        if StrToFloatDef(v, 9) < -0.1 then break;
-                        if StrToFloatDef(v, 9) > 1.1 then break;
-                        bUVInRange := True;
-                    end;
-                end;
-                if not bUVInRange then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
-            finally
-                nif.free;
-            end;
+            if MeshOutsideUVRange(f) then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
         end;
     end;
     slArchivedFiles.Free;
+end;
+
+function MeshOutsideUVRange(f: string): Boolean;
+{
+    Checks a mesh resource to see if its UVs are outside of range.
+}
+var
+    tsUV: TStrings;
+    j, k, vertexCount: integer;
+    uv, u, v: string;
+    nif: TwbNifFile;
+    arr, vertex: TdfElement;
+    block, b: TwbNifBlock;
+begin
+    nif := TwbNifFile.Create;
+    Result := True;
+    try
+        nif.LoadFromResource(f);
+        // iterate over all nif blocks
+        for j := 0 to Pred(nif.BlocksCount) do begin
+            block := nif.Blocks[j];
+            if not block.IsNiObject('BSTriShape', True) then continue;
+            vertexCount := block.NativeValues['Num Vertices'];
+            if vertexCount < 1 then continue;
+            arr := block.Elements['Vertex Data'];
+            for k := 0 to Pred(vertexCount) do begin
+                vertex := arr[k];
+                uv := vertex.EditValues['UV'];
+                if Length(uv) < 1 then break;
+                tsUV := SplitString(uv, ' ');
+                u := tsUV[0];
+                v := tsUV[1];
+                if StrToFloatDef(u, 9) < -0.1 then break;
+                if StrToFloatDef(u, 9) > 1.1 then break;
+                if StrToFloatDef(v, 9) < -0.1 then break;
+                if StrToFloatDef(v, 9) > 1.1 then break;
+                Result := False;
+            end;
+        end;
+    finally
+        nif.free;
+    end;
+end;
+
+function MatHasNonLodTexture(f: string): Boolean;
+{
+    Checks to see if a material file resource contains non-lod textures.
+}
+var
+    i: integer;
+    tp: string;
+    bgsm: TwbBGSMFile;
+    el: TdfElement;
+begin
+    Result := False;
+    bgsm := TwbBGSMFile.Create;
+    try
+        bgsm.LoadFromResource(f);
+        el := bgsm.Elements['Textures'];
+        for i := 0 to Pred(el.Count) do begin
+            tp := el[i].EditValue;
+            if Length(tp) < 4 then continue;
+            if ContainsText(tp, 'lod') then continue;
+            if ContainsText(tp, 'grad.dds') then continue;
+            if ContainsText(tp, 'grad_d.dds') then continue;
+            if ContainsText(tp, 'grad01.dds') then continue;
+            if ContainsText(tp, 'cubemap') then continue;
+            Result := True;
+            break;
+        end;
+    finally
+        bgsm.free;
+    end;
 end;
 
 procedure LoadRules(f: string);
@@ -1211,7 +1313,7 @@ begin
     end;
 end;
 
-function AssignLODModels(s: IInterface; joLOD: TJsonObject): Boolean;
+function AssignLODModels(s: IInterface; joLOD: TJsonObject; var sMissingLodMessage: string): Boolean;
 {
     Assigns LOD Models to Stat records.
 }
@@ -1287,7 +1389,7 @@ begin
             yBnd := Abs(GetElementNativeValues(s, 'OBND\Y1')) + GetElementNativeValues(s, 'OBND\Y2');
             zBnd := Abs(GetElementNativeValues(s, 'OBND\Z1')) + GetElementNativeValues(s, 'OBND\Z2');
             if (xBnd > 300) or (yBnd > 300) or (zBnd > 300) then begin
-                slFullLODMessages.Add(ShortName(s) + ' with object bounds of ' + IntToStr(xBnd) + 'x' + IntToStr(yBnd) + 'x' + IntToStr(zBnd) + ' has no lod.');
+                sMissingLodMessage := ShortName(s) + ' with object bounds of ' + IntToStr(xBnd) + 'x' + IntToStr(yBnd) + 'x' + IntToStr(zBnd) + ' has no lod.'
             end;
         end;
     end;
