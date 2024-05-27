@@ -1203,7 +1203,9 @@ var
     nif: TwbNifFile;
     arr, vertex: TdfElement;
     block, b: TwbNifBlock;
+    bWasEverAbleToCheck, bIsTrishape: boolean;
 begin
+    bWasEverAbleToCheck := False;
     nif := TwbNifFile.Create;
     Result := True;
     try
@@ -1211,7 +1213,10 @@ begin
         // iterate over all nif blocks
         for j := 0 to Pred(nif.BlocksCount) do begin
             block := nif.Blocks[j];
-            if not block.IsNiObject('BSTriShape', True) then continue;
+            bIsTrishape := False;
+            if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
+            if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
+            if not bIsTrishape then continue;
             vertexCount := block.NativeValues['Num Vertices'];
             if vertexCount < 1 then continue;
             arr := block.Elements['Vertex Data'];
@@ -1219,6 +1224,7 @@ begin
                 vertex := arr[k];
                 uv := vertex.EditValues['UV'];
                 if Length(uv) < 1 then break;
+                bWasEverAbleToCheck := True;
                 tsUV := SplitString(uv, ' ');
                 u := tsUV[0];
                 v := tsUV[1];
@@ -1232,6 +1238,7 @@ begin
     finally
         nif.free;
     end;
+    if not bWasEverAbleToCheck then Result := False;
 end;
 
 function MatHasNonLodTexture(f: string): Boolean;
