@@ -969,6 +969,11 @@ begin
 
     for si := 0 to Pred(ReferencedByCount(s)) do begin
         r := ReferencedByIndex(s, si);
+        if Signature(r) = 'SCOL' then begin
+            if not IsObjectUsedInExterior(r) then continue;
+            cnt := cnt + 1;
+            break;
+        end;
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
@@ -990,6 +995,17 @@ begin
     cnt := 0;
     for si := 0 to Pred(ReferencedByCount(s)) do begin
         r := ReferencedByIndex(s, si);
+        if Signature(r) = 'SCOL' then begin
+            if not IsWinningOverride(r) then continue;
+            if GetIsDeleted(r) then continue;
+            cnt := cnt + ProcessReferences(r);
+            //check for base material swap on the SCOL record
+            if (cnt > 0) and (ElementExists(r, 'Model\MODS - Material Swap')) then begin
+                ms := LinksTo(ElementByPath(r, 'Model\MODS'));
+                if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+            end;
+            continue;
+        end;
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
@@ -1400,7 +1416,7 @@ begin
             xBnd := Abs(GetElementNativeValues(s, 'OBND\X1')) + GetElementNativeValues(s, 'OBND\X2');
             yBnd := Abs(GetElementNativeValues(s, 'OBND\Y1')) + GetElementNativeValues(s, 'OBND\Y2');
             zBnd := Abs(GetElementNativeValues(s, 'OBND\Z1')) + GetElementNativeValues(s, 'OBND\Z2');
-            if (xBnd > 300) or (yBnd > 300) or (zBnd > 300) then begin
+            if (xBnd > 1000) or (yBnd > 1000) or (zBnd > 1000) then begin
                 sMissingLodMessage := ShortName(s) + ' with object bounds of ' + IntToStr(xBnd) + 'x' + IntToStr(yBnd) + 'x' + IntToStr(zBnd) + ' has no lod.'
             end;
         end;
