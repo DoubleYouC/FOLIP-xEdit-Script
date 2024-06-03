@@ -14,7 +14,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlCells: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlOppositeEnableParentedRefs: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
@@ -119,6 +119,7 @@ begin
     tlActiFurnMstt.Free;
     tlMswp.Free;
     tlCells.Free;
+    tlOppositeEnableParentedRefs.Free;
 
     slNifFiles.Free;
     slMatFiles.Free;
@@ -150,6 +151,7 @@ begin
     tlActiFurnMstt := TList.Create;
     tlMswp := TList.Create;
     tlCells := TList.Create;
+    tlOppositeEnableParentedRefs := TList.Create;
 
     //TStringLists
     slMatFiles := TStringList.Create;
@@ -702,13 +704,25 @@ end;
 // Record processing Functions and Procedures go below.
 // ----------------------------------------------------
 
+function GetIsCleanDeleted(r: IInterface): Boolean;
+{
+    Checks to see if a reference has an XESP set to opposite of the PlayerRef
+}
+begin
+    Result := False;
+    if not ElementExists(r, 'XESP') then Exit;
+    if not GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') then Exit;
+    if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
+    Result := True;
+end;
+
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
-    n, r, s, ms, rCell, fakeStatic, patchStatGroup: IInterface;
-    HasLOD, HasMS: Boolean;
+    n, r, s, ms, rCell, fakeStatic: IInterface;
+    HasLOD: Boolean;
     joLOD: TJsonObject;
-    fakeStaticEditorId, fakeStaticFormID, sMissingLodMessage: string;
+    fakeStaticFormID, sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlActiFurnMstt.Count) do begin
         sMissingLodMessage := '';
@@ -727,46 +741,26 @@ begin
                 if Signature(r) <> 'REFR' then continue;
                 if not IsWinningOverride(r) then continue;
                 if GetIsDeleted(r) then continue;
+                if GetIsCleanDeleted(r) then continue;
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
                 if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
 
                 //This reference should get lod if it passes these checks.
                 cnt := cnt + 1;
-                //Perform these functions if this is the very first reference. We set up the base object and mat swap.
+                //Perform these functions if this is the very first reference. We set up the base object as a Fake Static.
                 if cnt = 1 then begin
-                    //Add a new 'fake' STAT record which we will use to place LODs for these non-STAT records.
-                    iCurrentPlugin := RefMastersDeterminePlugin(s);
-                    patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
-                    HasMS := ElementExists(s, 'Model\MODS - Material Swap');
-
-                    //Add Fake STAT
-                    fakeStatic := Add(patchStatGroup, 'STAT', True);
-                    fakeStaticEditorId := SetEditorID(fakeStatic, 'FOLIP_' + EditorID(s) + '_FakeStatic');
-                    fakeStaticFormID := IntToHex(GetLoadOrderFormID(fakeStatic), 8);
-
-                    //Add base material swap
-                    if HasMS then begin
-                        ms := LinksTo(ElementByPath(s, 'Model\MODS'));
-                        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
-                        Add(fakeStatic, 'XMSP', True);
-                        SetElementNativeValues(fakeStatic, 'XMSP', ms);
-                    end;
+                    //Create Fake Static
+                    fakeStatic := AddFakeStatic(s);
 
                     //Add LOD models
                     AssignLODToStat(fakeStatic, joLOD);
+
+                    //Get formid
+                    fakeStaticFormID := IntToHex(GetLoadOrderFormID(fakeStatic), 8);
                 end;
 
                 //Copy
-                if tlCells.IndexOf(rCell) < 0 then begin
-                    tlCells.Add(rCell);
-                    iCurrentPlugin := RefMastersDeterminePlugin(rCell);
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                end;
-
-                //Copy duplicate of ref to patch and set base record to fakeStatic
-                iCurrentPlugin := RefMastersDeterminePlugin(r);
-                n := wbCopyElementToFile(r, iCurrentPlugin, True, True);
-                SetElementEditValues(n, 'NAME', fakeStaticFormID);
+                n := DuplicateRef(r, fakeStaticFormID);
 
                 //Add mat swap if it exists to list to check.
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
@@ -780,6 +774,117 @@ begin
 
         joLOD.Free;
     end;
+end;
+
+function DuplicateRef(r: IInterface; base: string): IInterface;
+{
+    Duplicates a placed reference and returns the duplicate.
+}
+var
+    n, rCell, nCell, ms: IInterface;
+    bHasOppositeParent: Boolean;
+begin
+    //Copy cell to plugin
+    rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+    if tlCells.IndexOf(rCell) < 0 then begin
+        tlCells.Add(rCell);
+        iCurrentPlugin := RefMastersDeterminePlugin(rCell);
+        nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+    end
+    else nCell := rCell;
+
+    //Add new ref to cell
+    n := Add(nCell, 'REFR', True);
+
+    //Add required elements
+
+    //  Remove persistent flag
+    SetIsPersistent(n, False);
+
+    //  Set flags
+    if GetElementNativeValues(r, 'Record Header\Record Flags\Initially Disabled') then AddMessage(name(r) + ' was initially disabled. ' + name(n));
+    SetElementNativeValues(n, 'Record Header\Record Flags\Initially Disabled', GetElementNativeValues(r, 'Record Header\Record Flags\Initially Disabled'));
+
+    //  Set base
+    SetElementEditValues(n, 'Name', base);
+
+    //  Set material swap
+    if ElementExists(r, 'XMSP - Material Swap') then begin
+        AddMessage(ShortName(r) + ' has a mat swap ' + ShortName(n));
+        Add(n, 'XMSP', True);
+        SetElementEditValues(n, 'XMSP - Material Swap', GetElementEditValues(r, 'XMSP - Material Swap'));
+    end;
+
+    //  Set scale
+    if ElementExists(r, 'XSCL - Scale') then begin
+        Add(n, 'XSCL', True);
+        SetElementNativeValues(n, 'XSCL - Scale', GetElementNativeValues(r, 'XSCL - Scale'));
+    end;
+
+
+    //  Set position
+    SetElementNativeValues(n, 'DATA\Position\X', GetElementNativeValues(r, 'DATA\Position\X'));
+    SetElementNativeValues(n, 'DATA\Position\Y', GetElementNativeValues(r, 'DATA\Position\Y'));
+    SetElementNativeValues(n, 'DATA\Position\Z', GetElementNativeValues(r, 'DATA\Position\Z'));
+    SetElementNativeValues(n, 'DATA\Rotation\X', GetElementNativeValues(r, 'DATA\Rotation\X'));
+    SetElementNativeValues(n, 'DATA\Rotation\Y', GetElementNativeValues(r, 'DATA\Rotation\Y'));
+    SetElementNativeValues(n, 'DATA\Rotation\Z', GetElementNativeValues(r, 'DATA\Rotation\Z'));
+
+    //  Set XESP
+
+    //      THIS WILL NEED EXTRA WORK
+    if ElementExists(r, 'XESP - Enable Parent') then begin
+        Add(n, 'XESP', True);
+        SetElementNativeValues(n, 'XESP\Reference', GetElementNativeValues(r, 'XESP\Reference'));
+        bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
+        SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
+        if bHasOppositeParent then AddMessage(ShortName(r) + ' has XESP - Set Enable State to Opposite of Parent flag set.');
+    end;
+
+
+end;
+
+procedure CopyObjectBounds(copyFrom, copyTo: IInterface);
+{
+    Copies the object bounds of the first reference to the second reference.
+}
+begin
+    SetElementNativeValues(copyTo, 'OBND\X1', GetElementNativeValues(copyFrom, 'OBND\X1'));
+    SetElementNativeValues(copyTo, 'OBND\X2', GetElementNativeValues(copyFrom, 'OBND\X2'));
+    SetElementNativeValues(copyTo, 'OBND\Y1', GetElementNativeValues(copyFrom, 'OBND\Y1'));
+    SetElementNativeValues(copyTo, 'OBND\Y2', GetElementNativeValues(copyFrom, 'OBND\Y2'));
+    SetElementNativeValues(copyTo, 'OBND\Z1', GetElementNativeValues(copyFrom, 'OBND\Z1'));
+    SetElementNativeValues(copyTo, 'OBND\Z2', GetElementNativeValues(copyFrom, 'OBND\Z2'));
+end;
+
+function AddFakeStatic(s: IInterface): IInterface;
+{
+    Adds a fake static version of the non-static input and returns is.
+}
+var
+    patchStatGroup, ms, fakeStatic: IInterface;
+    HasMS: Boolean;
+    fakeStaticEditorId: string;
+begin
+    iCurrentPlugin := RefMastersDeterminePlugin(s);
+    patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
+    HasMS := ElementExists(s, 'Model\MODS - Material Swap');
+
+    //Add Fake STAT
+    fakeStatic := Add(patchStatGroup, 'STAT', True);
+    fakeStaticEditorId := SetEditorID(fakeStatic, 'FOLIP_' + EditorID(s) + '_FakeStatic');
+
+    //Set Object Bounds
+    CopyObjectBounds(s, fakeStatic);
+
+    //Add base material swap
+    if HasMS then begin
+        ms := LinksTo(ElementByPath(s, 'Model\MODS'));
+        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+        Add(fakeStatic, 'XMSP', True);
+        SetElementNativeValues(fakeStatic, 'XMSP', ms);
+    end;
+    Result := fakeStatic;
 end;
 
 procedure AssignLODMaterialsList;
@@ -1009,6 +1114,7 @@ begin
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
+        if GetIsCleanDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         cnt := cnt + 1;
@@ -1127,6 +1233,43 @@ begin
             tlActiFurnMstt.Add(r);
         end;
 
+        {
+        //CONT
+        g := GroupBySignature(f, 'CONT');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slActiFurnMstt.IndexOf(recordId);
+            if idx > -1 then continue
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
+        end;
+
+
+        //FLOR
+        g := GroupBySignature(f, 'FLOR');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slActiFurnMstt.IndexOf(recordId);
+            if idx > -1 then continue
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
+        end;
+
+        //MISC
+        g := GroupBySignature(f, 'MISC');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := WinningOverride(ElementByIndex(g, j));
+            recordId := GetFileName(r) + #9 + ShortName(r);
+            idx := slActiFurnMstt.IndexOf(recordId);
+            if idx > -1 then continue
+            slActiFurnMstt.Add(recordId);
+            tlActiFurnMstt.Add(r);
+        end;
+        }
+
+
     end;
 
     slStats.Free;
@@ -1142,12 +1285,8 @@ procedure FilesInContainers(containers: TStringList);
 }
 var
     slArchivedFiles: TStringList;
-    tsUV: TStrings;
-    i, j, k, vertexCount: integer;
-    f, archive, uv, u, v: string;
-    nif: TwbNifFile;
-    arr, vertex: TdfElement;
-    block, b: TwbNifBlock;
+    i: integer;
+    f, archive: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Duplicates := dupIgnore;
@@ -1189,7 +1328,7 @@ begin
     slArchivedFiles.Sort;
 
     for i := 0 to Pred(slArchivedFiles.Count) do begin
-        f := slArchivedFiles[i];
+        f := LowerCase(slArchivedFiles[i]);
 
         //materials or meshes
         if IsInLODDir(f, 'materials') then begin
