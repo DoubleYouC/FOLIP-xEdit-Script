@@ -704,18 +704,6 @@ end;
 // Record processing Functions and Procedures go below.
 // ----------------------------------------------------
 
-function GetIsCleanDeleted(r: IInterface): Boolean;
-{
-    Checks to see if a reference has an XESP set to opposite of the PlayerRef
-}
-begin
-    Result := False;
-    if not ElementExists(r, 'XESP') then Exit;
-    if not GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') then Exit;
-    if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
-    Result := True;
-end;
-
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
@@ -776,16 +764,61 @@ begin
     end;
 end;
 
+function GetCellFromWorldspace(Worldspace: IInterface; GridX, GridY: integer): IInterface;
+var
+    blockidx, subblockidx, cellidx: integer;
+    wrldgrup, block, subblock, cell: IInterface;
+    Grid, GridBlock, GridSubBlock: TwbGridCell;
+    LabelBlock, LabelSubBlock: Cardinal;
+begin
+    Grid := wbGridCell(GridX, GridY);
+    GridSubBlock := wbSubBlockFromGridCell(Grid);
+    LabelSubBlock := wbGridCellToGroupLabel(GridSubBlock);
+    GridBlock := wbBlockFromSubBlock(GridSubBlock);
+    LabelBlock := wbGridCellToGroupLabel(GridBlock);
+
+    wrldgrup := ChildGroup(Worldspace);
+    // iterate over Exterior Blocks
+    for blockidx := 0 to Pred(ElementCount(wrldgrup)) do begin
+        block := ElementByIndex(wrldgrup, blockidx);
+        if GroupLabel(block) <> LabelBlock then Continue;
+        // iterate over SubBlocks
+        for subblockidx := 0 to Pred(ElementCount(block)) do begin
+            subblock := ElementByIndex(block, subblockidx);
+            if GroupLabel(subblock) <> LabelSubBlock then Continue;
+            // iterate over Cells
+            for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                cell := ElementByIndex(subblock, cellidx);
+                if (Signature(cell) <> 'CELL') or GetIsPersistent(cell) then Continue;
+                if (GetElementNativeValues(cell, 'XCLC\X') = Grid.x) and (GetElementNativeValues(cell, 'XCLC\Y') = Grid.y) then begin
+                    Result := cell;
+                    Exit;
+                end;
+            end;
+            Break;
+        end;
+        Break;
+    end;
+end;
+
 function DuplicateRef(r: IInterface; base: string): IInterface;
 {
     Duplicates a placed reference and returns the duplicate.
 }
 var
-    n, rCell, nCell, ms: IInterface;
+    n, wrld, rCell, nCell, ms: IInterface;
     bHasOppositeParent: Boolean;
+    c: TwbGridCell;
 begin
     //Copy cell to plugin
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+
+    //Handle persistent worldspace cell
+    if GetIsPersistent(rCell) then begin
+        c := wbPositionToGridCell(GetPosition(r));
+        wrld := LinksTo(ElementByIndex(rCell, 0));
+        rCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
+    end;
     if tlCells.IndexOf(rCell) < 0 then begin
         tlCells.Add(rCell);
         iCurrentPlugin := RefMastersDeterminePlugin(rCell);
@@ -798,11 +831,7 @@ begin
 
     //Add required elements
 
-    //  Remove persistent flag
-    SetIsPersistent(n, False);
-
     //  Set flags
-    if GetElementNativeValues(r, 'Record Header\Record Flags\Initially Disabled') then AddMessage(name(r) + ' was initially disabled. ' + name(n));
     SetElementNativeValues(n, 'Record Header\Record Flags\Initially Disabled', GetElementNativeValues(r, 'Record Header\Record Flags\Initially Disabled'));
 
     //  Set base
@@ -810,7 +839,6 @@ begin
 
     //  Set material swap
     if ElementExists(r, 'XMSP - Material Swap') then begin
-        AddMessage(ShortName(r) + ' has a mat swap ' + ShortName(n));
         Add(n, 'XMSP', True);
         SetElementEditValues(n, 'XMSP - Material Swap', GetElementEditValues(r, 'XMSP - Material Swap'));
     end;
@@ -835,7 +863,7 @@ begin
     //      THIS WILL NEED EXTRA WORK
     if ElementExists(r, 'XESP - Enable Parent') then begin
         Add(n, 'XESP', True);
-        SetElementNativeValues(n, 'XESP\Reference', GetElementNativeValues(r, 'XESP\Reference'));
+        SetElementEditValues(n, 'XESP\Reference', GetElementEditValues(r, 'XESP\Reference'));
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
         if bHasOppositeParent then AddMessage(ShortName(r) + ' has XESP - Set Enable State to Opposite of Parent flag set.');
@@ -1096,6 +1124,8 @@ function ProcessReferences(s: IInterface;): integer;
 var
     si, cnt: integer;
     ms, r, rCell: IInterface;
+    bHasOppositeParent: Boolean;
+    parent: string;
 begin
     cnt := 0;
     for si := 0 to Pred(ReferencedByCount(s)) do begin
@@ -1121,6 +1151,17 @@ begin
         if not ElementExists(r, 'XMSP - Material Swap') then continue;
         ms := LinksTo(ElementByPath(r, 'XMSP'));
         if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+
+        // check for enable parent
+        if not ElementExists(r, 'XESP - Enable Parent') then continue;
+        parent := GetElementEditValues(r, 'XESP\Reference');
+        bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
+        if bHasOppositeParent then begin
+            AddMessage(ShortName(r) + ' has XESP - Set Enable State to Opposite of Parent ' + parent);
+        end
+        else begin
+            AddMessage(ShortName(r) + ' has XESP - Enable Parent of ' + parent);
+        end;
     end;
     Result := cnt;
 end;
@@ -1796,6 +1837,18 @@ begin
             Exit;
         end;
     end;
+end;
+
+function GetIsCleanDeleted(r: IInterface): Boolean;
+{
+    Checks to see if a reference has an XESP set to opposite of the PlayerRef
+}
+begin
+    Result := False;
+    if not ElementExists(r, 'XESP') then Exit;
+    if not GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') then Exit;
+    if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
+    Result := True;
 end;
 
 // ----------------------------------------------------
