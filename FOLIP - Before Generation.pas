@@ -14,7 +14,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlOppositeEnableParentedRefs: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlHasLOD, tlEnableParents: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
     i: integer;
@@ -98,14 +98,14 @@ begin
     if bFakeStatics then ProcessActiFurnMstt;
 
     //Add Messages
-    slMessages.Sort;
     ListStringsInStringList(slMessages);
-    slFullLODMessages.Sort;
     ListStringsInStringList(slFullLODMessages);
 
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
+
+    ProcessEnableParents;
 
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
 end;
@@ -119,7 +119,8 @@ begin
     tlActiFurnMstt.Free;
     tlMswp.Free;
     tlCells.Free;
-    tlOppositeEnableParentedRefs.Free;
+    tlHasLOD.Free;
+    tlEnableParents.Free;
 
     slNifFiles.Free;
     slMatFiles.Free;
@@ -151,16 +152,24 @@ begin
     tlActiFurnMstt := TList.Create;
     tlMswp := TList.Create;
     tlCells := TList.Create;
-    tlOppositeEnableParentedRefs := TList.Create;
+    tlHasLOD := TList.Create;
+    tlEnableParents := TList.Create;
+
 
     //TStringLists
     slMatFiles := TStringList.Create;
+    slMatFiles.Sorted := True;
     slMatFiles.Duplicates := dupIgnore;
+
     slNifFiles := TStringList.Create;
+    slNifFiles.Sorted := True;
     slNifFiles.Duplicates := dupIgnore;
+
     slTopLevelModPatternPaths := TStringList.Create;
     slMessages := TStringList.Create;
+    slMessages.Sorted := True;
     slFullLODMessages := TStringList.Create;
+    slFullLODMessages.Sorted := True;
 
     //TJsonObjects
     joRules := TJsonObject.Create;
@@ -704,6 +713,17 @@ end;
 // Record processing Functions and Procedures go below.
 // ----------------------------------------------------
 
+procedure ProcessEnableParents;
+var
+    i: integer;
+    p: IInterface;
+begin
+    for i := 0 to Pred(tlEnableParents.Count) do begin
+        p := ObjectToElement(tlEnableParents[i]);
+        AddMessage(Name(p));
+    end;
+end;
+
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
@@ -734,6 +754,7 @@ begin
                 if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
 
                 //This reference should get lod if it passes these checks.
+                tlHasLOD.Add(s);
                 cnt := cnt + 1;
                 //Perform these functions if this is the very first reference. We set up the base object as a Fake Static.
                 if cnt = 1 then begin
@@ -806,9 +827,10 @@ function DuplicateRef(r: IInterface; base: string): IInterface;
     Duplicates a placed reference and returns the duplicate.
 }
 var
-    n, wrld, rCell, nCell, ms: IInterface;
+    n, wrld, rCell, nCell, ms, xesp, parentRef: IInterface;
     bHasOppositeParent: Boolean;
     c: TwbGridCell;
+    parent: string;
 begin
     //Copy cell to plugin
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
@@ -863,10 +885,14 @@ begin
     //      THIS WILL NEED EXTRA WORK
     if ElementExists(r, 'XESP - Enable Parent') then begin
         Add(n, 'XESP', True);
-        SetElementEditValues(n, 'XESP\Reference', GetElementEditValues(r, 'XESP\Reference'));
+        parent := GetElementEditValues(r, 'XESP\Reference');
+        SetElementEditValues(n, 'XESP\Reference', parent);
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
-        if bHasOppositeParent then AddMessage(ShortName(r) + ' has XESP - Set Enable State to Opposite of Parent flag set.');
+
+        xesp := ElementByPath(r, 'XESP');
+        parentRef := LinksTo(ElementByIndex(xesp, 0));
+        if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
 
 
@@ -1078,6 +1104,8 @@ begin
         if HasLOD then begin
             cnt := ProcessReferences(s);
 
+            if cnt > 0 then tlHasLOD.Add(s);
+
             //check for base material swap
             if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
                 ms := LinksTo(ElementByPath(s, 'Model\MODS'));
@@ -1123,8 +1151,7 @@ end;
 function ProcessReferences(s: IInterface;): integer;
 var
     si, cnt: integer;
-    ms, r, rCell: IInterface;
-    bHasOppositeParent: Boolean;
+    ms, r, rCell, xesp, parentRef: IInterface;
     parent: string;
 begin
     cnt := 0;
@@ -1155,13 +1182,9 @@ begin
         // check for enable parent
         if not ElementExists(r, 'XESP - Enable Parent') then continue;
         parent := GetElementEditValues(r, 'XESP\Reference');
-        bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
-        if bHasOppositeParent then begin
-            AddMessage(ShortName(r) + ' has XESP - Set Enable State to Opposite of Parent ' + parent);
-        end
-        else begin
-            AddMessage(ShortName(r) + ' has XESP - Enable Parent of ' + parent);
-        end;
+        xesp := ElementByPath(r, 'XESP');
+        parentRef := LinksTo(ElementByIndex(xesp, 0));
+        if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
     Result := cnt;
 end;
@@ -1330,6 +1353,7 @@ var
     f, archive: string;
 begin
     slArchivedFiles := TStringList.Create;
+    slArchivedFiles.Sorted := True;
     slArchivedFiles.Duplicates := dupIgnore;
     for i := 0 to Pred(containers.Count) do begin
         archive := TrimRightChars(containers[i], Length(wbDataPath));
@@ -1366,7 +1390,6 @@ begin
         ResourceList(containers[i], slArchivedFiles);
     end;
     AddMessage('Please wait while we detect all LOD assets...');
-    slArchivedFiles.Sort;
 
     for i := 0 to Pred(slArchivedFiles.Count) do begin
         f := LowerCase(slArchivedFiles[i]);
