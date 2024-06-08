@@ -14,19 +14,19 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlHasLOD, tlEnableParents: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlHasLOD, tlEnableParents, tlStolenForms: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
-    iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides: IInterface;
+    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, iFallout4ESM: IInterface;
     i: integer;
     f, sFolipPluginFileName: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged: Boolean;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
 
 const
-    sFolipMasterFileName = 'FOLIP Master.esm';
+    sFolipMasterFileName = 'FOLIP - Master.esm';
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
 
@@ -45,6 +45,8 @@ begin
     bReportNonLODMaterials := False;
     // This is used to report if a LOD mesh appears to have UVs outside of range.
     bReportUVs := False;
+    // This is used to ensure enable parented objects use LOD Respects Enable State
+    bRespectEnableMarkers := True;
 
     //Used to tell the Rule Editor whether or not to save changes.
     bSaveUserRules := False;
@@ -111,7 +113,7 @@ begin
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
 
-    ProcessEnableParents;
+    if bRespectEnableMarkers then ProcessEnableParents;
 
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
 end;
@@ -127,6 +129,7 @@ begin
     tlCells.Free;
     tlHasLOD.Free;
     tlEnableParents.Free;
+    tlStolenForms.Free;
 
     slNifFiles.Free;
     slMatFiles.Free;
@@ -160,6 +163,7 @@ begin
     tlCells := TList.Create;
     tlHasLOD := TList.Create;
     tlEnableParents := TList.Create;
+    tlStolenForms := TList.Create;
 
 
     //TStringLists
@@ -198,7 +202,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD: TCheckBox;
+    chkFakeStatics, chkForceLOD8, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -228,7 +232,7 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - Before Generation';
-        gbOptions.Height := 144;
+        gbOptions.Height := 174;
 
         btnRuleEditor := TButton.Create(gbOptions);
         btnRuleEditor.Parent := gbOptions;
@@ -236,7 +240,7 @@ begin
         btnRuleEditor.OnClick := RuleEditor;
         btnRuleEditor.Width := 100;
         btnRuleEditor.Left := 8;
-        btnRuleEditor.Top := 100;
+        btnRuleEditor.Top := 136;
 
         edPluginName := TEdit.Create(gbOptions);
         edPluginName.Parent := gbOptions;
@@ -293,10 +297,21 @@ begin
             + #13#10 + 'purposes only and has no visual benefit.';
         chkReportUVs.ShowHint := True;
 
+        chkRespectEnableMarkers := TCheckBox.Create(gbOptions);
+        chkRespectEnableMarkers.Parent := gbOptions;
+        chkRespectEnableMarkers.Left := chkFakeStatics.Left;
+        chkRespectEnableMarkers.Top := chkReportUVs.Top;
+        chkRespectEnableMarkers.Width := 200;
+        chkRespectEnableMarkers.Caption := 'Respect Enable Parents';
+        chkRespectEnableMarkers.Hint := 'Adds LOD Respects State Flag to relevant'
+            + #13#10 + 'enable parented references and works around'
+            + #13#10 + 'engine bugs related to its usage.';
+        chkRespectEnableMarkers.ShowHint := True;
+
         chkReportMissingLOD := TCheckBox.Create(gbOptions);
         chkReportMissingLOD.Parent := gbOptions;
         chkReportMissingLOD.Left := chkFakeStatics.Left;
-        chkReportMissingLOD.Top := chkReportUVs.Top;
+        chkReportMissingLOD.Top := chkReportUVs.Top + 30;
         chkReportMissingLOD.Width := 200;
         chkReportMissingLOD.Caption := 'Report Large Objects without LOD';
         chkReportMissingLOD.Hint := 'Adds messages about large objects'
@@ -332,7 +347,7 @@ begin
         chkReportNonLODMaterials.Checked := bReportNonLODMaterials;
         chkReportUVs.Checked := bReportUVs;
         chkReportMissingLOD.Checked := bReportMissingLOD;
-
+        chkRespectEnableMarkers.Checked := bRespectEnableMarkers;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -346,6 +361,7 @@ begin
         bReportNonLODMaterials := chkReportNonLODMaterials.Checked;
         bReportUVs := chkReportUVs.Checked;
         bReportMissingLOD := chkReportMissingLOD.Checked;
+        bRespectEnableMarkers := chkRespectEnableMarkers.Checked;
 
     finally
         frm.Free;
@@ -722,26 +738,27 @@ end;
 procedure ProcessEnableParents;
 var
     i, pi, oi: integer;
-    p, m, r, n, base, rCell, oppositeEnableParentReplacer, replacer: IInterface;
-    formid: string;
-    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent: boolean;
-    tlOppositeEnableRefs: TList;
+    p, m, r, n, base, rCell, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
+    parentFormid: string;
+    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin: boolean;
+    tlOppositeEnableRefs, tlEnableRefs: TList;
 begin
     for i := 0 to Pred(tlEnableParents.Count) do begin
+        bPlugin := False;
         p := ObjectToElement(tlEnableParents[i]);
-        AddMessage('Processing ' + Name(p));
         bCanBeRespected := False;
         bHasSuitableReplacer := False;
         bHasPersistentReplacer := False;
+        bHasOppositeEnableRefs := False;
+        parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
+        if Pos(Uppercase(parentFormid), '060521A9,06056CC4,0301EB18,030376DF,0304FBD9,06048B7D,0301C678,03035ABD,03037610,06041575,0303FD65,0303DC6E,0301C687,0301C67B,03037573,03035A9C,03035AAB,0303DC5C,03035AAA,030375B8,06056CAB,06051FCA') <> 0 then continue; //,06044806,0604480A,0604480E,06044810,06044805,0604480D,0604480F,06044809
+        iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
+        AddMessage('Processing ' + Name(p));
         if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
-            iCurrentPlugin := RefMastersDeterminePlugin(p);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, False);
             m := wbCopyElementToFile(p, iCurrentPlugin, False, True);
             SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
-        end
-        else begin
-            AddMessage(#9 + ShortName(p));
-            if not bCanBeRespected then continue; // We should make a function to rob a formid from Fallout4.esm instead of continuing
         end;
 
         {iterate over all reference. Two goals:
@@ -749,17 +766,25 @@ begin
         * Find all LOD references using opposite enable parent flag and store to a TList
         }
         tlOppositeEnableRefs := TList.Create;
+        tlEnableRefs := TList.Create;
         for pi := 0 to Pred(ReferencedByCount(p)) do begin
             r := ReferencedByIndex(p, pi);
+            bBaseHasLOD := False;
 
             if Signature(r) <> 'REFR' then continue;
             if not IsWinningOverride(r) then continue;
             if GetIsDeleted(r) then continue;
             if GetIsCleanDeleted(r) then continue;
 
-            base := LinksTo(ElementByPath(r, 'NAME'));
+            base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+            if Signature(base) = 'STAT' then
+                bBaseHasLOD := StrToBool(GetElementEditValues(base, 'Record Header\Record Flags\Has Distant LOD'))
+            else if Signature(base) = 'SCOL' then begin
+                bBaseHasLOD := True;
+                //Should really check these, but I really don't feel like it.
+            end;
             //Split between refs with LOD and not having LOD
-            if GetElementEditValues(base, 'Record Header\Record Flags\Has Distant LOD') <> '1' then begin
+            if not bBaseHasLOD then begin
                 if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue;
                 if bHasPersistentReplacer then continue;
                 if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
@@ -774,8 +799,12 @@ begin
                 continue;
             end;
             bHasOppositeEnableParent := StrToBool(GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent'));
-            if not bHasOppositeEnableParent then continue;
+            if not bHasOppositeEnableParent then begin
+                tlEnableRefs.Add(r);
+                continue;
+            end;
             tlOppositeEnableRefs.Add(r);
+            bHasOppositeEnableRefs := True;
 
             if bHasPersistentReplacer then continue;
             if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
@@ -787,51 +816,122 @@ begin
             bHasPersistentReplacer := True;
         end;
 
-        if tlOppositeEnableRefs.Count = 0 then begin
-            AddMessage('-' + ShortName(p) + ' does not have any opposite enable parented LOD refs.');
-            tlOppositeEnableRefs.Free;
-            continue;
-        end;
-        if not bHasSuitableReplacer then begin
-            AddMessage('-' + ShortName(p) + ' has no suitable opposite enable parent replacer.');
-            tlOppositeEnableRefs.Free;
-            continue;
-        end;
+        if bHasOppositeEnableRefs then begin
+            if not bHasSuitableReplacer then oppositeEnableParentReplacer := GetSuitableReplacement;
 
-
-        // Ensure cell is added to prevent failure to copy reference.
-        rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
-        if tlCells.IndexOf(rCell) = -1 then begin
-            tlCells.Add(rCell);
-            iCurrentPlugin := RefMastersDeterminePlugin(rCell);
-            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-        end;
-
-        // Create replacer
-        iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer);
-        replacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
-        if not bHasPersistentReplacer then SetIsPersistent(replacer);
-        SetElementEditValues(replacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
-        AddRefToOverrides(replacer);
-
-        for oi := 0 to Pred(tlOppositeEnableRefs.Count) do begin
-            r := ObjectToElement(tlOppositeEnableRefs[oi]);
-            AddMessage(#9 + Name(r));
-            rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+            // Ensure cell is added to prevent failure to copy reference.
+            rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
             if tlCells.IndexOf(rCell) = -1 then begin
                 tlCells.Add(rCell);
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
                 wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
             end;
-            iCurrentPlugin := RefMastersDeterminePlugin(r);
-            n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
-            SetElementEditValues(n, 'XESP\Reference', ShortName(replacer));
-            SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
-            AddRefToOverrides(n);
+
+            // Create replacer
+            iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, bPlugin);
+            oreplacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
+            if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
+            SetElementEditValues(oreplacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
+            if not bHasSuitableReplacer then begin
+                Add(oreplacer,'XESP',True);
+                SetElementEditValues(oreplacer, 'NAME', '000e4610');
+                SetElementEditValues(oreplacer, 'XESP\Reference', parentFormid);
+                SetElementNativeValues(oreplacer, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
+            end;
+            AddRefToOverrides(oreplacer);
+
+            for oi := 0 to Pred(tlOppositeEnableRefs.Count) do begin
+                r := ObjectToElement(tlOppositeEnableRefs[oi]);
+                AddMessage(#9 + Name(r));
+                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                if tlCells.IndexOf(rCell) = -1 then begin
+                    tlCells.Add(rCell);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                end;
+                iCurrentPlugin := RefMastersDeterminePlugin(r, False);
+                n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+                SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
+                SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
+                AddRefToOverrides(n);
+            end;
         end;
+        if not bCanBeRespected and tlEnableRefs.Count > 0 then begin
+            enableParentReplacer := GetSuitableReplacement;
+            iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, bPlugin);
+            ereplacer := wbCopyElementToFile(enableParentReplacer, iCurrentPlugin, False, True);
+            Add(ereplacer, 'XESP', True);
+            SetElementEditValues(ereplacer, 'XESP\Reference', parentFormid);
+            SetElementEditValues(ereplacer, 'NAME', '000e4610');
+            SetElementNativeValues(ereplacer, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+            AddRefToOverrides(ereplacer);
+            for oi := 0 to Pred(tlEnableRefs.Count) do begin
+                r := ObjectToElement(tlEnableRefs[oi]);
+                AddMessage(#9 + Name(r));
+                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                if tlCells.IndexOf(rCell) = -1 then begin
+                    tlCells.Add(rCell);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                end;
+                iCurrentPlugin := RefMastersDeterminePlugin(r, False);
+                n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+                SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
+                SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
+                AddRefToOverrides(n);
+            end;
+        end;
+
         tlOppositeEnableRefs.Free;
+        tlEnableRefs.Free;
+    end;
+end;
 
-
+function GetSuitableReplacement: IInterface;
+var
+    iDecalGrossStain, r, m, rCell: IInterface;
+    i: integer;
+begin
+    iDecalGrossStain := RecordByFormID(iFallout4ESM, $00061894, False);
+    Result := nil;
+    for i := 0 to Pred(ReferencedByCount(iDecalGrossStain)) do begin
+        r := ReferencedByIndex(iDecalGrossStain, i);
+        if tlStolenForms.IndexOf(r) <> -1 then continue;
+        if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        m := MasterOrSelf(r);
+        if not Equals(m, r) then continue;
+        if not GetIsPersistent(r) then continue;
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        if ReferencedByCount(r) <> 0 then continue;
+        if ElementExists(r, 'VMAD') then continue;
+        if ElementExists(r, 'XMPO') then continue;
+        if ElementExists(r, 'XPOD') then continue;
+        if ElementExists(r, 'XPTL') then continue;
+        if ElementExists(r, 'XORD') then continue;
+        if ElementExists(r, 'XMBP') then continue;
+        if ElementExists(r, 'XRGD') then continue;
+        if ElementExists(r, 'XTEL') then continue;
+        if ElementExists(r, 'XTNM') then continue;
+        if ElementExists(r, 'XMBR') then continue;
+        if ElementExists(r, 'XMCN') then continue;
+        if ElementExists(r, 'XMCU') then continue;
+        if ElementExists(r, 'XASP') then continue;
+        if ElementExists(r, 'XATP') then continue;
+        if ElementExists(r, 'XLKT') then continue;
+        if ElementExists(r, 'XPDD') then continue;
+        if ElementExists(r, 'XPRM') then continue;
+        if ElementExists(r, 'XRFG') then continue;
+        if ElementExists(r, 'XRDO') then continue;
+        if ElementExists(r, 'XBSD') then continue;
+        if ElementExists(r, 'XESP') then continue;
+        Result := r;
+        tlStolenForms.Add(r);
+        iCurrentPlugin := RefMastersDeterminePlugin(r, False);
+        wbCopyElementToFile(r, iCurrentPlugin, True, True);
+        break;
     end;
 end;
 
@@ -847,7 +947,12 @@ begin
         formids := ElementByName(flOverrides, 'FormIDs');
         lnam := ElementAssign(formids, HighInteger, nil, False);
     end;
-    SetEditValue(lnam, ShortName(r));
+    try
+        SetEditValue(lnam, ShortName(r));
+    except
+        AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+        SetEditValue(lnam, ShortName(r));
+    end;
 end;
 
 procedure ProcessActiFurnMstt;
@@ -895,7 +1000,7 @@ begin
                 end;
 
                 //Copy
-                n := DuplicateRef(r, fakeStaticFormID);
+                n := DuplicateRef(r, fakeStatic, fakeStaticFormID);
 
                 //Add mat swap if it exists to list to check.
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
@@ -948,16 +1053,26 @@ begin
     end;
 end;
 
-function DuplicateRef(r: IInterface; base: string): IInterface;
+function DuplicateRef(r, fakeStatic: IInterface; base: string): IInterface;
 {
     Duplicates a placed reference and returns the duplicate.
 }
 var
     n, wrld, rCell, nCell, ms, xesp, parentRef: IInterface;
-    bHasOppositeParent: Boolean;
+    bHasOppositeParent, bPlugin: Boolean;
     c: TwbGridCell;
     parent: string;
 begin
+    bPlugin := False;
+
+    if ElementExists(r, 'XESP - Enable Parent') then begin
+        xesp := ElementByPath(r, 'XESP');
+        parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
+        iCurrentPlugin := RefMastersDeterminePlugin(parentRef, bPlugin);
+    end;
+
+    iCurrentPlugin := RefMastersDeterminePlugin(fakeStatic, bPlugin);
+
     //Copy cell to plugin
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
 
@@ -967,12 +1082,10 @@ begin
         wrld := LinksTo(ElementByIndex(rCell, 0));
         rCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
     end;
-    if tlCells.IndexOf(rCell) < 0 then begin
-        tlCells.Add(rCell);
-        iCurrentPlugin := RefMastersDeterminePlugin(rCell);
-        nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-    end
-    else nCell := rCell;
+    if tlCells.IndexOf(rCell) = -1 then tlCells.Add(rCell);
+
+    iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+    nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
 
     //Add new ref to cell
     n := Add(nCell, 'REFR', True);
@@ -1008,7 +1121,6 @@ begin
 
     //  Set XESP
 
-    //      THIS WILL NEED EXTRA WORK
     if ElementExists(r, 'XESP - Enable Parent') then begin
         Add(n, 'XESP', True);
         parent := GetElementEditValues(r, 'XESP\Reference');
@@ -1016,8 +1128,6 @@ begin
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
 
-        xesp := ElementByPath(r, 'XESP');
-        parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
 
@@ -1046,9 +1156,16 @@ var
     HasMS: Boolean;
     fakeStaticEditorId: string;
 begin
-    iCurrentPlugin := RefMastersDeterminePlugin(s);
-    patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
     HasMS := ElementExists(s, 'Model\MODS - Material Swap');
+    if HasMS then begin
+        ms := LinksTo(ElementByPath(s, 'Model\MODS'));
+        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+        iCurrentPlugin := RefMastersDeterminePlugin(ms, False);
+    end
+    else iCurrentPlugin := iFolipMasterFile;
+
+    patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
+    if ElementCount(patchStatGroup) < 1 then Add(iCurrentPlugin, 'STAT', True);
 
     //Add Fake STAT
     fakeStatic := Add(patchStatGroup, 'STAT', True);
@@ -1059,10 +1176,8 @@ begin
 
     //Add base material swap
     if HasMS then begin
-        ms := LinksTo(ElementByPath(s, 'Model\MODS'));
-        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
-        Add(fakeStatic, 'XMSP', True);
-        SetElementNativeValues(fakeStatic, 'XMSP', ms);
+        Add(Add(fakeStatic, 'Model', True), 'MODS', True);
+        SetElementEditValues(fakeStatic, 'Model\MODS', IntToHex(GetLoadOrderFormID(ms), 8));
     end;
     Result := fakeStatic;
 end;
@@ -1178,7 +1293,7 @@ begin
         end;
 
         //Changes required, so add material swap to patch
-        iCurrentPlugin := RefMastersDeterminePlugin(m);
+        iCurrentPlugin := RefMastersDeterminePlugin(m, True);
         mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
         for n := 0 to Pred(cnt) do begin
             //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
@@ -1320,8 +1435,8 @@ var
     n: IInterface;
 begin
     AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
-    iCurrentPlugin := RefMastersDeterminePlugin(s);
-    n := wbCopyElementToFile(s, ICurrentPlugin, False, True);
+    iCurrentPlugin := RefMastersDeterminePlugin(s, True);
+    n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
     SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod']);
     Add(n, 'MNAM', True);
     SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
@@ -1846,25 +1961,33 @@ begin
     end;
 end;
 
-function RefMastersDeterminePlugin(r: IInterface): IInterface;
+function RefMastersDeterminePlugin(r: IInterface; var bPlugin: Boolean;): IInterface;
 {
     Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
 }
 begin
-    AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+    {AddRequiredElementMasters(r, iFolipPluginFile, False, True);
   	SortMasters(iFolipPluginFile);
-    Result := iFolipPluginFile;
-  {try
-    AddRequiredElementMasters(r, iFolipMasterFile, False, True);
-	SortMasters(iFolipMasterFile);
-	Result := iFolipMasterFile;
-  except
-    on E : Exception do begin
-      AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-  	  SortMasters(iFolipPluginFile);
-  	  Result := iFolipPluginFile;
+    Result := iFolipPluginFile;}
+    if bPlugin then begin
+        AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+        SortMasters(iFolipPluginFile);
+        Result := iFolipPluginFile;
+        bPlugin := True;
+        Exit;
     end;
-  end;}
+    try
+        AddRequiredElementMasters(r, iFolipMasterFile, False, True);
+        SortMasters(iFolipMasterFile);
+        Result := iFolipMasterFile;
+    except
+        on E : Exception do begin
+            AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+            SortMasters(iFolipPluginFile);
+            Result := iFolipPluginFile;
+            bPlugin := True;
+        end;
+    end;
 end;
 
 procedure FetchRules;
@@ -1909,6 +2032,7 @@ begin
     bFirstMswpJson := True;
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
+        if i = 0 then iFallout4ESM := FileByIndex(i);
 
         if SameText(f, sFolipMasterFileName) then
             iFolipMasterFile := FileByIndex(i)
@@ -1929,11 +2053,11 @@ begin
         Result := 0;
         Exit;
     end;
-    {if Assigned(iFolipMasterFile) then begin
-        MessageDlg(sFolipMasterFileName + ' found! Delete the old file before continuing.', mtError, [mbOk], 0);
+    if not Assigned(iFolipMasterFile) then begin
+        MessageDlg(sFolipMasterFileName + ' not found! Please install if from https://www.nexusmods.com/fallout4/mods/61884 before continuing.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
-    end;}
+    end;
     if Assigned(iFolipPluginFile) then begin
         MessageDlg(sFolipPluginFileName + '.esp found! Delete the old file before continuing.', mtError, [mbOk], 0);
         Result := 0;
@@ -1944,6 +2068,7 @@ begin
     //SetIsESM(iFolipMasterFile, True);
     iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
     AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
+    AddMasterIfMissing(iFolipPluginFile, 'sFolipMasterFileName');
 
     Result := 1;
 end;
