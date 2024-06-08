@@ -16,7 +16,7 @@ unit FOLIP;
 var
     tlStats, tlActiFurnMstt, tlMswp, tlCells, tlHasLOD, tlEnableParents: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
-    iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IInterface;
+    iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides: IInterface;
     i: integer;
     f, sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged: Boolean;
@@ -71,10 +71,16 @@ procedure BeforeGeneration;
 var
     slContainers: TStringList;
     bSkip: Boolean;
+    flstGroup: IInterface;
 begin
     bSkip := False;
     //Create FOLIP plugins
     if not CreatePlugins then Exit;
+
+    flstGroup := Add(iFolipPluginFile, 'FLST', True);
+    //Add Fake STAT
+    flOverrides := Add(flstGroup, 'FLST', True);
+    SetEditorID(flOverrides, 'FOLIP_Overrides');
 
     AddMessage('Collecting assets...');
     //Scan archives and loose files.
@@ -715,13 +721,133 @@ end;
 
 procedure ProcessEnableParents;
 var
-    i: integer;
-    p: IInterface;
+    i, pi, oi: integer;
+    p, m, r, n, base, rCell, oppositeEnableParentReplacer, replacer: IInterface;
+    formid: string;
+    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent: boolean;
+    tlOppositeEnableRefs: TList;
 begin
     for i := 0 to Pred(tlEnableParents.Count) do begin
         p := ObjectToElement(tlEnableParents[i]);
-        AddMessage(Name(p));
+        AddMessage('Processing ' + Name(p));
+        bCanBeRespected := False;
+        bHasSuitableReplacer := False;
+        bHasPersistentReplacer := False;
+        if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
+        if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
+            iCurrentPlugin := RefMastersDeterminePlugin(p);
+            m := wbCopyElementToFile(p, iCurrentPlugin, False, True);
+            SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+        end
+        else begin
+            AddMessage(#9 + ShortName(p));
+            if not bCanBeRespected then continue; // We should make a function to rob a formid from Fallout4.esm instead of continuing
+        end;
+
+        {iterate over all reference. Two goals:
+        * Find a suitable opposite enable parent replacer
+        * Find all LOD references using opposite enable parent flag and store to a TList
+        }
+        tlOppositeEnableRefs := TList.Create;
+        for pi := 0 to Pred(ReferencedByCount(p)) do begin
+            r := ReferencedByIndex(p, pi);
+
+            if Signature(r) <> 'REFR' then continue;
+            if not IsWinningOverride(r) then continue;
+            if GetIsDeleted(r) then continue;
+            if GetIsCleanDeleted(r) then continue;
+
+            base := LinksTo(ElementByPath(r, 'NAME'));
+            //Split between refs with LOD and not having LOD
+            if GetElementEditValues(base, 'Record Header\Record Flags\Has Distant LOD') <> '1' then begin
+                if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue;
+                if bHasPersistentReplacer then continue;
+                if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
+                bHasOppositeEnableParent := StrToBool(GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent'));
+                if not bHasOppositeEnableParent then continue;
+                bIsPersistent := GetIsPersistent(r);
+                if bHasSuitableReplacer and not bIsPersistent then continue;
+                oppositeEnableParentReplacer := r;
+                bHasSuitableReplacer := True;
+                if not bIsPersistent then continue;
+                bHasPersistentReplacer := True;
+                continue;
+            end;
+            bHasOppositeEnableParent := StrToBool(GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent'));
+            if not bHasOppositeEnableParent then continue;
+            tlOppositeEnableRefs.Add(r);
+
+            if bHasPersistentReplacer then continue;
+            if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
+            bIsPersistent := GetIsPersistent(r);
+            if bHasSuitableReplacer and not bIsPersistent then continue;
+            oppositeEnableParentReplacer := r;
+            bHasSuitableReplacer := True;
+            if not bIsPersistent then continue;
+            bHasPersistentReplacer := True;
+        end;
+
+        if tlOppositeEnableRefs.Count = 0 then begin
+            AddMessage('-' + ShortName(p) + ' does not have any opposite enable parented LOD refs.');
+            tlOppositeEnableRefs.Free;
+            continue;
+        end;
+        if not bHasSuitableReplacer then begin
+            AddMessage('-' + ShortName(p) + ' has no suitable opposite enable parent replacer.');
+            tlOppositeEnableRefs.Free;
+            continue;
+        end;
+
+
+        // Ensure cell is added to prevent failure to copy reference.
+        rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
+        if tlCells.IndexOf(rCell) = -1 then begin
+            tlCells.Add(rCell);
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell);
+            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+        end;
+
+        // Create replacer
+        iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer);
+        replacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
+        if not bHasPersistentReplacer then SetIsPersistent(replacer);
+        SetElementEditValues(replacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
+        AddRefToOverrides(replacer);
+
+        for oi := 0 to Pred(tlOppositeEnableRefs.Count) do begin
+            r := ObjectToElement(tlOppositeEnableRefs[oi]);
+            AddMessage(#9 + Name(r));
+            rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+            if tlCells.IndexOf(rCell) = -1 then begin
+                tlCells.Add(rCell);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell);
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            end;
+            iCurrentPlugin := RefMastersDeterminePlugin(r);
+            n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+            SetElementEditValues(n, 'XESP\Reference', ShortName(replacer));
+            SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
+            AddRefToOverrides(n);
+        end;
+        tlOppositeEnableRefs.Free;
+
+
     end;
+end;
+
+procedure AddRefToOverrides(r: IInterface);
+var
+    formids, lnam: IInterface;
+begin
+    if not ElementExists(flOverrides, 'FormIDs') then begin
+        formids := Add(flOverrides, 'FormIDs', True);
+        lnam := ElementByIndex(formids, 0);
+    end
+    else begin
+        formids := ElementByName(flOverrides, 'FormIDs');
+        lnam := ElementAssign(formids, HighInteger, nil, False);
+    end;
+    SetEditValue(lnam, ShortName(r));
 end;
 
 procedure ProcessActiFurnMstt;
@@ -891,7 +1017,7 @@ begin
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
 
         xesp := ElementByPath(r, 'XESP');
-        parentRef := LinksTo(ElementByIndex(xesp, 0));
+        parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
 
@@ -1183,7 +1309,7 @@ begin
         if not ElementExists(r, 'XESP - Enable Parent') then continue;
         parent := GetElementEditValues(r, 'XESP\Reference');
         xesp := ElementByPath(r, 'XESP');
-        parentRef := LinksTo(ElementByIndex(xesp, 0));
+        parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
     Result := cnt;
@@ -1808,7 +1934,7 @@ begin
         Result := 0;
         Exit;
     end;}
-    if Assigned(iFolipMasterFile) then begin
+    if Assigned(iFolipPluginFile) then begin
         MessageDlg(sFolipPluginFileName + '.esp found! Delete the old file before continuing.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
@@ -1891,7 +2017,7 @@ function StrToBool(str: string): boolean;
     Given a string, return a boolean.
 }
 begin
-    if str = 'true' then Result := True else Result := False;
+    if (str = 'true') or (str = '1') then Result := True else Result := False;
 end;
 
 function TrimRightChars(s: string; chars: integer): string;
