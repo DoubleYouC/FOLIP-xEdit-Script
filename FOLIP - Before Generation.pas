@@ -63,6 +63,12 @@ begin
     FetchRules;
     TopLevelModPatternPaths;
 
+    if wbSimpleRecords then begin
+        MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
+        Result := 1;
+        Exit;
+    end;
+
     //Display the main menu. If the user presses the cancel button, exit.
     if MainMenuForm then BeforeGeneration;
 
