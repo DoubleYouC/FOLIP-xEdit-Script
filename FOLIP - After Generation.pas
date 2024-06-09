@@ -10,24 +10,54 @@ var
     tlStats : TList;
     bLightPlugin : Boolean;
 
-function Initialize:integer;
+const
+    sFolipFileName = 'FOLIP - New LODs.esp';
+
+function Initialize: integer;
 {
     This function is called at the beginning.
 }
 var
-    i, j, idx : integer;
-    f, g, n, r, p : IInterface;
-    editorid, recordId : string;
+    i, j, idx: integer;
+    f, g, n, r, p, iFolip, iRecordToModify: IInterface;
+    editorid, recordId, filename: string;
 begin
     slStats := TStringList.Create;
     tlStats := TList.Create;
     sFolipPluginFileName := 'FOLIP - After Generation';
     bLightPlugin := True;
 
-    if not MainMenuForm then Exit;
+    if wbSimpleRecords then begin
+        MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
+        Result := 1;
+        Exit;
+    end;
+
+    if not MainMenuForm then begin
+        Result := 1;
+        Exit;
+    end;
 
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
+        filename := GetFileName(f);
+
+        if SameText(filename, sFolipFileName) then
+            iFolip := f
+        else if SameText(filename, sFolipPluginFileName) then begin
+            iPluginFile := f;
+
+            //Clear out any previous edits to the file.
+            if HasGroup(iPluginFile, 'STAT') then begin
+                RemoveNode(GroupBySignature(iPluginFile, 'STAT'));
+            end;
+            if HasGroup(iPluginFile, 'CELL') then begin
+                RemoveNode(GroupBySignature(iPluginFile, 'CELL'));
+            end;
+            if HasGroup(iPluginFile, 'WRLD') then begin
+                RemoveNode(GroupBySignature(iPluginFile, 'WRLD'));
+            end;
+        end;
 
         //STAT
         g := GroupBySignature(f, 'STAT');
@@ -44,8 +74,15 @@ begin
         end;
     end;
 
-    iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', bLightPlugin);
-    AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
+    if not Assigned(iFolip) then begin
+        MessageDlg('Please enable ' + sFolipFileName + ' before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    if not Assigned(iPluginFile) then begin
+        iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', bLightPlugin);
+        AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
+    end;
 
     for i := 0 to Pred(tlStats.Count) do begin
         r := ObjectToElement(tlStats[i]);
@@ -53,6 +90,13 @@ begin
         n := wbCopyElementToFile(r, p, False, True);
         SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
     end;
+
+    iRecordToModify := WinningOverride(RecordByFormID(iFolip, $001B026B, False));
+    p := RefMastersDeterminePlugin(iRecordToModify);
+    n := wbCopyElementToFile(iRecordToModify, p, False, True);
+    SetElementNativeValues(n, 'Record Header\Record Flags\Visible when distant', 0);
+    if ElementExists(iRecordToModify, 'XESP') then RemoveElement(n, 'XESP');
+
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
 end;
