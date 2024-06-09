@@ -29,6 +29,7 @@ const
     sFolipMasterFileName = 'FOLIP - Master.esm';
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
+    sEnableParentFormidExclusions = '060521A9,06056CC4,0301EB18,030376DF,0304FBD9,06048B7D,0301C678,03035ABD,03037610,06041575,0303FD65,0303DC6E,0301C687,0301C67B,03037573,03035A9C,03035AAB,0303DC5C,03035AAA,030375B8,06056CAB,06051FCA';
 
 // ----------------------------------------------------
 // Main functions and procedures go up immediately below.
@@ -79,16 +80,13 @@ procedure BeforeGeneration;
 var
     slContainers: TStringList;
     bSkip: Boolean;
-    flstGroup: IInterface;
 begin
     bSkip := False;
     //Create FOLIP plugins
     if not CreatePlugins then Exit;
 
-    flstGroup := Add(iFolipPluginFile, 'FLST', True);
-    //Add Fake STAT
-    flOverrides := Add(flstGroup, 'FLST', True);
-    SetEditorID(flOverrides, 'FOLIP_Overrides');
+    SpecificRecordEdits;
+    if bSkip then Exit;
 
     AddMessage('Collecting assets...');
     //Scan archives and loose files.
@@ -741,7 +739,56 @@ end;
 // Record processing Functions and Procedures go below.
 // ----------------------------------------------------
 
+procedure SpecificRecordEdits;
+{
+    Special record modifications to the target plugins
+}
+var
+    i: integer;
+    flstGroup, r: IInterface;
+begin
+    //Purge FOLIP - Master.esm
+    if HasGroup(iFolipMasterFile, 'STAT') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'STAT'));
+    end;
+    if HasGroup(iFolipMasterFile, 'MSWP') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
+    end;
+    if HasGroup(iFolipMasterFile, 'CELL') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'CELL'));
+    end;
+    if HasGroup(iFolipMasterFile, 'WRLD') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
+    end;
+
+    //Purge FOLIP - Before Generation.esp
+    if HasGroup(iFolipPluginFile, 'STAT') then begin
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'STAT'));
+    end;
+    if HasGroup(iFolipPluginFile, 'MSWP') then begin
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'WRLD'));
+    end;
+    if HasGroup(iFolipPluginFile, 'CELL') then begin
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'CELL'));
+    end;
+    if HasGroup(iFolipPluginFile, 'WRLD') then begin
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'WRLD'));
+    end;
+    if HasGroup(iFolipPluginFile, 'FLST') then begin
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'FLST'));
+    end;
+
+
+    flstGroup := Add(iFolipPluginFile, 'FLST', True);
+    //Add FOLIP_Overrides formlist
+    flOverrides := Add(flstGroup, 'FLST', True);
+    SetEditorID(flOverrides, 'FOLIP_Overrides');
+end;
+
 procedure ProcessEnableParents;
+{
+    Apply LOD Respects Enable State flag to XESP - Enable Parent references.
+}
 var
     i, pi, oi: integer;
     p, m, r, n, base, rCell, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
@@ -757,7 +804,7 @@ begin
         bHasPersistentReplacer := False;
         bHasOppositeEnableRefs := False;
         parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
-        if Pos(Uppercase(parentFormid), '060521A9,06056CC4,0301EB18,030376DF,0304FBD9,06048B7D,0301C678,03035ABD,03037610,06041575,0303FD65,0303DC6E,0301C687,0301C67B,03037573,03035A9C,03035AAB,0303DC5C,03035AAA,030375B8,06056CAB,06051FCA') <> 0 then continue; //,06044806,0604480A,0604480E,06044810,06044805,0604480D,0604480F,06044809
+        if Pos(Uppercase(parentFormid), sEnableParentFormidExclusions) <> 0 then continue;
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
         AddMessage('Processing ' + Name(p));
         if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
@@ -2064,17 +2111,11 @@ begin
         Result := 0;
         Exit;
     end;
-    if Assigned(iFolipPluginFile) then begin
-        MessageDlg(sFolipPluginFileName + '.esp found! Delete the old file before continuing.', mtError, [mbOk], 0);
-        Result := 0;
-        Exit;
+    if not Assigned(iFolipPluginFile) then begin
+        iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
+        AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
+        AddMasterIfMissing(iFolipPluginFile, 'sFolipMasterFileName');
     end;
-    //iFolipMasterFile := AddNewFileName(sFolipMasterFileName, False);
-    //AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
-    //SetIsESM(iFolipMasterFile, True);
-    iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
-    AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
-    AddMasterIfMissing(iFolipPluginFile, 'sFolipMasterFileName');
 
     Result := 1;
 end;
