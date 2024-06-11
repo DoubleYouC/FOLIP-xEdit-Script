@@ -1112,19 +1112,31 @@ function DuplicateRef(r, fakeStatic: IInterface; base: string): IInterface;
 }
 var
     n, wrld, rCell, nCell, ms, xesp, parentRef: IInterface;
-    bHasOppositeParent, bPlugin: Boolean;
+    bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
     parent: string;
 begin
     bPlugin := False;
+    bParent := False;
+    bParentWasPlugin := False;
+    bMswpWasPlugin := False;
+    bFakeStaticWasPlugin := False;
 
     if ElementExists(r, 'XESP - Enable Parent') then begin
+        bParent := True;
         xesp := ElementByPath(r, 'XESP');
         parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         iCurrentPlugin := RefMastersDeterminePlugin(parentRef, bPlugin);
+        if bPlugin then bParentWasPlugin := True;
+    end;
+    if ElementExists(r, 'XMSP - Material Swap') then begin
+        ms := WinningOverride(LinksTo(ElementByPath(r, 'XMSP - Material Swap')));
+        iCurrentPlugin := RefMastersDeterminePlugin(ms, bPlugin);
+        if bPlugin then bMswpWasPlugin := True;
     end;
 
     iCurrentPlugin := RefMastersDeterminePlugin(fakeStatic, bPlugin);
+    if bPlugin then bFakeStaticWasPlugin := True;
 
     //Copy cell to plugin
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
@@ -1138,6 +1150,12 @@ begin
     if tlCells.IndexOf(rCell) = -1 then tlCells.Add(rCell);
 
     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+    if bPlugin then begin
+        if not bParentWasPlugin then RefMastersDeterminePlugin(parentRef, bPlugin);
+        if not bMswpWasPlugin then RefMastersDeterminePlugin(ms, bPlugin);
+        if not bFakeStaticWasPlugin then RefMastersDeterminePlugin(fakeStatic, bPlugin);
+    end;
+
     nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
 
     //Add new ref to cell
