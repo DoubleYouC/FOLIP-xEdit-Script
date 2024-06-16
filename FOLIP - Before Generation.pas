@@ -1485,7 +1485,12 @@ begin
         if GetIsDeleted(r) then continue;
         if GetIsCleanDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        try
+            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        except
+            AddMessage('Skipped problem record: '+ GetFileName(rCell) + #9 + Name(rCell));
+            continue;
+        end;
         cnt := cnt + 1;
         if not ElementExists(r, 'XMSP - Material Swap') then continue;
         ms := LinksTo(ElementByPath(r, 'XMSP'));
