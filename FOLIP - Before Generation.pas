@@ -14,7 +14,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlCells, tlHasLOD, tlEnableParents, tlStolenForms: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, iFallout4ESM: IInterface;
     i: integer;
@@ -130,7 +130,8 @@ begin
     tlStats.Free;
     tlActiFurnMstt.Free;
     tlMswp.Free;
-    tlCells.Free;
+    tlMasterCells.Free;
+    tlPluginCells.Free;
     tlHasLOD.Free;
     tlEnableParents.Free;
     tlStolenForms.Free;
@@ -164,7 +165,8 @@ begin
     tlStats := TList.Create;
     tlActiFurnMstt := TList.Create;
     tlMswp := TList.Create;
-    tlCells := TList.Create;
+    tlMasterCells := TList.Create;
+    tlPluginCells := TList.Create;
     tlHasLOD := TList.Create;
     tlEnableParents := TList.Create;
     tlStolenForms := TList.Create;
@@ -793,7 +795,7 @@ var
     i, pi, oi: integer;
     p, m, r, n, base, rCell, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
     parentFormid: string;
-    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin: boolean;
+    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin, bPluginHere, bPluginTemp: boolean;
     tlOppositeEnableRefs, tlEnableRefs: TList;
 begin
     for i := 0 to Pred(tlEnableParents.Count) do begin
@@ -806,12 +808,18 @@ begin
         parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
         if Pos(Uppercase(parentFormid), sEnableParentFormidExclusions) <> 0 then continue;
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
+        bPluginHere := bPlugin;
         AddMessage('Processing ' + Name(p));
         if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
-            iCurrentPlugin := RefMastersDeterminePlugin(p, False);
+            rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+            if not bPlugin and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            if bPlugin and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            if bPluginHere <> bPlugin then RefMastersDeterminePlugin(p, bPlugin);
             m := wbCopyElementToFile(p, iCurrentPlugin, False, True);
             SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+            if not GetIsPersistent(p) then SetIsPersistent(m, True);
         end;
 
         {iterate over all reference. Two goals:
@@ -874,20 +882,23 @@ begin
 
             // Ensure cell is added to prevent failure to copy reference.
             rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
-            if tlCells.IndexOf(rCell) = -1 then begin
-                tlCells.Add(rCell);
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-            end;
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+            bPluginHere := bPlugin;
+            if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
 
             // Create replacer
             iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, bPlugin);
+            if bPlugin <> bPluginHere then begin
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+                if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            end;
             oreplacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
             if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
             SetElementEditValues(oreplacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
             if not bHasSuitableReplacer then begin
                 Add(oreplacer,'XESP',True);
-                SetElementEditValues(oreplacer, 'NAME', '000e4610');
+                SetElementEditValues(oreplacer, 'NAME', '000e4610'); //Enable Marker
                 SetElementEditValues(oreplacer, 'XESP\Reference', parentFormid);
                 SetElementNativeValues(oreplacer, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
             end;
@@ -897,12 +908,16 @@ begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
                 AddMessage(#9 + Name(r));
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-                if tlCells.IndexOf(rCell) = -1 then begin
-                    tlCells.Add(rCell);
-                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                bPluginTemp := False;
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                bPluginHere := bPluginTemp;
+                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
+                if bPluginTemp <> bPluginHere then begin
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                    if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                 end;
-                iCurrentPlugin := RefMastersDeterminePlugin(r, False);
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
@@ -922,12 +937,16 @@ begin
                 r := ObjectToElement(tlEnableRefs[oi]);
                 AddMessage(#9 + Name(r));
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-                if tlCells.IndexOf(rCell) = -1 then begin
-                    tlCells.Add(rCell);
-                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, False);
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                bPluginTemp := False;
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                bPluginHere := bPluginTemp;
+                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
+                if bPluginTemp <> bPluginHere then begin
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                    if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                 end;
-                iCurrentPlugin := RefMastersDeterminePlugin(r, False);
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
@@ -1147,14 +1166,15 @@ begin
         wrld := LinksTo(ElementByIndex(rCell, 0));
         rCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
     end;
-    if tlCells.IndexOf(rCell) = -1 then tlCells.Add(rCell);
 
     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
     if bPlugin then begin
         if not bParentWasPlugin then RefMastersDeterminePlugin(parentRef, bPlugin);
         if not bMswpWasPlugin then RefMastersDeterminePlugin(ms, bPlugin);
         if not bFakeStaticWasPlugin then RefMastersDeterminePlugin(fakeStatic, bPlugin);
-    end;
+        if tlPluginCells.IndexOf(rCell) = -1 then tlPluginCells.Add(rCell);
+    end
+    else if tlMasterCells.IndexOf(rCell) = -1 then tlMasterCells.Add(rCell);
 
     nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
 
