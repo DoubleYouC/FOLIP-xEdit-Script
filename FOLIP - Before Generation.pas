@@ -14,7 +14,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, iFallout4ESM: IInterface;
     i: integer;
@@ -135,6 +135,7 @@ begin
     tlHasLOD.Free;
     tlEnableParents.Free;
     tlStolenForms.Free;
+    tlTxst.Free;
 
     slNifFiles.Free;
     slMatFiles.Free;
@@ -170,6 +171,7 @@ begin
     tlHasLOD := TList.Create;
     tlEnableParents := TList.Create;
     tlStolenForms := TList.Create;
+    tlTxst := TList.Create;
 
 
     //TStringLists
@@ -806,6 +808,7 @@ begin
         bHasPersistentReplacer := False;
         bHasOppositeEnableRefs := False;
         parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
+        if parentFormid = '00000014' then continue;
         if Pos(Uppercase(parentFormid), sEnableParentFormidExclusions) <> 0 then continue;
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
         bPluginHere := bPlugin;
@@ -921,6 +924,7 @@ begin
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
+                SetIsVisibleWhenDistant(n, True);
                 AddRefToOverrides(n);
             end;
         end;
@@ -950,6 +954,7 @@ begin
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
+                SetIsVisibleWhenDistant(n, True);
                 AddRefToOverrides(n);
             end;
         end;
@@ -961,49 +966,51 @@ end;
 
 function GetSuitableReplacement: IInterface;
 var
-    iDecalGrossStain, r, m, rCell: IInterface;
-    i: integer;
+    stolen, r, m, rCell, g: IInterface;
+    i, j: integer;
 begin
-    iDecalGrossStain := RecordByFormID(iFallout4ESM, $00061894, False);
     Result := nil;
-    for i := 0 to Pred(ReferencedByCount(iDecalGrossStain)) do begin
-        r := ReferencedByIndex(iDecalGrossStain, i);
-        if tlStolenForms.IndexOf(r) <> -1 then continue;
-        if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
-        if Signature(r) <> 'REFR' then continue;
-        if not IsWinningOverride(r) then continue;
-        m := MasterOrSelf(r);
-        if not Equals(m, r) then continue;
-        if not GetIsPersistent(r) then continue;
-        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
-        if ReferencedByCount(r) <> 0 then continue;
-        if ElementExists(r, 'VMAD') then continue;
-        if ElementExists(r, 'XMPO') then continue;
-        if ElementExists(r, 'XPOD') then continue;
-        if ElementExists(r, 'XPTL') then continue;
-        if ElementExists(r, 'XORD') then continue;
-        if ElementExists(r, 'XMBP') then continue;
-        if ElementExists(r, 'XRGD') then continue;
-        if ElementExists(r, 'XTEL') then continue;
-        if ElementExists(r, 'XTNM') then continue;
-        if ElementExists(r, 'XMBR') then continue;
-        if ElementExists(r, 'XMCN') then continue;
-        if ElementExists(r, 'XMCU') then continue;
-        if ElementExists(r, 'XASP') then continue;
-        if ElementExists(r, 'XATP') then continue;
-        if ElementExists(r, 'XLKT') then continue;
-        if ElementExists(r, 'XPDD') then continue;
-        if ElementExists(r, 'XPRM') then continue;
-        if ElementExists(r, 'XRFG') then continue;
-        if ElementExists(r, 'XRDO') then continue;
-        if ElementExists(r, 'XBSD') then continue;
-        if ElementExists(r, 'XESP') then continue;
-        Result := r;
-        tlStolenForms.Add(r);
-        iCurrentPlugin := RefMastersDeterminePlugin(r, False);
-        wbCopyElementToFile(r, iCurrentPlugin, True, True);
-        break;
+    for j := 0 to Pred(tlTxst.Count) do begin
+        stolen := ObjectToElement(tlTxst[j]);
+        for i := 0 to Pred(ReferencedByCount(stolen)) do begin
+            r := ReferencedByIndex(stolen, i);
+            if tlStolenForms.IndexOf(r) <> -1 then continue;
+            if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
+            if Signature(r) <> 'REFR' then continue;
+            if not IsWinningOverride(r) then continue;
+            m := MasterOrSelf(r);
+            if not Equals(m, r) then continue;
+            if not GetIsPersistent(r) then continue;
+            rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+            if ReferencedByCount(r) <> 0 then continue;
+            if ElementExists(r, 'VMAD') then continue;
+            if ElementExists(r, 'XMPO') then continue;
+            if ElementExists(r, 'XPOD') then continue;
+            if ElementExists(r, 'XPTL') then continue;
+            if ElementExists(r, 'XORD') then continue;
+            if ElementExists(r, 'XMBP') then continue;
+            if ElementExists(r, 'XRGD') then continue;
+            if ElementExists(r, 'XTEL') then continue;
+            if ElementExists(r, 'XTNM') then continue;
+            if ElementExists(r, 'XMBR') then continue;
+            if ElementExists(r, 'XMCN') then continue;
+            if ElementExists(r, 'XMCU') then continue;
+            if ElementExists(r, 'XASP') then continue;
+            if ElementExists(r, 'XATP') then continue;
+            if ElementExists(r, 'XLKT') then continue;
+            if ElementExists(r, 'XPDD') then continue;
+            if ElementExists(r, 'XPRM') then continue;
+            if ElementExists(r, 'XRFG') then continue;
+            if ElementExists(r, 'XRDO') then continue;
+            if ElementExists(r, 'XBSD') then continue;
+            if ElementExists(r, 'XESP') then continue;
+            Result := r;
+            tlStolenForms.Add(r);
+            iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+            wbCopyElementToFile(r, iCurrentPlugin, True, True);
+            Exit;
+        end;
     end;
 end;
 
@@ -1184,7 +1191,8 @@ begin
     //Add required elements
 
     //  Set flags
-    SetElementNativeValues(n, 'Record Header\Record Flags\Initially Disabled', GetElementNativeValues(r, 'Record Header\Record Flags\Initially Disabled'));
+    if GetIsInitiallyDisabled(r) then SetIsInitiallyDisabled(r);
+    SetIsVisibleWhenDistant(n, True);
 
     //  Set base
     SetElementEditValues(n, 'Name', base);
@@ -1211,18 +1219,21 @@ begin
     SetElementNativeValues(n, 'DATA\Rotation\Z', GetElementNativeValues(r, 'DATA\Rotation\Z'));
 
     //  Set XESP
-
+    Add(n, 'XESP', True);
     if ElementExists(r, 'XESP - Enable Parent') then begin
-        Add(n, 'XESP', True);
         parent := GetElementEditValues(r, 'XESP\Reference');
-        SetElementEditValues(n, 'XESP\Reference', parent);
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
-
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
+    end
+    else begin
+        parent := ShortName(r);
+        if ContainsText(Name(r), 'repairable') then begin
+            parentRef := r;
+            if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
+        end;
     end;
-
-
+    SetElementEditValues(n, 'XESP\Reference', parent);
 end;
 
 procedure CopyObjectBounds(copyFrom, copyTo: IInterface);
@@ -1578,6 +1589,13 @@ begin
     //Iterate over all files.
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
+        if i = 0 then begin
+            g := GroupBySignature(f, 'TXST');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                tlTxst.Add(r);
+            end;
+        end;
 
         //STAT
         g := GroupBySignature(f, 'STAT');
@@ -2210,7 +2228,7 @@ function GetIsCleanDeleted(r: IInterface): Boolean;
 begin
     Result := False;
     if not ElementExists(r, 'XESP') then Exit;
-    if not GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') then Exit;
+    if not GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') = '1' then Exit;
     if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
     Result := True;
 end;
