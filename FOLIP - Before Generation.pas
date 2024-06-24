@@ -16,7 +16,7 @@ unit FOLIP;
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
-    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, iFallout4ESM: IInterface;
+    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flDecals, flFakeStatics: IInterface;
     i: integer;
     f, sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
@@ -751,20 +751,6 @@ var
     i: integer;
     flstGroup, r: IInterface;
 begin
-    //Purge FOLIP - Master.esm
-    if HasGroup(iFolipMasterFile, 'STAT') then begin
-        RemoveNode(GroupBySignature(iFolipMasterFile, 'STAT'));
-    end;
-    if HasGroup(iFolipMasterFile, 'MSWP') then begin
-        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
-    end;
-    if HasGroup(iFolipMasterFile, 'CELL') then begin
-        RemoveNode(GroupBySignature(iFolipMasterFile, 'CELL'));
-    end;
-    if HasGroup(iFolipMasterFile, 'WRLD') then begin
-        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
-    end;
-
     //Purge FOLIP - Before Generation.esp
     if HasGroup(iFolipPluginFile, 'STAT') then begin
         RemoveNode(GroupBySignature(iFolipPluginFile, 'STAT'));
@@ -782,11 +768,34 @@ begin
         RemoveNode(GroupBySignature(iFolipPluginFile, 'FLST'));
     end;
 
+    //Purge FOLIP - Master.esm
+    if HasGroup(iFolipMasterFile, 'STAT') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'STAT'));
+    end;
+    if HasGroup(iFolipMasterFile, 'MSWP') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
+    end;
+    if HasGroup(iFolipMasterFile, 'CELL') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'CELL'));
+    end;
+    if HasGroup(iFolipMasterFile, 'WRLD') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
+    end;
+
 
     flstGroup := Add(iFolipPluginFile, 'FLST', True);
     //Add FOLIP_Overrides formlist
     flOverrides := Add(flstGroup, 'FLST', True);
     SetEditorID(flOverrides, 'FOLIP_Overrides');
+
+    flParents := Add(flstGroup, 'FLST', True);
+    SetEditorID(flParents, 'FOLIP_Parents');
+
+    flDecals := Add(flstGroup, 'FLST', True);
+    SetEditorID(flDecals, 'FOLIP_Decals');
+
+    flFakeStatics := Add(flstGroup, 'FLST', True);
+    SetEditorID(flFakeStatics, 'FOLIP_FakeStatics');
 end;
 
 procedure ProcessEnableParents;
@@ -905,7 +914,7 @@ begin
                 SetElementEditValues(oreplacer, 'XESP\Reference', parentFormid);
                 SetElementNativeValues(oreplacer, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
             end;
-            AddRefToOverrides(oreplacer);
+            AddRefToMyFormlist(oreplacer, flParents);
 
             for oi := 0 to Pred(tlOppositeEnableRefs.Count) do begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
@@ -925,7 +934,7 @@ begin
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
                 SetIsVisibleWhenDistant(n, True);
-                AddRefToOverrides(n);
+                AddRefToMyFormlist(n, flOverrides);
             end;
         end;
         if not bCanBeRespected and tlEnableRefs.Count > 0 then begin
@@ -936,7 +945,7 @@ begin
             SetElementEditValues(ereplacer, 'XESP\Reference', parentFormid);
             SetElementEditValues(ereplacer, 'NAME', '000e4610');
             SetElementNativeValues(ereplacer, 'Record Header\Record Flags\LOD Respects Enable State', 1);
-            AddRefToOverrides(ereplacer);
+            AddRefToMyFormlist(ereplacer, flParents);
             for oi := 0 to Pred(tlEnableRefs.Count) do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
                 AddMessage(#9 + Name(r));
@@ -955,7 +964,7 @@ begin
                 SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
                 SetIsVisibleWhenDistant(n, True);
-                AddRefToOverrides(n);
+                AddRefToMyFormlist(n, flOverrides);
             end;
         end;
 
@@ -966,7 +975,7 @@ end;
 
 function GetSuitableReplacement: IInterface;
 var
-    stolen, r, m, rCell, g: IInterface;
+    stolen, r, m, rCell, g, n: IInterface;
     i, j: integer;
 begin
     Result := nil;
@@ -1008,22 +1017,23 @@ begin
             Result := r;
             tlStolenForms.Add(r);
             iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-            wbCopyElementToFile(r, iCurrentPlugin, True, True);
+            n := wbCopyElementToFile(r, iCurrentPlugin, True, True);
+            AddRefToMyFormlist(n, flDecals);
             Exit;
         end;
     end;
 end;
 
-procedure AddRefToOverrides(r: IInterface);
+procedure AddRefToMyFormlist(r, frmlst: IInterface);
 var
     formids, lnam: IInterface;
 begin
-    if not ElementExists(flOverrides, 'FormIDs') then begin
-        formids := Add(flOverrides, 'FormIDs', True);
+    if not ElementExists(frmlst, 'FormIDs') then begin
+        formids := Add(frmlst, 'FormIDs', True);
         lnam := ElementByIndex(formids, 0);
     end
     else begin
-        formids := ElementByName(flOverrides, 'FormIDs');
+        formids := ElementByName(frmlst, 'FormIDs');
         lnam := ElementAssign(formids, HighInteger, nil, False);
     end;
     try
@@ -1137,11 +1147,12 @@ function DuplicateRef(r, fakeStatic: IInterface; base: string): IInterface;
     Duplicates a placed reference and returns the duplicate.
 }
 var
-    n, wrld, rCell, nCell, ms, xesp, parentRef: IInterface;
+    n, wrld, rCell, wCell, nCell, ms, xesp, parentRef: IInterface;
     bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
     parent: string;
 begin
+    Result := nil;
     bPlugin := False;
     bParent := False;
     bParentWasPlugin := False;
@@ -1171,7 +1182,8 @@ begin
     if GetIsPersistent(rCell) then begin
         c := wbPositionToGridCell(GetPosition(r));
         wrld := LinksTo(ElementByIndex(rCell, 0));
-        rCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
+        wCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
+        if Assigned(wCell) then rCell := wCell;
     end;
 
     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
@@ -1184,6 +1196,12 @@ begin
     else if tlMasterCells.IndexOf(rCell) = -1 then tlMasterCells.Add(rCell);
 
     nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+
+    if not Assigned(nCell) then begin
+        AddMessage(Name(rCell) + ' could not be copied as a cell.');
+        AddMessage(Name(r) + ' failed to make a fake static version.');
+        Exit;
+    end;
 
     //Add new ref to cell
     n := Add(nCell, 'REFR', True);
@@ -1234,6 +1252,9 @@ begin
         end;
     end;
     SetElementEditValues(n, 'XESP\Reference', parent);
+
+    AddRefToMyFormlist(n, flFakeStatics);
+    Result := n;
 end;
 
 procedure CopyObjectBounds(copyFrom, copyTo: IInterface);
@@ -1267,7 +1288,9 @@ begin
     else iCurrentPlugin := iFolipMasterFile;
 
     patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
-    if ElementCount(patchStatGroup) < 1 then Add(iCurrentPlugin, 'STAT', True);
+    if ElementCount(patchStatGroup) < 1 then begin
+        patchStatGroup := Add(iCurrentPlugin, 'STAT', True);
+    end;
 
     //Add Fake STAT
     fakeStatic := Add(patchStatGroup, 'STAT', True);
@@ -2146,7 +2169,6 @@ begin
     bFirstMswpJson := True;
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
-        if i = 0 then iFallout4ESM := FileByIndex(i);
 
         if SameText(f, sFolipMasterFileName) then
             iFolipMasterFile := FileByIndex(i)
