@@ -4,8 +4,8 @@
 unit HasDistantLOD;
 
 var
-    iPluginFile : IInterface;
-    sFolipPluginFileName : string;
+    iPluginFile, iBeforeGeneration : IInterface;
+    sFolipPluginFileName, sFolipBeforeGeneration : string;
     slStats : TStringList;
     tlStats : TList;
     bLightPlugin : Boolean;
@@ -19,11 +19,12 @@ function Initialize: integer;
 }
 var
     i, j, idx: integer;
-    f, g, n, r, p, iFolip, iRecordToModify: IInterface;
+    f, g, n, r, p, iFolip: IInterface;
     editorid, recordId, filename: string;
 begin
     slStats := TStringList.Create;
     tlStats := TList.Create;
+    sFolipBeforeGeneration := 'FOLIP - Before Generation';
     sFolipPluginFileName := 'FOLIP - After Generation';
     bLightPlugin := True;
 
@@ -56,6 +57,14 @@ begin
             end;
             if HasGroup(iPluginFile, 'WRLD') then begin
                 RemoveNode(GroupBySignature(iPluginFile, 'WRLD'));
+            end;
+        end
+        else if SameText(filename, sFolipBeforeGeneration + '.esp') then begin
+            iBeforeGeneration := f;
+
+            //Delete stuff no longer needed.
+            if HasGroup(iBeforeGeneration, 'MSWP') then begin
+                RemoveNode(GroupBySignature(iBeforeGeneration, 'MSWP'));
             end;
         end;
 
@@ -91,12 +100,6 @@ begin
         SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
     end;
 
-    iRecordToModify := WinningOverride(RecordByFormID(iFolip, $001B026B, False));
-    p := RefMastersDeterminePlugin(iRecordToModify);
-    n := wbCopyElementToFile(iRecordToModify, p, False, True);
-    SetElementNativeValues(n, 'Record Header\Record Flags\Visible when distant', 0);
-    if ElementExists(iRecordToModify, 'XESP') then RemoveElement(n, 'XESP');
-
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
 end;
@@ -119,7 +122,7 @@ function MainMenuForm: Boolean;
 var
     frm: TForm;
     btnStart, btnCancel: TButton;
-    edPluginName: TEdit;
+    edPluginName, edBeforeGen: TEdit;
     pnl: TPanel;
     picFolip: TPicture;
     fImage: TImage;
@@ -130,7 +133,7 @@ begin
     try
         frm.Caption := 'FOLIP HasDistantLOD Flag Remover';
         frm.Width := 600;
-        frm.Height := 480;
+        frm.Height := 510;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
         frm.KeyPreview := True;
@@ -154,22 +157,32 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - After Generation';
-        gbOptions.Height := 104;
+        gbOptions.Height := 134;
+
+        edBeforeGen := TEdit.Create(gbOptions);
+        edBeforeGen.Parent := gbOptions;
+        edBeforeGen.Name := 'edBeforeGen';
+        edBeforeGen.Left := 160;
+        edBeforeGen.Top := 30;
+        edBeforeGen.Width := 180;
+        edBeforeGen.Hint := 'Specify the Before Generation plugin name you previously used.';
+        edBeforeGen.ShowHint := True;
+        CreateLabel(gbOptions, 16, edBeforeGen.Top + 4, 'Before Generation Plugin:');
 
         edPluginName := TEdit.Create(gbOptions);
         edPluginName.Parent := gbOptions;
         edPluginName.Name := 'edPluginName';
-        edPluginName.Left := 104;
-        edPluginName.Top := 30;
+        edPluginName.Left := edBeforeGen.Left;
+        edPluginName.Top := edBeforeGen.Top + 30;
         edPluginName.Width := 180;
         edPluginName.Hint := 'Sets the output plugin name for the patch.';
         edPluginName.ShowHint := True;
-        CreateLabel(gbOptions, 16, edPluginName.Top + 4, 'Output Plugin:');
+        CreateLabel(gbOptions, 73, edPluginName.Top + 4, 'Output Plugin:');
 
         chkLightPlugin := TCheckBox.Create(gbOptions);
         chkLightPlugin.Parent := gbOptions;
         chkLightPlugin.Left := edPluginName.Left + edPluginName.Width + 16;
-        chkLightPlugin.Top := 32;
+        chkLightPlugin.Top := edPluginName.Top + 2;
         chkLightPlugin.Width := 120;
         chkLightPlugin.Caption := 'Flag as ESL';
         chkLightPlugin.Hint := 'Flags the output plugin as ESL.';
@@ -179,7 +192,7 @@ begin
         btnStart.Parent := gbOptions;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := 72;
+        btnStart.Top := 102;
 
         btnCancel := TButton.Create(gbOptions);
         btnCancel.Parent := gbOptions;
@@ -198,7 +211,10 @@ begin
         pnl.Height := 2;
 
         edPluginName.Text := sFolipPluginFileName;
+        edBeforeGen.Text := sFolipBeforeGeneration;
         chkLightPlugin.Checked := bLightPlugin;
+
+        frm.ActiveControl := btnStart;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -207,6 +223,7 @@ begin
         else Result := True;
 
         sFolipPluginFileName := edPluginName.Text;
+        sFolipBeforeGeneration := edBeforeGen.Text;
         bLightPlugin := chkLightPlugin.Checked;
 
     finally
