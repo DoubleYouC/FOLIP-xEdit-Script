@@ -4,7 +4,7 @@
 unit HasDistantLOD;
 
 var
-    iPluginFile, iBeforeGeneration : IInterface;
+    iPluginFile, iBeforeGeneration, formLists : IInterface;
     sFolipPluginFileName, sFolipBeforeGeneration : string;
     slStats : TStringList;
     tlStats : TList;
@@ -45,7 +45,7 @@ begin
 
         if SameText(filename, sFolipFileName) then
             iFolip := f
-        else if SameText(filename, sFolipPluginFileName) then begin
+        else if SameText(filename, sFolipPluginFileName + '.esp') then begin
             iPluginFile := f;
 
             //Clear out any previous edits to the file.
@@ -61,13 +61,22 @@ begin
         end
         else if SameText(filename, sFolipBeforeGeneration + '.esp') then begin
             iBeforeGeneration := f;
-
-            //Delete stuff no longer needed.
-            if HasGroup(iBeforeGeneration, 'MSWP') then begin
-                RemoveNode(GroupBySignature(iBeforeGeneration, 'MSWP'));
-            end;
+            formLists := GroupBySignature(iBeforeGeneration, 'FLST');
         end;
+    end;
 
+    if not Assigned(iFolip) then begin
+        MessageDlg('Please enable ' + sFolipFileName + ' before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;
+    if not Assigned(iPluginFile) then begin
+        iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', bLightPlugin);
+        AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
+    end;
+
+    for i := 0 to Pred(FileCount) do begin
+        f := FileByIndex(i);
         //STAT
         g := GroupBySignature(f, 'STAT');
         for j := 0 to Pred(ElementCount(g)) do begin
@@ -83,16 +92,6 @@ begin
         end;
     end;
 
-    if not Assigned(iFolip) then begin
-        MessageDlg('Please enable ' + sFolipFileName + ' before continuing.', mtError, [mbOk], 0);
-        Result := 0;
-        Exit;
-    end;
-    if not Assigned(iPluginFile) then begin
-        iPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', bLightPlugin);
-        AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
-    end;
-
     for i := 0 to Pred(tlStats.Count) do begin
         r := ObjectToElement(tlStats[i]);
         p := RefMastersDeterminePlugin(r);
@@ -100,8 +99,95 @@ begin
         SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
     end;
 
+    SpecificRecordEdits;
+
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
+end;
+
+procedure SpecificRecordEdits;
+{
+    Carries out specific record changes.
+}
+var
+    i: integer;
+    f, r, rCell, rWrld, p, n: IInterface;
+    editorid: string;
+    tlOverrides, tlParents, tlDecals: TList;
+begin
+    //Fetch formlists
+    tlOverrides := TList.Create;
+    tlParents := TList.Create;
+    tlDecals := TList.Create;
+    for i := 0 to Pred(ElementCount(formLists)) do begin
+        f := WinningOverride(ElementByIndex(formLists, i));
+        AddMessage(ShortName(f));
+        editorid := GetElementEditValues(f, 'EDID');
+        AddMessage(editorid);
+        if editorid = 'FOLIP_Overrides' then AddFormlistToTList(f, tlOverrides)
+        else if editorid = 'FOLIP_Parents' then AddFormlistToTList(f, tlParents)
+        else if editorid = 'FOLIP_Decals' then AddFormlistToTList(f, tlDecals);
+    end;
+
+    //Add Enable Parents to plugin
+    for i := 0 to Pred(tlParents.Count) do begin
+        r := ObjectToElement(tlParents[i]);
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        p := RefMastersDeterminePlugin(rCell);
+        p := RefMastersDeterminePlugin(rWrld);
+        p := RefMastersDeterminePlugin(r);
+        n := wbCopyElementToFile(rWrld, p, False, True);
+        n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(r, p, False, True);
+    end;
+    tlParents.Free;
+
+    //Add Decals to plugin
+    for i := 0 to Pred(tlDecals.Count) do begin
+        r := ObjectToElement(tlDecals[i]);
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        p := RefMastersDeterminePlugin(rCell);
+        p := RefMastersDeterminePlugin(rWrld);
+        n := wbCopyElementToFile(rWrld, p, False, True);
+        n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(r, p, True, True);
+    end;
+    tlDecals.Free;
+
+    //Remove Visible when distant from Overrides.
+    for i := 0 to Pred(tlOverrides.Count) do begin
+        r := ObjectToElement(tlOverrides[i]);
+        editorid := GetElementEditValues(LinksTo(ElementByPath(r, 'NAME')),'EDID');
+        AddMessage(editorid);
+        if ContainsText(editorid, 'FOLIP_') then continue; //Skip FOLIP Fake Statics
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        p := RefMastersDeterminePlugin(rCell);
+        p := RefMastersDeterminePlugin(rWrld);
+        p := RefMastersDeterminePlugin(r);
+        n := wbCopyElementToFile(rWrld, p, False, True);
+        n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(r, p, False, True);
+        SetIsVisibleWhenDistant(n, False);
+    end;
+    tlOverrides.Free;
+end;
+
+procedure AddFormlistToTList(flst: IInterface; var list: TList);
+{
+    Adds all formids in a formlist to the input TList.
+}
+var
+    formids, r: IInterface;
+    i: integer;
+begin
+    formids := ElementByName(flst, 'FormIDs');
+    for i := 0 to Pred(ElementCount(formids)) do begin
+        r := LinksTo(ElementByIndex(formids, i));
+        list.Add(r);
+    end;
 end;
 
 function Finalize: integer;
