@@ -769,7 +769,7 @@ begin
     end;
 
     //Purge FOLIP - Master.esm
-    if HasGroup(iFolipMasterFile, 'STAT') then begin
+    {if HasGroup(iFolipMasterFile, 'STAT') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'STAT'));
     end;
     if HasGroup(iFolipMasterFile, 'MSWP') then begin
@@ -780,7 +780,7 @@ begin
     end;
     if HasGroup(iFolipMasterFile, 'WRLD') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
-    end;
+    end;}
 
 
     flstGroup := Add(iFolipPluginFile, 'FLST', True);
@@ -1285,7 +1285,7 @@ begin
         if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
         iCurrentPlugin := RefMastersDeterminePlugin(ms, False);
     end
-    else iCurrentPlugin := iFolipMasterFile;
+    else iCurrentPlugin := iFolipPluginFile;
 
     patchStatGroup := GroupBySignature(iCurrentPlugin, 'STAT');
     if ElementCount(patchStatGroup) < 1 then begin
@@ -2103,10 +2103,10 @@ function RefMastersDeterminePlugin(r: IInterface; var bPlugin: Boolean;): IInter
     Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
 }
 begin
-    {AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+    AddRequiredElementMasters(r, iFolipPluginFile, False, True);
   	SortMasters(iFolipPluginFile);
-    Result := iFolipPluginFile;}
-    if bPlugin then begin
+    Result := iFolipPluginFile
+    {if bPlugin then begin
         AddRequiredElementMasters(r, iFolipPluginFile, False, True);
         SortMasters(iFolipPluginFile);
         Result := iFolipPluginFile;
@@ -2124,7 +2124,7 @@ begin
             Result := iFolipPluginFile;
             bPlugin := True;
         end;
-    end;
+    end;}
 end;
 
 procedure FetchRules;
@@ -2189,8 +2189,13 @@ begin
         Result := 0;
         Exit;
     end;
-    if not Assigned(iFolipMasterFile) then begin
+    {if not Assigned(iFolipMasterFile) then begin
         MessageDlg(sFolipMasterFileName + ' not found! Please install if from https://www.nexusmods.com/fallout4/mods/61884 before continuing.', mtError, [mbOk], 0);
+        Result := 0;
+        Exit;
+    end;}
+    if Assigned(iFolipMasterFile) then begin
+        MessageDlg(sFolipMasterFileName + ' found! This file is now deprecated and should no longer be used. Please remove.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
     end;
