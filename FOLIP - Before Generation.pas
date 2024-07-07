@@ -1165,7 +1165,8 @@ begin
         parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         iCurrentPlugin := RefMastersDeterminePlugin(parentRef, bPlugin);
         if bPlugin then bParentWasPlugin := True;
-    end;
+    end
+    else RefMastersDeterminePlugin(r, bPlugin);
     if ElementExists(r, 'XMSP - Material Swap') then begin
         ms := WinningOverride(LinksTo(ElementByPath(r, 'XMSP - Material Swap')));
         iCurrentPlugin := RefMastersDeterminePlugin(ms, bPlugin);
@@ -1238,7 +1239,7 @@ begin
 
     //  Set XESP
     Add(n, 'XESP', True);
-    if ElementExists(r, 'XESP - Enable Parent') then begin
+    if bParent then begin
         parent := GetElementEditValues(r, 'XESP\Reference');
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
