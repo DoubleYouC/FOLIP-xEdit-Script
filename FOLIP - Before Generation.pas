@@ -1209,7 +1209,7 @@ begin
     //Add required elements
 
     //  Set flags
-    if GetIsInitiallyDisabled(r) then SetIsInitiallyDisabled(r);
+    if GetIsInitiallyDisabled(r) then SetIsInitiallyDisabled(r, true);
     SetIsVisibleWhenDistant(n, True);
 
     //  Set base
