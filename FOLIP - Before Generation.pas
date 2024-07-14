@@ -1915,8 +1915,8 @@ begin
             sub := TJsonObject.Create;
             sub.LoadFromResource(j);
             for c := 0 to Pred(sub.Count) do begin
-            key := sub.Names[c];
-            for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
+                key := sub.Names[c];
+                for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
             end;
             sub.Free;
         end;
