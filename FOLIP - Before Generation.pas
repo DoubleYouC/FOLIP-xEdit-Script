@@ -1589,6 +1589,7 @@ begin
     slTopLevelModPatternPaths.Add('dlc05\');
     slTopLevelModPatternPaths.Add('dlc06\');
     slTopLevelModPatternPaths.Add('capitalwasteland\');
+    slTopLevelModPatternPaths.Add('dlclondon\');
 
     slTopLevelModPatternPaths.Add('');
 end;
