@@ -17,8 +17,8 @@ var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
     slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slFullLODMessages: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
-    i: integer;
-    f, sFolipPluginFileName: string;
+    uiScale: integer;
+    sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
     joRules, joMswpMap, joUserRules: TJsonObject;
 
@@ -59,6 +59,10 @@ begin
 
     //Default plugin name.
     sFolipPluginFileName := 'FOLIP - Before Generation';
+
+    //Get scaling
+    uiScale := Screen.PixelsPerInch * 100 / 96;
+    AddMessage('UI scale: ' + IntToStr(uiScale));
 
     CreateObjects;
     FetchRules;
@@ -236,24 +240,25 @@ begin
 		fImage.Parent := frm;
         fImage.Width := 576;
 		fImage.Height := 278;
-		fImage.Left := 8;
+		fImage.Left := 6;
 		fImage.Top := 12;
+        fImage.Stretch := True;
 
         gbOptions := TGroupBox.Create(frm);
         gbOptions.Parent := frm;
-        gbOptions.Left := 10;
+        gbOptions.Left := 6;
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - Before Generation';
-        gbOptions.Height := 174;
+        gbOptions.Height := 134;
 
-        btnRuleEditor := TButton.Create(gbOptions);
-        btnRuleEditor.Parent := gbOptions;
+        btnRuleEditor := TButton.Create(frm);
+        btnRuleEditor.Parent := frm;
         btnRuleEditor.Caption := 'Rule Editor';
         btnRuleEditor.OnClick := RuleEditor;
         btnRuleEditor.Width := 100;
-        btnRuleEditor.Left := 8;
-        btnRuleEditor.Top := 136;
+        btnRuleEditor.Left := 16;
+        btnRuleEditor.Top := gbOptions.Top + gbOptions.Height + 24;
 
         edPluginName := TEdit.Create(gbOptions);
         edPluginName.Parent := gbOptions;
@@ -332,14 +337,14 @@ begin
             + #13#10 + 'purposes only and has no visual benefit.';
         chkReportMissingLOD.ShowHint := True;
 
-        btnStart := TButton.Create(gbOptions);
-        btnStart.Parent := gbOptions;
+        btnStart := TButton.Create(frm);
+        btnStart.Parent := frm;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
         btnStart.Top := btnRuleEditor.Top;
 
-        btnCancel := TButton.Create(gbOptions);
-        btnCancel.Parent := gbOptions;
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
         btnCancel.Caption := 'Cancel';
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
@@ -347,12 +352,17 @@ begin
         btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
         btnCancel.Left := btnStart.Left + btnStart.Width + 8;
 
-        pnl := TPanel.Create(gbOptions);
-        pnl.Parent := gbOptions;
-        pnl.Left := 8;
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := gbOptions.Left;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width - 16;
+        pnl.Width := gbOptions.Width;
         pnl.Height := 2;
+
+        frm.ActiveControl := btnStart;
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
 
         edPluginName.Text := sFolipPluginFileName;
         chkFakeStatics.Checked := bFakeStatics;
