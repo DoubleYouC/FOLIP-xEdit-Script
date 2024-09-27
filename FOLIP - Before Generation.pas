@@ -530,7 +530,7 @@ begin
     edKey.Name := 'edKey';
     edKey.Left := 120;
     edKey.Top := 12;
-    edKey.Width := frmRule.Width - 140;
+    edKey.Width := frmRule.Width - 150;
     CreateLabel(frmRule, 16, edKey.Top + 4, 'Mesh or EditorID');
 
     chkHasDistantLOD := TCheckBox.Create(frmRule);
@@ -552,7 +552,7 @@ begin
     edlod4.Name := 'edlod4';
     edlod4.Left := 120;
     edlod4.Top := chkHasDistantLOD.Top + 28;
-    edlod4.Width := frmRule.Width - 140;
+    edlod4.Width := frmRule.Width - 150;
     CreateLabel(frmRule, 16, edlod4.Top + 4, 'LOD4');
 
     edlod8 := TEdit.Create(frmRule);
@@ -560,7 +560,7 @@ begin
     edlod8.Name := 'edlod8';
     edlod8.Left := 120;
     edlod8.Top := edlod4.Top + 28;
-    edlod8.Width := frmRule.Width - 140;
+    edlod8.Width := frmRule.Width - 150;
     CreateLabel(frmRule, 16, edlod8.Top + 4, 'LOD8');
 
     edlod16 := TEdit.Create(frmRule);
@@ -568,7 +568,7 @@ begin
     edlod16.Name := 'edlod16';
     edlod16.Left := 120;
     edlod16.Top := edlod8.Top + 28;
-    edlod16.Width := frmRule.Width - 140;
+    edlod16.Width := frmRule.Width - 150;
     CreateLabel(frmRule, 16, edlod16.Top + 4, 'LOD16');
 
     edlod32 := TEdit.Create(frmRule);
@@ -576,29 +576,34 @@ begin
     edlod32.Name := 'edlod32';
     edlod32.Left := 120;
     edlod32.Top := edlod16.Top + 28;
-    edlod32.Width := frmRule.Width - 140;
+    edlod32.Width := frmRule.Width - 150;
     CreateLabel(frmRule, 16, edlod32.Top + 4, 'LOD32');
 
     btnOk := TButton.Create(frmRule);
     btnOk.Parent := frmRule;
     btnOk.Caption := 'OK';
     btnOk.ModalResult := mrOk;
-    btnOk.Left := frmRule.Width - 176;
-    btnOk.Top := frmRule.Height - 62;
+    btnOk.Top := edlod32.Top + (2*edlod32.Height);
 
     btnCancel := TButton.Create(frmRule);
     btnCancel.Parent := frmRule;
     btnCancel.Caption := 'Cancel';
     btnCancel.ModalResult := mrCancel;
-    btnCancel.Left := btnOk.Left + btnOk.Width + 8;
     btnCancel.Top := btnOk.Top;
+
+    btnOk.Left := frmRule.Width - btnOk.Width - btnCancel.Width - 32;
+    btnCancel.Left := btnOk.Left + btnOk.Width + 8;
 
     pnl := TPanel.Create(frmRule);
     pnl.Parent := frmRule;
-    pnl.Left := 8;
+    pnl.Left := 10;
     pnl.Top := btnOk.Top - 12;
-    pnl.Width := frmRule.Width - 20;
+    pnl.Width := frmRule.Width - 32;
     pnl.Height := 2;
+
+    frmRule.Height := btnOk.Top + (4*btnOk.Height);
+    frmRule.ScaleBy(uiScale, 100);
+    frmRule.Font.Size := 8;
 
     edKey.Text := key;
     chkHasDistantLOD.Checked := hasdistantlod;
@@ -1808,7 +1813,7 @@ begin
     slActiFurnMstt.Free;
 
     AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
-    AddMessage('Found ' + IntToStr(tlActiFurnMstt.Count) + ' ACTI, FURN, and MSTT records.');
+    AddMessage('Found ' + IntToStr(tlActiFurnMstt.Count) + ' ACTI, DOOR, FURN, and MSTT records.');
 end;
 
 procedure FilesInContainers(containers: TStringList);
