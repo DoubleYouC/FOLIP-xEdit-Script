@@ -481,7 +481,7 @@ begin
         btnRuleOk.Parent := frm;
         btnRuleOk.Caption := 'OK';
         btnRuleOk.ModalResult := mrOk;
-        btnRuleOk.Top := frm.Height - 70;
+        btnRuleOk.Top := lvRules.Height + lvRules.Top + 8;
 
         btnRuleCancel := TButton.Create(frm);
         btnRuleCancel.Parent := frm;
@@ -491,6 +491,9 @@ begin
 
         btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
         btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
+
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -759,9 +762,9 @@ begin
         frm := TForm(Sender);
         lvRules.Width := frm.Width - 36;
         lvRules.Left := (frm.Width - lvRules.Width)/2;
-        lvRules.Height := frm.Height - 110;
+        lvRules.Height := frm.Height - btnRuleOk.Height - btnRuleOk.Height - btnRuleOk.Height - btnRuleOk.Height;
 
-        btnRuleOk.Top := frm.Height - 70;
+        btnRuleOk.Top := lvRules.Height + lvRules.Top + 8;
         btnRuleCancel.Top := btnRuleOk.Top;
         btnRuleOk.Left := (frm.Width - btnRuleOk.Width - btnRuleCancel.Width - 8)/2;
         btnRuleCancel.Left := btnRuleOk.Left + btnRuleOk.Width + 8;
