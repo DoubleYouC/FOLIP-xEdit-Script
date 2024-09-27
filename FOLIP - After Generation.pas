@@ -113,11 +113,12 @@ var
     i: integer;
     f, r, rCell, rWrld, p, n: IInterface;
     editorid: string;
-    tlOverrides, tlParents, tlDecals: TList;
+    tlOverrides, tlParents, tlNeverfades, tlDecals: TList;
 begin
     //Fetch formlists
     tlOverrides := TList.Create;
     tlParents := TList.Create;
+    tlNeverfades := TList.Create;
     tlDecals := TList.Create;
     for i := 0 to Pred(ElementCount(formLists)) do begin
         f := WinningOverride(ElementByIndex(formLists, i));
@@ -126,6 +127,7 @@ begin
         AddMessage(editorid);
         if editorid = 'FOLIP_Overrides' then AddFormlistToTList(f, tlOverrides)
         else if editorid = 'FOLIP_Parents' then AddFormlistToTList(f, tlParents)
+        else if editorid = 'FOLIP_Neverfades' then AddFormlistToTList(f, tlNeverfades)
         else if editorid = 'FOLIP_Decals' then AddFormlistToTList(f, tlDecals);
     end;
 
@@ -142,6 +144,20 @@ begin
         n := wbCopyElementToFile(r, p, False, True);
     end;
     tlParents.Free;
+
+    //Add Neverfades to plugin
+    for i := 0 to Pred(tlNeverfades.Count) do begin
+        r := ObjectToElement(tlNeverfades[i]);
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        p := RefMastersDeterminePlugin(rCell);
+        p := RefMastersDeterminePlugin(rWrld);
+        p := RefMastersDeterminePlugin(r);
+        n := wbCopyElementToFile(rWrld, p, False, True);
+        n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(r, p, False, True);
+    end;
+    tlNeverfades.Free;
 
     //Add Decals to plugin
     for i := 0 to Pred(tlDecals.Count) do begin

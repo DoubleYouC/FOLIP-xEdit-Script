@@ -15,8 +15,8 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slFullLODMessages: TStringList;
-    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flDecals, flFakeStatics: IInterface;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slFullLODMessages: TStringList;
+    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     i: integer;
     f, sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
@@ -111,6 +111,7 @@ begin
 
     //Add Messages
     ListStringsInStringList(slMessages);
+    ListStringsInStringList(slMissingLODMessages);
     ListStringsInStringList(slFullLODMessages);
 
     //Apply lod material swaps.
@@ -141,6 +142,7 @@ begin
     slMatFiles.Free;
     slTopLevelModPatternPaths.Free;
     slMessages.Free;
+    slMissingLODMessages.Free;
     slFullLODMessages.Free;
 
     joRules.Free;
@@ -186,6 +188,9 @@ begin
     slTopLevelModPatternPaths := TStringList.Create;
     slMessages := TStringList.Create;
     slMessages.Sorted := True;
+    slMissingLODMessages := TStringList.Create;
+    slMissingLODMessages.Sorted := True;
+
     slFullLODMessages := TStringList.Create;
     slFullLODMessages.Sorted := True;
 
@@ -431,14 +436,16 @@ begin
         lvRules.Columns[0].Width := 400;
         lvRules.Columns.Add.Caption := 'HasDistantLOD';
         lvRules.Columns[1].Width := 95;
+        lvRules.Columns.Add.Caption := 'IsFullLOD';
+        lvRules.Columns[2].Width := 95;
         lvRules.Columns.Add.Caption := 'LOD4';
-        lvRules.Columns[2].Width := 400;
+        lvRules.Columns[3].Width := 400;
         lvRules.Columns.Add.Caption := 'LOD8';
-        lvRules.Columns[3].Width := 90;
+        lvRules.Columns[4].Width := 90;
         lvRules.Columns.Add.Caption := 'LOD16';
-        lvRules.Columns[4].Width := 60;
-        lvRules.Columns.Add.Caption := 'LOD32';
         lvRules.Columns[5].Width := 60;
+        lvRules.Columns.Add.Caption := 'LOD32';
+        lvRules.Columns[6].Width := 60;
         lvRules.OwnerData := True;
         lvRules.OnData := lvRulesData;
         lvRules.OnDblClick := lvRulesDblClick;
@@ -486,13 +493,13 @@ begin
     end;
 end;
 
-function EditRuleForm(var key, lod4, lod8, lod16, lod32: string; var hasdistantlod: Boolean): Boolean;
+function EditRuleForm(var key, lod4, lod8, lod16, lod32: string; var hasdistantlod, bIsFullLod: Boolean): Boolean;
 var
     frmRule: TForm;
     pnl: TPanel;
     btnOk, btnCancel: TButton;
     edKey, edHasDistantLOD, edlod4, edlod8, edlod16, edlod32: TEdit;
-    chkHasDistantLOD: TCheckBox;
+    chkHasDistantLOD, chkIsFullLOD: TCheckBox;
 begin
   frmRule := TForm.Create(nil);
   try
@@ -519,6 +526,13 @@ begin
     chkHasDistantLOD.Top := edKey.Top + 32;
     chkHasDistantLOD.Width := 200;
     chkHasDistantLOD.Caption := 'Has Distant LOD';
+
+    chkIsFullLOD := TCheckBox.Create(frmRule);
+    chkIsFullLOD.Parent := frmRule;
+    chkIsFullLOD.Left := chkHasDistantLOD.Left + chkHasDistantLOD.Width + 16;
+    chkIsFullLOD.Top := edKey.Top + 32;
+    chkIsFullLOD.Width := 200;
+    chkIsFullLOD.Caption := 'Is Full LOD';
 
     edlod4 := TEdit.Create(frmRule);
     edlod4.Parent := frmRule;
@@ -575,6 +589,7 @@ begin
 
     edKey.Text := key;
     chkHasDistantLOD.Checked := hasdistantlod;
+    chkIsFullLOD.Checked := bIsFullLod;
     edlod4.Text := lod4;
     edlod8.Text := lod8;
     edlod16.Text := lod16;
@@ -582,8 +597,9 @@ begin
 
     if frmRule.ShowModal <> mrOk then Exit;
 
-    key := edKey.Text;
+    key := LowerCase(edKey.Text);
     hasdistantlod := chkHasDistantLOD.Checked;
+    bIsFullLod := chkIsFullLOD.Checked;
     lod4 := edlod4.Text;
     lod8 := edlod8.Text;
     lod16 := edlod16.Text;
@@ -604,7 +620,8 @@ var
 begin
     key := joRules.Names[Item.Index];
     Item.Caption := key;
-    Item.SubItems.Add(joRules.O[key].S['hasdistantlod']);
+    Item.SubItems.Add(Fallback(joRules.O[key].S['hasdistantlod'], 'false'));
+    Item.SubItems.Add(Fallback(joRules.O[key].S['bisfulllod'], 'false'));
     Item.SubItems.Add(joRules.O[key].S['level0']);
     Item.SubItems.Add(joRules.O[key].S['level1']);
     Item.SubItems.Add(joRules.O[key].S['level2']);
@@ -626,18 +643,20 @@ procedure RulesMenuAddClick(Sender: TObject);
 var
     idx: integer;
     key, lod4, lod8, lod16, lod32: string;
-    hasdistantlod: Boolean;
+    hasdistantlod, bIsFullLod: Boolean;
 begin
     key := '';
     hasdistantlod := True;
+    bIsFullLod := False;
     lod4 := '';
     lod8 := '';
     lod16 := '';
     lod32 := '';
 
-    if not EditRuleForm(key, lod4, lod8, lod16, lod32, hasdistantlod) then Exit;
+    if not EditRuleForm(key, lod4, lod8, lod16, lod32, hasdistantlod, bIsFullLod) then Exit;
 
     joRules.O[key].S['hasdistantlod'] := BoolToStr(hasdistantlod);
+    joRules.O[key].S['bisfulllod'] := BoolToStr(bIsFullLod);
     joRules.O[key].S['level0'] := lod4;
     joRules.O[key].S['level1'] := lod8;
     joRules.O[key].S['level2'] := lod16;
@@ -657,21 +676,23 @@ procedure RulesMenuEditClick(Sender: TObject);
 var
     idx: integer;
     key, lod4, lod8, lod16, lod32: string;
-    hasdistantlod: Boolean;
+    hasdistantlod, bIsFullLod: Boolean;
 begin
     if not Assigned(lvRules.Selected) then Exit;
     idx := lvRules.Selected.Index;
 
     key := joRules.Names[idx];
     hasdistantlod := StrToBool(joRules.O[key].S['hasdistantlod']);
+    bIsFullLod := StrToBool(joRules.O[key].S['bisfulllod']);
     lod4 := joRules.O[key].S['level0'];
     lod8 := joRules.O[key].S['level1'];
     lod16 := joRules.O[key].S['level2'];
     lod32 := joRules.O[key].S['level3'];
 
-    if not EditRuleForm(key, lod4, lod8, lod16, lod32, hasdistantlod) then Exit;
+    if not EditRuleForm(key, lod4, lod8, lod16, lod32, hasdistantlod, bIsFullLod) then Exit;
 
     joRules.O[key].S['hasdistantlod'] := BoolToStr(hasdistantlod);
+    joRules.O[key].S['bisfulllod'] := BoolToStr(bIsFullLod);
     joRules.O[key].S['level0'] := lod4;
     joRules.O[key].S['level1'] := lod8;
     joRules.O[key].S['level2'] := lod16;
@@ -791,6 +812,9 @@ begin
     flParents := Add(flstGroup, 'FLST', True);
     SetEditorID(flParents, 'FOLIP_Parents');
 
+    flNeverfades := Add(flstGroup, 'FLST', True);
+    SetEditorID(flNeverfades, 'FOLIP_Neverfades');
+
     flDecals := Add(flstGroup, 'FLST', True);
     SetEditorID(flDecals, 'FOLIP_Decals');
 
@@ -840,7 +864,7 @@ begin
         }
         tlOppositeEnableRefs := TList.Create;
         tlEnableRefs := TList.Create;
-        for pi := 0 to Pred(ReferencedByCount(p)) do begin
+        for pi := Pred(ReferencedByCount(p)) downto 0 do begin
             r := ReferencedByIndex(p, pi);
             bBaseHasLOD := False;
 
@@ -981,7 +1005,7 @@ begin
     Result := nil;
     for j := 0 to Pred(tlTxst.Count) do begin
         stolen := ObjectToElement(tlTxst[j]);
-        for i := 0 to Pred(ReferencedByCount(stolen)) do begin
+        for i := Pred(ReferencedByCount(stolen)) downto 0 do begin
             r := ReferencedByIndex(stolen, i);
             if tlStolenForms.IndexOf(r) <> -1 then continue;
             if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
@@ -1044,17 +1068,68 @@ begin
     end;
 end;
 
+function IsFullLOD(s: IInterface): Boolean;
+var
+    model, editorid: string;
+    bIsFullLOD, bXESP: Boolean;
+    i: integer;
+    r, n, rCell: IInterface;
+begin
+    Result := false;
+    editorid := LowerCase(GetElementEditValues(s, 'EDID'));
+    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
+    if joRules.Contains(model) then begin
+        bIsFullLOD := StrToBool(joRules.O[model].S['bisfulllod']);
+    end
+    else if joRules.Contains(editorid) then begin
+        bIsFullLOD := StrToBool(joRules.O[editorid].S['bisfulllod']);
+    end;
+    if not bIsFullLOD then Exit;
+    Result := true;
+    for i := Pred(ReferencedByCount(s)) downto 0 do begin
+        r := ReferencedByIndex(s, i);
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        if GetIsDeleted(r) then continue;
+        if GetIsCleanDeleted(r) then continue;
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+
+        bXESP := ElementExists(r, 'XESP');
+        if GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') then begin
+            if not bXESP then continue;
+            if bXESP and GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') then continue;
+        end;
+
+        iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+
+        iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+        n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+        SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', 1);
+        SetIsPersistent(n, True);
+        if bXESP then SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+
+        AddRefToMyFormlist(n, flNeverfades);
+        slFullLODMessages.Add('IsFullLOD Reference:' + Name(n));
+    end;
+end;
+
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
     n, r, s, ms, rCell, fakeStatic: IInterface;
-    HasLOD: Boolean;
+    HasLOD, bFullLOD: Boolean;
     joLOD: TJsonObject;
     fakeStaticFormID, sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlActiFurnMstt.Count) do begin
         sMissingLodMessage := '';
         s := ObjectToElement(tlActiFurnMstt[i]);
+
+        bFullLOD := IsFullLOD(s);
+        if bFullLOD then continue;
+
         joLOD := TJsonObject.Create;
         HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
@@ -1064,7 +1139,7 @@ begin
         if HasLOD then begin
             cnt := 0;
 
-            for si := 0 to Pred(ReferencedByCount(s)) do begin
+            for si := Pred(ReferencedByCount(s)) downto 0 do begin
                 r := ReferencedByIndex(s, si);
                 if Signature(r) <> 'REFR' then continue;
                 if not IsWinningOverride(r) then continue;
@@ -1098,7 +1173,7 @@ begin
             end;
         end
         else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
-            if IsObjectUsedInExterior(s) then slFullLODMessages.Add(sMissingLodMessage);
+            if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
         end;
 
         joLOD.Free;
@@ -1482,7 +1557,7 @@ begin
             if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
         end
         else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
-            if IsObjectUsedInExterior(s) then slFullLODMessages.Add(sMissingLodMessage);
+            if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
         end;
         joLOD.Free;
     end;
@@ -1495,7 +1570,7 @@ var
 begin
     cnt := 0;
 
-    for si := 0 to Pred(ReferencedByCount(s)) do begin
+    for si := Pred(ReferencedByCount(s)) downto 0 do begin
         r := ReferencedByIndex(s, si);
         if Signature(r) = 'SCOL' then begin
             if not IsObjectUsedInExterior(r) then continue;
@@ -1522,7 +1597,7 @@ var
     parent: string;
 begin
     cnt := 0;
-    for si := 0 to Pred(ReferencedByCount(s)) do begin
+    for si := Pred(ReferencedByCount(s)) downto 0 do begin
         r := ReferencedByIndex(s, si);
         if Signature(r) = 'SCOL' then begin
             if not IsWinningOverride(r) then continue;
@@ -1730,7 +1805,7 @@ procedure FilesInContainers(containers: TStringList);
 var
     slArchivedFiles: TStringList;
     i: integer;
-    f, archive: string;
+    f, archive, tp: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
@@ -1778,7 +1853,7 @@ begin
         if IsInLODDir(f, 'materials') then begin
             slMatFiles.Add(f);
             if not bReportNonLODMaterials then continue;
-            if MatHasNonLodTexture(f) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
+            if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
         end
         else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
             slNifFiles.Add(f);
@@ -1845,13 +1920,12 @@ begin
     if not bWasEverAbleToCheck then Result := False;
 end;
 
-function MatHasNonLodTexture(f: string): Boolean;
+function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
 {
     Checks to see if a material file resource contains non-lod textures.
 }
 var
     i: integer;
-    tp: string;
     bgsm: TwbBGSMFile;
     el: TdfElement;
 begin
@@ -1959,7 +2033,7 @@ begin
         hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
     end;
 
-    editorid := GetElementEditValues(s, 'EDID');
+    editorid := LowerCase(GetElementEditValues(s, 'EDID'));
 
     if joRules.Contains(editorid) then begin
         lod4 := joRules.O[editorid].S['level0'];
@@ -2280,6 +2354,14 @@ function StrToBool(str: string): boolean;
 }
 begin
     if (str = 'true') or (str = '1') then Result := True else Result := False;
+end;
+
+function Fallback(str, fallback: string): string;
+{
+    Set a fallback value if blank.
+}
+begin
+    if str = '' then Result := fallback else Result := str;
 end;
 
 function TrimRightChars(s: string; chars: integer): string;
