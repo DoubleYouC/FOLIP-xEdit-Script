@@ -9,6 +9,7 @@ var
     slStats : TStringList;
     tlStats : TList;
     bLightPlugin : Boolean;
+    uiScale: integer;
 
 const
     sFolipFileName = 'FOLIP - New LODs.esp';
@@ -27,6 +28,10 @@ begin
     sFolipBeforeGeneration := 'FOLIP - Before Generation';
     sFolipPluginFileName := 'FOLIP - After Generation';
     bLightPlugin := True;
+
+    //Get scaling
+    uiScale := Screen.PixelsPerInch * 100 / 96;
+    AddMessage('UI scale: ' + IntToStr(uiScale));
 
     if wbSimpleRecords then begin
         MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
@@ -233,7 +238,7 @@ var
 begin
     frm := TForm.Create(nil);
     try
-        frm.Caption := 'FOLIP HasDistantLOD Flag Remover';
+        frm.Caption := 'FOLIP - After Generation';
         frm.Width := 600;
         frm.Height := 510;
         frm.Position := poMainFormCenter;
@@ -250,16 +255,17 @@ begin
 		fImage.Parent := frm;
         fImage.Width := 576;
 		fImage.Height := 278;
-		fImage.Left := 8;
+		fImage.Left := 6;
 		fImage.Top := 12;
+        fImage.Stretch := True;
 
         gbOptions := TGroupBox.Create(frm);
         gbOptions.Parent := frm;
-        gbOptions.Left := 10;
+        gbOptions.Left := 6;
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - After Generation';
-        gbOptions.Height := 134;
+        gbOptions.Height := 104;
 
         edBeforeGen := TEdit.Create(gbOptions);
         edBeforeGen.Parent := gbOptions;
@@ -290,14 +296,14 @@ begin
         chkLightPlugin.Hint := 'Flags the output plugin as ESL.';
         chkLightPlugin.ShowHint := True;
 
-        btnStart := TButton.Create(gbOptions);
-        btnStart.Parent := gbOptions;
+        btnStart := TButton.Create(frm);
+        btnStart.Parent := frm;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := 102;
+        btnStart.Top := gbOptions.Top + gbOptions.Height + 24;
 
-        btnCancel := TButton.Create(gbOptions);
-        btnCancel.Parent := gbOptions;
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
         btnCancel.Caption := 'Cancel';
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
@@ -305,11 +311,11 @@ begin
         btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
         btnCancel.Left := btnStart.Left + btnStart.Width + 8;
 
-        pnl := TPanel.Create(gbOptions);
-        pnl.Parent := gbOptions;
-        pnl.Left := 8;
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := gbOptions.Left;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width - 16;
+        pnl.Width := gbOptions.Width;
         pnl.Height := 2;
 
         edPluginName.Text := sFolipPluginFileName;
@@ -317,6 +323,9 @@ begin
         chkLightPlugin.Checked := bLightPlugin;
 
         frm.ActiveControl := btnStart;
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
