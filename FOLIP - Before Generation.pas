@@ -1089,9 +1089,9 @@ end;
 function IsFullLOD(s: IInterface): Boolean;
 var
     model, editorid: string;
-    bIsFullLOD, bXESP: Boolean;
+    bIsFullLOD, bXESP, bRespect: Boolean;
     i: integer;
-    r, n, rCell: IInterface;
+    r, n, rCell, parentRef, xesp: IInterface;
 begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
@@ -1114,9 +1114,15 @@ begin
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
 
         bXESP := ElementExists(r, 'XESP');
+        if bXESP then begin
+            xesp := ElementByPath(r, 'XESP');
+            parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
+            bRespect := GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State');
+        end;
         if GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') then begin
             if not bXESP then continue;
-            if bXESP and GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') then continue;
+            if GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') then continue;
+            if bRespect then continue;
         end;
 
         iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
@@ -1126,7 +1132,7 @@ begin
         n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
         SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', 1);
         SetIsPersistent(n, True);
-        if bXESP then SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+        if bXESP and not bRespect then SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
 
         AddRefToMyFormlist(n, flNeverfades);
         slFullLODMessages.Add('IsFullLOD Reference:' + Name(n));
