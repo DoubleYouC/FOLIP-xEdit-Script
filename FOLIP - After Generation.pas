@@ -144,8 +144,8 @@ begin
         p := RefMastersDeterminePlugin(rCell);
         p := RefMastersDeterminePlugin(rWrld);
         p := RefMastersDeterminePlugin(r);
-        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(r, p, False, True);
     end;
     tlParents.Free;
@@ -158,8 +158,8 @@ begin
         p := RefMastersDeterminePlugin(rCell);
         p := RefMastersDeterminePlugin(rWrld);
         p := RefMastersDeterminePlugin(r);
-        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(r, p, False, True);
     end;
     tlNeverfades.Free;
@@ -171,8 +171,8 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         p := RefMastersDeterminePlugin(rCell);
         p := RefMastersDeterminePlugin(rWrld);
-        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(r, p, True, True);
     end;
     tlDecals.Free;
@@ -188,8 +188,8 @@ begin
         p := RefMastersDeterminePlugin(rCell);
         p := RefMastersDeterminePlugin(rWrld);
         p := RefMastersDeterminePlugin(r);
-        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(rWrld, p, False, True);
         n := wbCopyElementToFile(r, p, False, True);
         SetIsVisibleWhenDistant(n, False);
     end;

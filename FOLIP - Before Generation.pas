@@ -846,7 +846,7 @@ procedure ProcessEnableParents;
 }
 var
     i, pi, oi: integer;
-    p, m, r, n, base, rCell, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
+    p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
     parentFormid: string;
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin, bPluginHere, bPluginTemp: boolean;
     tlOppositeEnableRefs, tlEnableRefs: TList;
@@ -867,9 +867,17 @@ begin
         if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
+            rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
-            if not bPlugin and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-            if bPlugin and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
+            if not bPlugin and (tlMasterCells.IndexOf(rCell) = -1) then begin
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+            end;
+            if bPlugin and (tlPluginCells.IndexOf(rCell) = -1) then begin
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+            end;
             if bPluginHere <> bPlugin then RefMastersDeterminePlugin(p, bPlugin);
             m := wbCopyElementToFile(p, iCurrentPlugin, False, True);
             SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
@@ -936,16 +944,27 @@ begin
 
             // Ensure cell is added to prevent failure to copy reference.
             rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
+            rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
             bPluginHere := bPlugin;
-            if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-            if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+            if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+            end;
+            if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+            end;
 
             // Create replacer
             iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, bPlugin);
             if bPlugin <> bPluginHere then begin
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
-                if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                if tlPluginCells.IndexOf(rCell) = -1 then begin
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                end;
             end;
             oreplacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
             if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
@@ -962,15 +981,27 @@ begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
                 AddMessage(#9 + Name(r));
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 bPluginTemp := False;
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
                 bPluginHere := bPluginTemp;
-                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                end;
+                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                end;
                 iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
                 if bPluginTemp <> bPluginHere then begin
                     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                    if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
+                    if tlPluginCells.IndexOf(rCell) = -1 then begin
+                        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                    end;
                 end;
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
@@ -992,15 +1023,27 @@ begin
                 r := ObjectToElement(tlEnableRefs[oi]);
                 AddMessage(#9 + Name(r));
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 bPluginTemp := False;
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
                 bPluginHere := bPluginTemp;
-                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                end;
+                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
+                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                end;
                 iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
                 if bPluginTemp <> bPluginHere then begin
                     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                    if tlPluginCells.IndexOf(rCell) = -1 then wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
+                    if tlPluginCells.IndexOf(rCell) = -1 then begin
+                        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                    end;
                 end;
                 n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
@@ -1091,7 +1134,7 @@ var
     model, editorid: string;
     bIsFullLOD, bXESP, bRespect: Boolean;
     i: integer;
-    r, n, rCell, parentRef, xesp: IInterface;
+    r, n, rCell, rWrld, parentRef, xesp: IInterface;
 begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
@@ -1125,8 +1168,11 @@ begin
             if bRespect then continue;
         end;
 
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+        iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
         wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
 
         iCurrentPlugin := RefMastersDeterminePlugin(r, True);
         n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
@@ -1246,7 +1292,7 @@ function DuplicateRef(r, fakeStatic: IInterface; base: string): IInterface;
     Duplicates a placed reference and returns the duplicate.
 }
 var
-    n, wrld, rCell, wCell, nCell, ms, xesp, parentRef: IInterface;
+    n, rCell, rWrld, wCell, nCell, ms, xesp, parentRef: IInterface;
     bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
     parent: string;
@@ -1277,16 +1323,18 @@ begin
 
     //Copy cell to plugin
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+    rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
 
     //Handle persistent worldspace cell
     if GetIsPersistent(rCell) then begin
         c := wbPositionToGridCell(GetPosition(r));
-        wrld := LinksTo(ElementByIndex(rCell, 0));
-        wCell := WinningOverride(GetCellFromWorldspace(wrld, c.X, c.Y));
+        wCell := WinningOverride(GetCellFromWorldspace(rWrld, c.X, c.Y));
         if Assigned(wCell) then rCell := wCell;
     end;
 
+
     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
+    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
     if bPlugin then begin
         if not bParentWasPlugin then RefMastersDeterminePlugin(parentRef, bPlugin);
         if not bMswpWasPlugin then RefMastersDeterminePlugin(ms, bPlugin);
@@ -1295,7 +1343,9 @@ begin
     end
     else if tlMasterCells.IndexOf(rCell) = -1 then tlMasterCells.Add(rCell);
 
+
     nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
 
     if not Assigned(nCell) then begin
         AddMessage(Name(rCell) + ' could not be copied as a cell.');
