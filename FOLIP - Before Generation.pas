@@ -15,7 +15,7 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slFullLODMessages: TStringList;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
     sFolipPluginFileName: string;
@@ -66,7 +66,7 @@ begin
 
     CreateObjects;
     FetchRules;
-    TopLevelModPatternPaths;
+    slTopLevelModPatternPaths.Add('');
 
     if wbSimpleRecords then begin
         MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
@@ -117,6 +117,7 @@ begin
     ListStringsInStringList(slMessages);
     ListStringsInStringList(slMissingLODMessages);
     ListStringsInStringList(slFullLODMessages);
+    ListStringsInStringList(slMissingColorRemaps);
 
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
@@ -148,6 +149,7 @@ begin
     slMessages.Free;
     slMissingLODMessages.Free;
     slFullLODMessages.Free;
+    slMissingColorRemaps.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -197,6 +199,9 @@ begin
 
     slFullLODMessages := TStringList.Create;
     slFullLODMessages.Sorted := True;
+
+    slMissingColorRemaps := TStringList.Create;
+    slMissingColorRemaps.Sorted := True;
 
     //TJsonObjects
     joRules := TJsonObject.Create;
@@ -1139,11 +1144,11 @@ begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
     model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
-    if joRules.Contains(model) then begin
-        bIsFullLOD := StrToBool(joRules.O[model].S['bisfulllod']);
-    end
-    else if joRules.Contains(editorid) then begin
+    if joRules.Contains(editorid) then begin
         bIsFullLOD := StrToBool(joRules.O[editorid].S['bisfulllod']);
+    end
+    else if joRules.Contains(model) then begin
+        bIsFullLOD := StrToBool(joRules.O[model].S['bisfulllod']);
     end;
     if not bIsFullLOD then Exit;
     Result := true;
@@ -1539,7 +1544,10 @@ begin
             slTopPaths.Free;
             if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
             if not hasLODReplacementMaterial then begin
-                if ResourceExists(replacementMat) and (colorRemap = '') then slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
+                if ResourceExists(replacementMat) then begin
+                    if colorRemap = '' then slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
+                    else slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                end
                 else AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
                 continue;
             end;
@@ -1723,24 +1731,6 @@ begin
     SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
     SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
     SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
-end;
-
-procedure TopLevelModPatternPaths;
-{
-    Say you have a major mod that uses a top level pattern identifier, such as DLC01 for Automatron, for all of its assets.
-    We add these in this procedure so we know to use that pattern for identification of assets.
-}
-begin
-    slTopLevelModPatternPaths.Add('dlc01\');
-    slTopLevelModPatternPaths.Add('dlc02\');
-    slTopLevelModPatternPaths.Add('dlc03\');
-    slTopLevelModPatternPaths.Add('dlc04\');
-    slTopLevelModPatternPaths.Add('dlc05\');
-    slTopLevelModPatternPaths.Add('dlc06\');
-    slTopLevelModPatternPaths.Add('capitalwasteland\');
-    slTopLevelModPatternPaths.Add('dlclondon\');
-
-    slTopLevelModPatternPaths.Add('');
 end;
 
 procedure CollectRecords;
@@ -2184,25 +2174,41 @@ function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths
     Given a model and level, checks to see if an LOD model exists and returns it.
 }
 var
-    searchModel, p1, p2: string;
+    searchModel, p1, p2, p3: string;
     i: integer;
+    bColorRemap: Boolean;
 begin
 
     for i := 0 to Pred(slTopPaths.Count) do begin
         // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
         // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
-        searchModel := TrimLeftChars(searchModel, 4) + colorRemap + '_lod';
+        searchModel := TrimLeftChars(searchModel, 4);
+
+        bColorRemap := false;
+        if Length(colorRemap) > 0 then bColorRemap := true;
+
+        if bColorRemap then begin
+            //p3 is for specific color remap level lod like 'model_lod_1.nif'
+            p3 := searchModel + colorRemap + '_lod_' + level + '.nif';
+            if slNifFiles.IndexOf(p3) > -1 then begin
+                Result := TrimRightChars(p3, 7);
+                Exit;
+            end;
+        end;
 
         //p1 is for specific level lod like 'model_lod_1.nif'
-        p1 := searchModel + '_' + level + '.nif';
+        p1 := searchModel + '_lod_' + level + '.nif';
         if slNifFiles.IndexOf(p1) > -1 then begin
-            Result := TrimRightChars(p1, 7);
-            Exit;
+            if bColorRemap then slMissingColorRemaps.Add('Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model)
+            else begin
+                Result := TrimRightChars(p1, 7);
+                Exit;
+            end;
         end;
 
         //p2 is for non-specific level lod like 'model_lod.nif'
-        p2 := searchModel + '.nif';
+        p2 := searchModel + '_lod.nif';
         if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
             Result := TrimRightChars(p2, 7);
             Exit;
@@ -2388,12 +2394,27 @@ function IsInLODDir(f, m: string): Boolean;
 }
 var
     i: integer;
+    parts: TStringDynArray;
+    between: string;
 begin
     Result := False;
-    for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
-        if ContainsText(f, m + '\' + slTopLevelModPatternPaths[i] + 'lod\') then begin
-            Result := True;
-            Exit;
+    if LeftStr(f, Length(m)) <> m then Exit;
+    parts := SplitString(f, '\');
+    for i := 1 to 2 do begin
+        try
+            if parts[i] = 'lod' then begin
+                Result := True;
+                if i = 2 then begin
+                    between := parts[1] + '\';
+                    if slTopLevelModPatternPaths.IndexOf(between) = -1 then begin
+                        AddMessage('Added sub path: ' + between);
+                        slTopLevelModPatternPaths.Add(between);
+                    end;
+                end;
+                Break;
+            end;
+        except
+            Break;
         end;
     end;
 end;
