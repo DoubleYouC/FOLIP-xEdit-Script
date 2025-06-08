@@ -1300,7 +1300,7 @@ var
     n, rCell, rWrld, wCell, nCell, ms, xesp, parentRef: IInterface;
     bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
-    parent: string;
+    parent, parentFormid: string;
 begin
     Result := nil;
     bPlugin := False;
@@ -1406,7 +1406,13 @@ begin
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
         end;
     end;
-    SetElementEditValues(n, 'XESP\Reference', parent);
+
+    parentFormid := IntToHex(GetLoadOrderFormID(parentRef), 8);
+    try
+        SetElementEditValues(n, 'XESP\Reference', parentFormid);
+    except
+        AddMessage('ERROR: Failed to set XESP Reference for ' + Name(r) + ' to ' + parent);
+    end;
 
     AddRefToMyFormlist(n, flFakeStatics);
     Result := n;
@@ -1867,66 +1873,216 @@ procedure FilesInContainers(containers: TStringList);
     Retrieves the ba2 packed files.
 }
 var
-    slArchivedFiles: TStringList;
+    slArchivedFiles, slVanilla, slModded: TStringList;
     i: integer;
-    f, archive, tp: string;
+    f, fNoLod, archive, tp: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
     slArchivedFiles.Duplicates := dupIgnore;
-    for i := 0 to Pred(containers.Count) do begin
-        archive := TrimRightChars(containers[i], Length(wbDataPath));
-        if ContainsText(archive, ' - Animations.ba2') then continue;
-        if ContainsText(archive, ' - Interface.ba2') then continue;
-        if ContainsText(archive, ' - MeshesExtra.ba2') then continue;
-        if ContainsText(archive, ' - Nvflex.ba2') then continue;
-        if ContainsText(archive, ' - Shaders.ba2') then continue;
-        if ContainsText(archive, ' - Sounds.ba2') then continue;
-        if ContainsText(archive, ' - Startup.ba2') then continue;
-        if ContainsText(archive, ' - Textures.ba2') then continue;
-        if ContainsText(archive, ' - Textures1.ba2') then continue;
-        if ContainsText(archive, ' - Textures2.ba2') then continue;
-        if ContainsText(archive, ' - Textures3.ba2') then continue;
-        if ContainsText(archive, ' - Textures4.ba2') then continue;
-        if ContainsText(archive, ' - Textures5.ba2') then continue;
-        if ContainsText(archive, ' - Textures6.ba2') then continue;
-        if ContainsText(archive, ' - Textures7.ba2') then continue;
-        if ContainsText(archive, ' - Textures8.ba2') then continue;
-        if ContainsText(archive, ' - Textures9.ba2') then continue;
-        if ContainsText(archive, ' - Voices.ba2') then continue;
-        if ContainsText(archive, ' - Voices_cn.ba2') then continue;
-        if ContainsText(archive, ' - Voices_de.ba2') then continue;
-        if ContainsText(archive, ' - Voices_en.ba2') then continue;
-        if ContainsText(archive, ' - Voices_es.ba2') then continue;
-        if ContainsText(archive, ' - Voices_esmx.ba2') then continue;
-        if ContainsText(archive, ' - Voices_fr.ba2') then continue;
-        if ContainsText(archive, ' - Voices_it.ba2') then continue;
-        if ContainsText(archive, ' - Voices_ja.ba2') then continue;
-        if ContainsText(archive, ' - Voices_pl.ba2') then continue;
-        if ContainsText(archive, ' - Voices_ptbr.ba2') then continue;
-        if ContainsText(archive, ' - Voices_ru.ba2') then continue;
-        if archive <> '' then AddMessage('Loaded archive: ' + archive);
-        ResourceList(containers[i], slArchivedFiles);
-    end;
-    AddMessage('Please wait while we detect all LOD assets...');
+    slVanilla := TStringList.Create;
+    slModded := TStringList.Create;
+    try
+        for i := 0 to Pred(containers.Count) do begin
+            archive := TrimRightChars(containers[i], Length(wbDataPath));
+            if ContainsText(archive, ' - Animations.ba2') then continue;
+            if ContainsText(archive, ' - Interface.ba2') then continue;
+            if ContainsText(archive, ' - MeshesExtra.ba2') then continue;
+            if ContainsText(archive, ' - Nvflex.ba2') then continue;
+            if ContainsText(archive, ' - Shaders.ba2') then continue;
+            if ContainsText(archive, ' - Sounds.ba2') then continue;
+            if ContainsText(archive, ' - Startup.ba2') then continue;
+            if ContainsText(archive, ' - Textures.ba2') then continue;
+            if ContainsText(archive, ' - Textures1.ba2') then continue;
+            if ContainsText(archive, ' - Textures2.ba2') then continue;
+            if ContainsText(archive, ' - Textures3.ba2') then continue;
+            if ContainsText(archive, ' - Textures4.ba2') then continue;
+            if ContainsText(archive, ' - Textures5.ba2') then continue;
+            if ContainsText(archive, ' - Textures6.ba2') then continue;
+            if ContainsText(archive, ' - Textures7.ba2') then continue;
+            if ContainsText(archive, ' - Textures8.ba2') then continue;
+            if ContainsText(archive, ' - Textures9.ba2') then continue;
+            if ContainsText(archive, ' - Voices.ba2') then continue;
+            if ContainsText(archive, ' - Voices_cn.ba2') then continue;
+            if ContainsText(archive, ' - Voices_de.ba2') then continue;
+            if ContainsText(archive, ' - Voices_en.ba2') then continue;
+            if ContainsText(archive, ' - Voices_es.ba2') then continue;
+            if ContainsText(archive, ' - Voices_esmx.ba2') then continue;
+            if ContainsText(archive, ' - Voices_fr.ba2') then continue;
+            if ContainsText(archive, ' - Voices_it.ba2') then continue;
+            if ContainsText(archive, ' - Voices_ja.ba2') then continue;
+            if ContainsText(archive, ' - Voices_pl.ba2') then continue;
+            if ContainsText(archive, ' - Voices_ptbr.ba2') then continue;
+            if ContainsText(archive, ' - Voices_ru.ba2') then continue;
+            if archive <> '' then AddMessage('Loaded archive: ' + archive);
 
-    for i := 0 to Pred(slArchivedFiles.Count) do begin
-        f := LowerCase(slArchivedFiles[i]);
+            //Check if the archive is a vanilla archive.
+            if ContainsText(archive, 'DLCCoast - Main.ba2') or
+            ContainsText(archive, 'DLCNukaWorld - Main.ba2') or
+            ContainsText(archive, 'DLCworkshop01 - Main.ba2') or
+            ContainsText(archive, 'DLCworkshop02 - Main.ba2') or
+            ContainsText(archive, 'DLCworkshop03 - Main.ba2') or
+            ContainsText(archive, 'Fallout4 - Materials.ba2') then ResourceList(containers[i], slVanilla)
+            else ResourceList(containers[i], slModded);
 
-        //materials or meshes
-        if IsInLODDir(f, 'materials') then begin
-            slMatFiles.Add(f);
-            if not bReportNonLODMaterials then continue;
-            if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
-        end
-        else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
-            slNifFiles.Add(f);
-            if not bReportUVs then continue;
-            //AddMessage(f);
-            if MeshOutsideUVRange(f) then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
+            //Add all files in the archive to the list of archived files.
+            ResourceList(containers[i], slArchivedFiles);
         end;
+        for i := 0 to Pred(slVanilla.Count) do begin
+            slVanilla[i] := LowerCase(slVanilla[i]);
+        end;
+        for i := 0 to Pred(slModded.Count) do begin
+            slModded[i] := LowerCase(slModded[i]);
+        end;
+
+        AddMessage('Please wait while we detect all LOD assets...');
+
+        for i := 0 to Pred(slArchivedFiles.Count) do begin
+            f := LowerCase(slArchivedFiles[i]);
+
+            //materials or meshes
+            if IsInLODDir(f, 'materials') then begin
+                slMatFiles.Add(f);
+
+                fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
+                if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
+                    if not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm') then CompareModdedMaterialToVanilla(fNoLod);
+                end;
+
+                if not bReportNonLODMaterials then continue;
+                if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
+            end
+            else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
+                slNifFiles.Add(f);
+                if not bReportUVs then continue;
+                //AddMessage(f);
+                if MeshOutsideUVRange(f) then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
+            end;
+        end;
+    finally
+        slVanilla.Free;
+        slModded.Free;
+        slArchivedFiles.Free;
     end;
-    slArchivedFiles.Free;
+end;
+
+function FetchVanillaContainer(f: string): string;
+{
+    Fetches the vanilla container for a given file.
+}
+var
+    i, li: integer;
+    slVanilla, vanillaContainers: TStringList;
+    archive: string;
+begin
+    Result := '';
+    slVanilla := TStringList.Create;
+    vanillaContainers := TStringList.Create;
+    try
+        vanillaContainers.Add(wbDataPath + 'Fallout4 - Materials.ba2');
+        vanillaContainers.Add(wbDataPath + 'DLCworkshop01 - Main.ba2');
+        vanillaContainers.Add(wbDataPath + 'DLCworkshop02 - Main.ba2');
+        vanillaContainers.Add(wbDataPath + 'DLCworkshop03 - Main.ba2');
+        vanillaContainers.Add(wbDataPath + 'DLCCoast - Main.ba2');
+        vanillaContainers.Add(wbDataPath + 'DLCNukaWorld - Main.ba2');
+        for i := Pred(vanillaContainers.Count) downto 0 do begin
+            ResourceList(vanillaContainers[i], slVanilla);
+            for li := 0 to Pred(slVanilla.Count) do begin
+                slVanilla[li] := LowerCase(slVanilla[li]);
+            end;
+            if slVanilla.IndexOf(f) > -1 then begin
+                Result := vanillaContainers[i];
+                Exit;
+            end;
+        end;
+    finally
+        slVanilla.Free;
+        vanillaContainers.Free;
+    end;
+end;
+
+function CompareModdedMaterialToVanilla(f: string): Boolean;
+{
+    Compares a modded material file to the vanilla material file.
+    Returns True if the modded material is different from the vanilla material.
+}
+var
+    i: integer;
+    bgsmModded, bgsmVanilla: TwbBGSMFile;
+    vanillaContainer: string;
+begin
+    Result := False; //Assume no differences found.
+    bgsmModded := TwbBGSMFile.Create;
+    bgsmVanilla := TwbBGSMFile.Create;
+    try
+        if not ResourceExists(f) then begin
+            AddMessage('Warning: ' + f + ' does not exist.');
+
+            Exit;
+        end;
+        bgsmModded.LoadFromResource(f);
+
+        //Fetch vanilla container
+        vanillaContainer := FetchVanillaContainer(f);
+        if vanillaContainer = '' then begin
+            AddMessage('Warning: Could not find vanilla container for ' + f);
+            Exit;
+        end;
+
+        bgsmVanilla.LoadFromResource(vanillaContainer, f);
+
+        if bgsmVanilla.NativeValues['UOffset'] <> bgsmModded.NativeValues['UOffset'] then begin
+            AddMessage('Warning: ' + f + ' has a modified UOffset value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['VOffset'] <> bgsmModded.NativeValues['VOffset'] then begin
+            AddMessage('Warning: ' + f + ' has a modified VOffset value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['UScale'] <> bgsmModded.NativeValues['UScale'] then begin
+            AddMessage('Warning: ' + f + ' has a modified UScale value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['VScale'] <> bgsmModded.NativeValues['VScale'] then begin
+            AddMessage('Warning: ' + f + ' has a modified VScale value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['AlphaTest'] <> bgsmModded.NativeValues['AlphaTest'] then begin
+            AddMessage('Warning: ' + f + ' has a modified AlphaTest value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['TwoSided'] <> bgsmModded.NativeValues['TwoSided'] then begin
+            AddMessage('Warning: ' + f + ' has a modified TwoSided value.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['GrayscaleToPaletteColor'] <> bgsmModded.NativeValues['GrayscaleToPaletteColor'] then begin
+            AddMessage('Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
+            Result := True;
+        end;
+        if bgsmVanilla.EditValues['Textures\Diffuse'] <> bgsmModded.EditValues['Textures\Diffuse'] then begin
+            AddMessage('Warning: ' + f + ' has a modified Diffuse texture.');
+            Result := True;
+        end;
+        if bgsmVanilla.EditValues['Textures\Normal'] <> bgsmModded.EditValues['Textures\Normal'] then begin
+            AddMessage('Warning: ' + f + ' has a modified Normal texture.');
+            Result := True;
+        end;
+        if bgsmVanilla.EditValues['Textures\SmoothSpec'] <> bgsmModded.EditValues['Textures\SmoothSpec'] then begin
+            AddMessage('Warning: ' + f + ' has a modified Specular texture.');
+            Result := True;
+        end;
+        if bgsmVanilla.EditValues['Textures\Grayscale'] <> bgsmModded.EditValues['Textures\Grayscale'] then begin
+            AddMessage('Warning: ' + f + ' has a modified Grayscale palette texture.');
+            Result := True;
+        end;
+        if bgsmVanilla.NativeValues['GrayscaleToPaletteScale'] <> bgsmModded.NativeValues['GrayscaleToPaletteScale'] then begin
+            AddMessage('Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
+            Result := True;
+        end;
+    finally
+        bgsmModded.free;
+        bgsmVanilla.free;
+    end;
 end;
 
 function MeshOutsideUVRange(f: string): Boolean;
