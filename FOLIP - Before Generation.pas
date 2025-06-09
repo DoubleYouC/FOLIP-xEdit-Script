@@ -1300,7 +1300,7 @@ var
     n, rCell, rWrld, wCell, nCell, ms, xesp, parentRef: IInterface;
     bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
-    parent, parentFormid: string;
+    parent: string;
 begin
     Result := nil;
     bPlugin := False;
@@ -1407,12 +1407,7 @@ begin
         end;
     end;
 
-    parentFormid := IntToHex(GetLoadOrderFormID(parentRef), 8);
-    try
-        SetElementEditValues(n, 'XESP\Reference', parentFormid);
-    except
-        AddMessage('ERROR: Failed to set XESP Reference for ' + Name(r) + ' to ' + parent);
-    end;
+    SetElementEditValues(n, 'XESP\Reference', parent);
 
     AddRefToMyFormlist(n, flFakeStatics);
     Result := n;
@@ -1655,7 +1650,7 @@ begin
                 end;
             end;
             if bgsmOm.NativeValues['UOffset'] <> bgsmRm.NativeValues['UOffset'] then begin
-                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UOffset from ' + #13#10 + #9 + rm);
+                if om <> 'materials\lod\setdressing\signage\billboardsmtall02.bgsm' then slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UOffset from ' + #13#10 + #9 + rm);
             end;
             if bgsmOm.NativeValues['VOffset'] <> bgsmRm.NativeValues['VOffset'] then begin
                 slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different VOffset from ' + #13#10 + #9 + rm);
