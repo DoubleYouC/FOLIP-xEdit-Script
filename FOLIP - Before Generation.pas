@@ -1476,125 +1476,133 @@ var
     i, si, tp, sc, cnt, n, oms: integer;
     m, mn, substitutions, sub: IInterface;
     colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
-    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy: TStringList;
+    slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy, slMismatchedMaterials: TStringList;
     hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
 begin
     slDummy := TStringList.Create;
     //store missing lod materials here
     slMissingMaterials := TStringList.Create;
+    slMismatchedMaterials := TStringList.Create;
+    slMismatchedMaterials.Sorted := True;
+    slMismatchedMaterials.Duplicates := dupIgnore;
+    try
+        for i := 0 to Pred(tlMswp.Count) do begin
+            m := WinningOverride(ObjectToElement(tlMswp[i]));
 
-    for i := 0 to Pred(tlMswp.Count) do begin
-        m := WinningOverride(ObjectToElement(tlMswp[i]));
+            slLODSubOriginal := TStringList.Create;
+            slLODSubReplacement := TStringList.Create;
 
-        slLODSubOriginal := TStringList.Create;
-        slLODSubReplacement := TStringList.Create;
-
-        //make a list of existing substitutions, which we will need to then check to make sure we don't add a duplicate substitution.
-        slExistingSubstitutions := TStringList.Create;
-        substitutions := ElementByName(m, 'Material Substitutions');
-        //foreach substitution in substitutions
-        for si := 0 to Pred(ElementCount(substitutions)) do begin
-            //the substitution
-            sub := ElementByIndex(substitutions, si);
-            if not ElementExists(sub, 'BNAM - Original Material') then continue;
-            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
-            if originalMat = '' then continue;
-            if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
-            slExistingSubstitutions.Add(originalMat);
-        end;
-
-        //We need to loop through the substitutions again to actually do the work now that we know what the existing substitutions are.
-        //foreach substitution in substitutions
-        for si := 0 to Pred(ElementCount(substitutions)) do begin
-            //the substitution
-            sub := ElementByIndex(substitutions, si);
-            if not ElementExists(sub, 'BNAM - Original Material') then continue;
-            if not ElementExists(sub, 'SNAM - Replacement Material') then continue;
-            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
-            if originalMat = '' then continue;
-            if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
-
-            slTopPaths := TStringList.Create;
-            for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
-                if ContainsText(originalMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+            //make a list of existing substitutions, which we will need to then check to make sure we don't add a duplicate substitution.
+            slExistingSubstitutions := TStringList.Create;
+            substitutions := ElementByName(m, 'Material Substitutions');
+            //foreach substitution in substitutions
+            for si := 0 to Pred(ElementCount(substitutions)) do begin
+                //the substitution
+                sub := ElementByIndex(substitutions, si);
+                if not ElementExists(sub, 'BNAM - Original Material') then continue;
+                originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+                if originalMat = '' then continue;
+                if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
+                slExistingSubstitutions.Add(originalMat);
             end;
 
-            hasLODOriginalMaterial := False;
-            slLODOriginals := TStringList.Create;
-            om := LODMaterial(originalMat, '', slTopPaths, slExistingSubstitutions, slLODOriginals);
-            slTopPaths.Free;
-            if slLODOriginals.Count > 0 then hasLODOriginalMaterial := True;
-            if not hasLODOriginalMaterial then continue;
-            //ListStringsInStringList(slLODOriginals);
+            //We need to loop through the substitutions again to actually do the work now that we know what the existing substitutions are.
+            //foreach substitution in substitutions
+            for si := 0 to Pred(ElementCount(substitutions)) do begin
+                //the substitution
+                sub := ElementByIndex(substitutions, si);
+                if not ElementExists(sub, 'BNAM - Original Material') then continue;
+                if not ElementExists(sub, 'SNAM - Replacement Material') then continue;
+                originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+                if originalMat = '' then continue;
+                if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
 
-            replacementMat := LowerCase(GetElementEditValues(sub, 'SNAM - Replacement Material'));
-            if replacementMat = '' then continue;
-            if LeftStr(replacementMat, 10) <> 'materials\' then replacementMat := 'materials\' + replacementMat;
+                slTopPaths := TStringList.Create;
+                for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+                    if ContainsText(originalMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+                end;
 
-            colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
-            if ((originalMat = replacementMat) and (colorRemap = '9')) then begin
-                AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Original Material being the same as the Replacement Material: ' + #9 + originalMat + #9 + replacementMat);
+                hasLODOriginalMaterial := False;
+                slLODOriginals := TStringList.Create;
+                om := LODMaterial(originalMat, '', slTopPaths, slExistingSubstitutions, slLODOriginals);
+                slTopPaths.Free;
+                if slLODOriginals.Count > 0 then hasLODOriginalMaterial := True;
+                if not hasLODOriginalMaterial then continue;
+                //ListStringsInStringList(slLODOriginals);
+
+                replacementMat := LowerCase(GetElementEditValues(sub, 'SNAM - Replacement Material'));
+                if replacementMat = '' then continue;
+                if LeftStr(replacementMat, 10) <> 'materials\' then replacementMat := 'materials\' + replacementMat;
+
+                colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
+                if ((originalMat = replacementMat) and (colorRemap = '9')) then begin
+                    AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Original Material being the same as the Replacement Material: ' + #9 + originalMat + #9 + replacementMat);
+                    continue;
+                end;
+                if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
+
+
+                slTopPaths := TStringList.Create;
+                for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+                    if ContainsText(replacementMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+                end;
+
+                hasLODReplacementMaterial := False;
+                slLODReplacements := TStringList.Create;
+                rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slDummy, slLODReplacements);
+                slTopPaths.Free;
+                if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
+                if not hasLODReplacementMaterial then begin
+                    if ResourceExists(replacementMat) then begin
+                        if colorRemap = '' then slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
+                        else slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                    end
+                    else AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
+                    continue;
+                end;
+                //ListStringsInStringList(slLODReplacements);
+
+                for oms := 0 to Pred(slLODOriginals.Count) do begin
+                    om := slLODOriginals[oms];
+                    if slLODSubOriginal.IndexOf(om) > -1 then continue;
+                    if slExistingSubstitutions.IndexOf('materials\' + om) > -1 then continue;
+                    rm := slLODReplacements[0];
+                    if om = rm then continue;
+                    slLODSubOriginal.Add(om);
+                    slLODSubReplacement.Add(rm);
+                    CompareMaterialSwaps(slMismatchedMaterials, om, rm);
+                end;
+
+                slLODReplacements.Free;
+                slLODOriginals.Free;
+            end;
+
+            //continue if no changes are required.
+            cnt := slLODSubOriginal.Count;
+            if cnt < 1 then begin
+                slLODSubOriginal.Free;
+                slLODSubReplacement.Free;
                 continue;
             end;
-            if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
 
-
-            slTopPaths := TStringList.Create;
-            for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
-                if ContainsText(replacementMat, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+            //Changes required, so add material swap to patch
+            iCurrentPlugin := RefMastersDeterminePlugin(m, True);
+            mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
+            for n := 0 to Pred(cnt) do begin
+                //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
+                AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
             end;
-
-            hasLODReplacementMaterial := False;
-            slLODReplacements := TStringList.Create;
-            rm := LODMaterial(replacementMat, colorRemap, slTopPaths, slDummy, slLODReplacements);
-            slTopPaths.Free;
-            if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
-            if not hasLODReplacementMaterial then begin
-                if ResourceExists(replacementMat) then begin
-                    if colorRemap = '' then slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
-                    else slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
-                end
-                else AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
-                continue;
-            end;
-            //ListStringsInStringList(slLODReplacements);
-
-            for oms := 0 to Pred(slLODOriginals.Count) do begin
-                om := slLODOriginals[oms];
-                if slLODSubOriginal.IndexOf(om) > -1 then continue;
-                if slExistingSubstitutions.IndexOf('materials\' + om) > -1 then continue;
-                rm := slLODReplacements[0];
-                if om = rm then continue;
-                slLODSubOriginal.Add(om);
-                slLODSubReplacement.Add(rm);
-            end;
-
-            slLODReplacements.Free;
-            slLODOriginals.Free;
-        end;
-
-        //continue if no changes are required.
-        cnt := slLODSubOriginal.Count;
-        if cnt < 1 then begin
             slLODSubOriginal.Free;
             slLODSubReplacement.Free;
-            continue;
         end;
 
-        //Changes required, so add material swap to patch
-        iCurrentPlugin := RefMastersDeterminePlugin(m, True);
-        mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
-        for n := 0 to Pred(cnt) do begin
-            //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
-            AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
-        end;
-        slLODSubOriginal.Free;
-        slLODSubReplacement.Free;
+        ListStringsInStringList(slMissingMaterials);
+        ListStringsInStringList(slMismatchedMaterials);
+    finally
+        slMissingMaterials.Free;
+        slMismatchedMaterials.Free;
+        slDummy.Free;
     end;
-
-    ListStringsInStringList(slMissingMaterials);
-    slMissingMaterials.Free;
-    slDummy.Free;
 end;
 
 procedure AddMaterialSwap(e: IInterface; om, rm: String);
@@ -1608,6 +1616,82 @@ begin
     ms := ElementAssign(substitutions, HighInteger, nil, False);
     SetElementNativeValues(ms, 'BNAM - Original Material', om);
     SetElementNativeValues(ms, 'SNAM - Replacement Material', rm);
+end;
+
+procedure CompareMaterialSwaps(slMismatchedMaterials: TStringList; om, rm: String);
+{
+    Compares two material swaps and adds mismatched materials to the provided list.
+}
+var
+    bgsmOm, bgsmRm: TwbBGSMFile;
+    bgemOm, bgemRm: TwbBGEMFile;
+begin
+    om := wbNormalizeResourceName(om, resMaterial);
+    rm := wbNormalizeResourceName(rm, resMaterial);
+
+    if not ResourceExists(om) then begin
+        AddMessage('Error: ' + om + ' does not exist.');
+        Exit;
+    end;
+    if not ResourceExists(rm) then begin
+        AddMessage('Error: ' + rm + ' does not exist.');
+        Exit;
+    end;
+    bgsmOm := TwbBGSMFile.Create;
+    bgsmRm := TwbBGSMFile.Create;
+    bgemOm := TwbBGEMFile.Create;
+    bgemRm := TwbBGEMFile.Create;
+    try
+        if RightStr(om, 5) = '.bgsm' then begin
+            bgsmOm.LoadFromResource(om);
+            bgsmRm.LoadFromResource(rm);
+
+            if bgsmOm.NativeValues['TwoSided'] <> bgsmRm.NativeValues['TwoSided'] then begin
+                if bgsmOm.EditValues['TwoSided'] = 'yes' then begin
+                    slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
+                    bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
+                    EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(rm));
+                    bgsmRm.SaveToFile(ScriptsPath() + 'FOLIP\output\' + rm);
+                end;
+            end;
+            if bgsmOm.NativeValues['UOffset'] <> bgsmRm.NativeValues['UOffset'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UOffset from ' + #13#10 + #9 + rm);
+            end;
+            if bgsmOm.NativeValues['VOffset'] <> bgsmRm.NativeValues['VOffset'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different VOffset from ' + #13#10 + #9 + rm);
+            end;
+            if bgsmOm.NativeValues['UScale'] <> bgsmRm.NativeValues['UScale'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UScale from ' + #13#10 + #9 + rm);
+            end;
+            if bgsmOm.NativeValues['VScale'] <> bgsmRm.NativeValues['VScale'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different VScale from ' + #13#10 + #9 + rm);
+            end;
+        end
+        else if RightStr(om, 5) = '.bgem' then begin
+            bgemOm.LoadFromResource(om);
+            bgemRm.LoadFromResource(rm);
+            if bgemOm.NativeValues['TwoSided'] <> bgemRm.NativeValues['TwoSided'] then begin
+                if bgsmOm.EditValues['TwoSided'] = 'yes' then slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
+            end;
+            if bgemOm.NativeValues['UOffset'] <> bgemRm.NativeValues['UOffset'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UOffset from ' + #13#10 + #9 + rm);
+            end;
+            if bgemOm.NativeValues['VOffset'] <> bgemRm.NativeValues['VOffset'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different VOffset from ' + #13#10 + #9 + rm);
+            end;
+            if bgemOm.NativeValues['UScale'] <> bgemRm.NativeValues['UScale'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different UScale from ' + #13#10 + #9 + rm);
+            end;
+            if bgemOm.NativeValues['VScale'] <> bgemRm.NativeValues['VScale'] then begin
+                slMismatchedMaterials.Add('Warning: ' + om + #9 + ' has a different VScale from ' + #13#10 + #9 + rm);
+            end;
+        end;
+    finally
+        bgsmOm.Free;
+        bgsmRm.Free;
+        bgemOm.Free;
+        bgemRm.Free;
+    end;
 end;
 
 procedure AssignLODModelsList;
@@ -2629,6 +2713,16 @@ function TrimLeftChars(s: string; chars: integer): string;
 }
 begin
     Result := LeftStr(s, Length(s) - chars);
+end;
+
+procedure EnsureDirectoryExists(f: string);
+{
+    Create directories if they do not exist.
+}
+begin
+    if not DirectoryExists(f) then
+        if not ForceDirectories(f) then
+            raise Exception.Create('Can not create destination directory ' + f);
 end;
 
 procedure ListStringsInStringList(sl: TStringList);
