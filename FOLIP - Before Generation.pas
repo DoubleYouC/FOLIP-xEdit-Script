@@ -851,7 +851,7 @@ procedure ProcessEnableParents;
 }
 var
     i, pi, oi: integer;
-    p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IInterface;
+    p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer, xesp: IInterface;
     parentFormid: string;
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin, bPluginHere, bPluginTemp: boolean;
     tlOppositeEnableRefs, tlEnableRefs: TList;
@@ -1019,7 +1019,8 @@ begin
             enableParentReplacer := GetSuitableReplacement;
             iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, bPlugin);
             ereplacer := wbCopyElementToFile(enableParentReplacer, iCurrentPlugin, False, True);
-            Add(ereplacer, 'XESP', True);
+            xesp := Add(ereplacer, 'XESP', True);
+            ElementAssign(xesp, 0, nil, False);
             SetElementEditValues(ereplacer, 'XESP\Reference', parentFormid);
             SetElementEditValues(ereplacer, 'NAME', '000e4610');
             SetElementNativeValues(ereplacer, 'Record Header\Record Flags\LOD Respects Enable State', 1);
@@ -1297,7 +1298,7 @@ function DuplicateRef(r, fakeStatic: IInterface; base: string): IInterface;
     Duplicates a placed reference and returns the duplicate.
 }
 var
-    n, rCell, rWrld, wCell, nCell, ms, xesp, parentRef: IInterface;
+    n, rCell, rWrld, wCell, nCell, ms, xesp, xespDup, parentRef: IInterface;
     bHasOppositeParent, bPlugin, bParent, bParentWasPlugin, bMswpWasPlugin, bFakeStaticWasPlugin: Boolean;
     c: TwbGridCell;
     parent: string;
@@ -1392,7 +1393,7 @@ begin
     SetElementNativeValues(n, 'DATA\Rotation\Z', GetElementNativeValues(r, 'DATA\Rotation\Z'));
 
     //  Set XESP
-    Add(n, 'XESP', True);
+    xespDup := Add(n, 'XESP', True);
     if bParent then begin
         parent := GetElementEditValues(r, 'XESP\Reference');
         bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
@@ -1407,6 +1408,7 @@ begin
         end;
     end;
 
+    ElementAssign(xespDup, 0, nil, False);
     SetElementEditValues(n, 'XESP\Reference', parent);
 
     AddRefToMyFormlist(n, flFakeStatics);
