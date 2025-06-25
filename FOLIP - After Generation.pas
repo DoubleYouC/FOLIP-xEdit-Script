@@ -110,6 +110,33 @@ begin
     Result := 0;
 end;
 
+function DoesStatHaveCobj(r: IInterface): Boolean;
+{
+    Checks if the STAT record has a COBJ.
+}
+var
+    i, j: integer;
+    e, f: IInterface;
+begin
+    Result := False;
+    for i := Pred(ReferencedByCount(r)) downto 0 do begin
+        e := ReferencedByIndex(r, i);
+        if Signature(e) = 'COBJ' then begin
+            Result := True;
+            Exit;
+        end
+        else if Signature(e) = 'FLST' then begin
+            for j := Pred(ElementCount(e)) downto 0 do begin
+                f := ElementByIndex(e, j);
+                if Signature(f) = 'COBJ' then begin
+                    Result := True;
+                    Exit;
+                end;
+            end;
+        end;
+    end;
+end;
+
 procedure SpecificRecordEdits;
 {
     Carries out specific record changes.
