@@ -800,7 +800,7 @@ begin
         RemoveNode(GroupBySignature(iFolipPluginFile, 'STAT'));
     end;
     if HasGroup(iFolipPluginFile, 'MSWP') then begin
-        RemoveNode(GroupBySignature(iFolipPluginFile, 'WRLD'));
+        RemoveNode(GroupBySignature(iFolipPluginFile, 'MSWP'));
     end;
     if HasGroup(iFolipPluginFile, 'CELL') then begin
         RemoveNode(GroupBySignature(iFolipPluginFile, 'CELL'));
@@ -2173,13 +2173,14 @@ function MeshOutsideUVRange(f: string): Boolean;
 var
     tsUV: TStrings;
     j, k, vertexCount, iTimesOutsideRange: integer;
-    uv, u, v: string;
+    uv, u, v, mat: string;
     nif: TwbNifFile;
     arr, vertex: TdfElement;
     block, b: TwbNifBlock;
-    bWasEverAbleToCheck, bIsTrishape: boolean;
+    bWasEverAbleToCheck, bIsTrishape, bModified: boolean;
 begin
     bWasEverAbleToCheck := False;
+    bModified := False;
     iTimesOutsideRange := 0;
     nif := TwbNifFile.Create;
     Result := True;
@@ -2191,6 +2192,18 @@ begin
             bIsTrishape := False;
             //if ContainsText(block.Name, 'BSTriShape') then bIsTrishape := True;
             //if ContainsText(block.Name, 'BSMeshLODTriShape') then bIsTrishape := True;
+            if block.BlockType = 'BSLightingShaderProperty' then begin
+                mat := block.EditValues['Name'];
+                if not SameText(ExtractFileExt(mat), '.bgsm') then begin
+                    AddMessage('Warning: ' + f + #9 + ' does not specify a material');
+                    Continue;
+                end;
+                mat := wbNormalizeResourceName(mat, resMaterial);
+                if not ResourceExists(mat) then begin
+                    AddMessage('Warning: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
+                end;
+                if not ContainsText(ExtractFilePath(mat), 'lod') then AddMessage('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
+            end;
             if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
             if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
             if not bIsTrishape then continue;
@@ -2214,8 +2227,17 @@ begin
                     Exit;
                 end;
             end;
+            // if block.IsNiObject('BSMeshLODTriShape', True) then begin
+            //     Turn this on if you want to convert LOD meshes with BSMeshLODTriShape to BSTriShape.
+            //     nif.ConvertBlock(j, 'BSTriShape');
+            //     bModified := True;
+            // end;
         end;
     finally
+        if bModified then begin
+            EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(f));
+            nif.SaveToFile(ScriptsPath() + 'FOLIP\output\' + f);
+        end;
         nif.free;
     end;
     if not bWasEverAbleToCheck then Result := False;
