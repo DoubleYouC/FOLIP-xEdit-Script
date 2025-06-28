@@ -173,7 +173,7 @@ begin
         p := RefMastersDeterminePlugin(r);
         n := wbCopyElementToFile(rCell, p, False, True);
         n := wbCopyElementToFile(rWrld, p, False, True);
-        n := wbCopyElementToFile(r, p, False, True);
+        n := CopyElementToFileWithVC(r, p);
     end;
     tlParents.Free;
 
@@ -187,7 +187,7 @@ begin
         p := RefMastersDeterminePlugin(r);
         n := wbCopyElementToFile(rCell, p, False, True);
         n := wbCopyElementToFile(rWrld, p, False, True);
-        n := wbCopyElementToFile(r, p, False, True);
+        n := CopyElementToFileWithVC(r, p);
     end;
     tlNeverfades.Free;
 
@@ -217,7 +217,7 @@ begin
         p := RefMastersDeterminePlugin(r);
         n := wbCopyElementToFile(rCell, p, False, True);
         n := wbCopyElementToFile(rWrld, p, False, True);
-        n := wbCopyElementToFile(r, p, False, True);
+        n := CopyElementToFileWithVC(r, p);
         SetIsVisibleWhenDistant(n, False);
     end;
     tlOverrides.Free;
@@ -405,6 +405,19 @@ begin
     AddRequiredElementMasters(r, iPluginFile, False, True);
     SortMasters(iPluginFile);
     Result := iPluginFile;
+end;
+
+function CopyElementToFileWithVC(e: IwbElement; f: IwbFile): IwbElement;
+{
+    Copies an element (e) to a file (f), but also copies the version control data from the element being copied.
+}
+var
+    n: IwbElement;
+begin
+    n := wbCopyElementToFile(e, f, False, True);
+    SetFormVCS1(n, GetFormVCS1(e));
+    SetFormVCS2(n, GetFormVCS2(e));
+    Result := n;
 end;
 
 end.

@@ -884,7 +884,7 @@ begin
                 wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
             end;
             if bPluginHere <> bPlugin then RefMastersDeterminePlugin(p, bPlugin);
-            m := wbCopyElementToFile(p, iCurrentPlugin, False, True);
+            m := CopyElementToFileWithVC(p, iCurrentPlugin);
             SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
             if not GetIsPersistent(p) then SetIsPersistent(m, True);
         end;
@@ -971,7 +971,7 @@ begin
                     wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                 end;
             end;
-            oreplacer := wbCopyElementToFile(oppositeEnableParentReplacer, iCurrentPlugin, False, True);
+            oreplacer := CopyElementToFileWithVC(oppositeEnableParentReplacer, iCurrentPlugin);
             if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
             SetElementEditValues(oreplacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
             if not bHasSuitableReplacer then begin
@@ -1008,7 +1008,7 @@ begin
                         wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                     end;
                 end;
-                n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+                n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
                 SetIsVisibleWhenDistant(n, True);
@@ -1018,7 +1018,7 @@ begin
         if not bCanBeRespected and tlEnableRefs.Count > 0 then begin
             enableParentReplacer := GetSuitableReplacement;
             iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, bPlugin);
-            ereplacer := wbCopyElementToFile(enableParentReplacer, iCurrentPlugin, False, True);
+            ereplacer := CopyElementToFileWithVC(enableParentReplacer, iCurrentPlugin);
             xesp := Add(ereplacer, 'XESP', True);
             ElementAssign(xesp, 0, nil, False);
             SetElementEditValues(ereplacer, 'XESP\Reference', parentFormid);
@@ -1051,7 +1051,7 @@ begin
                         wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                     end;
                 end;
-                n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+                n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
                 SetIsVisibleWhenDistant(n, True);
@@ -1181,7 +1181,7 @@ begin
         wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
 
         iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-        n := wbCopyElementToFile(r, iCurrentPlugin, False, True);
+        n := CopyElementToFileWithVC(r, iCurrentPlugin);
         SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', 1);
         SetIsPersistent(n, True);
         if bXESP and not bRespect then SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
@@ -2797,6 +2797,19 @@ begin
         SortedKeys.Free;
         NewJSONObj.Free;
     end;
+end;
+
+function CopyElementToFileWithVC(e: IwbElement; f: IwbFile): IwbElement;
+{
+    Copies an element (e) to a file (f), but also copies the version control data from the element being copied.
+}
+var
+    n: IwbElement;
+begin
+    n := wbCopyElementToFile(e, f, False, True);
+    SetFormVCS1(n, GetFormVCS1(e));
+    SetFormVCS2(n, GetFormVCS2(e));
+    Result := n;
 end;
 
 end.
