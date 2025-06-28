@@ -15,12 +15,12 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages: TStringList;
-    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
+    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
+    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
     sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
-    joRules, joMswpMap, joUserRules: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -125,6 +125,8 @@ begin
 
     if bRespectEnableMarkers then ProcessEnableParents;
 
+    MultiRefLOD;
+
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
 end;
 
@@ -143,6 +145,7 @@ begin
     tlStolenForms.Free;
     tlTxst.Free;
 
+    slPluginFiles.Free;
     slNifFiles.Free;
     slMatFiles.Free;
     slTopLevelModPatternPaths.Free;
@@ -183,6 +186,8 @@ begin
 
 
     //TStringLists
+    slPluginFiles := TStringList.Create;
+
     slMatFiles := TStringList.Create;
     slMatFiles.Sorted := True;
     slMatFiles.Duplicates := dupIgnore;
@@ -206,6 +211,7 @@ begin
     //TJsonObjects
     joRules := TJsonObject.Create;
     joMswpMap := TJsonObject.Create;
+    joMultiRefLOD := TJsonObject.Create;
 end;
 
 // ----------------------------------------------------
@@ -832,6 +838,9 @@ begin
     flOverrides := Add(flstGroup, 'FLST', True);
     SetEditorID(flOverrides, 'FOLIP_Overrides');
 
+    flMultiRefLOD := Add(flstGroup, 'FLST', True);
+    SetEditorID(flMultiRefLOD, 'FOLIP_MultiRefLOD');
+
     flParents := Add(flstGroup, 'FLST', True);
     SetEditorID(flParents, 'FOLIP_Parents');
 
@@ -1061,6 +1070,132 @@ begin
 
         tlOppositeEnableRefs.Free;
         tlEnableRefs.Free;
+    end;
+end;
+
+procedure MultiRefLOD;
+{
+    Adds MultiRefLOD keyword to references specified in FOLIP MultiRefLOD.json rules.
+}
+var
+    c, a, i, colonPos, MultiRefFormid, RefFormid: integer;
+    MultiRefLODReference, ref, MultiRefLODFormidStr: string;
+    r, MultiRefLODElement, n, rCell, rWrld: IwbElement;
+    MultiRefLODFile, refFile: IwbFile;
+    linkedrefs, lref: IInterface;
+    bNeedsModified, bHadMultiRefLODCorrect: Boolean;
+begin
+    for c := 0 to Pred(joMultiRefLOD.Count) do begin
+        MultiRefLODReference := joMultiRefLOD.Names[c];
+        colonPos := Pos(':', MultiRefLODReference);
+        MultiRefFormid := StrToInt('$' + Copy(MultiRefLODReference, 1, Pred(colonPos)));
+        MultiRefLODFile := FileByIndex(slPluginFiles.IndexOf(Copy(MultiRefLODReference, Succ(colonPos), Length(MultiRefLODReference))));
+        MultiRefLODElement := RecordByFormID(MultiRefLODFile, MultiRefFormid, False);
+        MultiRefLODFormidStr := IntToHex(GetLoadOrderFormID(MultiRefLODElement), 8);
+        if not Assigned(MultiRefLODElement) then begin
+            AddMessage('MultiRefLOD: Could not find record for ' + MultiRefLODReference);
+            Continue;
+        end;
+
+        AddMessage('MultiRefLOD: Processing ' + ShortName(MultiRefLODElement));
+
+        for a := 0 to Pred(joMultiRefLOD.A[MultiRefLODReference].Count) do begin
+            ref := joMultiRefLOD.A[MultiRefLODReference].S[a];
+            colonPos := Pos(':', ref);
+            RefFormid := StrToInt('$' + Copy(ref, 1, Pred(colonPos)));
+            refFile := FileByIndex(slPluginFiles.IndexOf(Copy(ref, Succ(colonPos), Length(ref))));
+            r := WinningOverride(RecordByFormID(refFile, RefFormid, False));
+            if not Assigned(r) then begin
+                AddMessage('MultiRefLOD: Could not find reference ' + ref + ' for ' + MultiRefLODReference);
+                Continue;
+            end;
+
+            //Check to see if we need to modify the ref.
+            bNeedsModified := False;
+            if GetIsDeleted(r) then begin
+                AddMessage('MultiRefLOD: Skipping deleted reference ' + Name(r));
+                Continue;
+            end;
+            if GetIsCleanDeleted(r) then begin
+                AddMessage('MultiRefLOD: Skipping clean deleted reference ' + Name(r));
+                Continue;
+            end;
+
+            if ElementExists(r, 'Linked References') then begin
+                bHadMultiRefLODCorrect := False;
+                linkedrefs := ElementByPath(r, 'Linked References');
+                for i := 0 to Pred(ElementCount(linkedrefs)) do begin
+                    lref := ElementByIndex(linkedrefs, i);
+                    if IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(lref, 'Keyword/Ref'))), 8) = '00195411' then begin
+                        // if the reference already has the MultiRefLOD keyword, but the formid does not match, we need to modify it.
+                        if IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(lref, 'Ref'))), 8) <> MultiRefLODFormidStr then begin
+                            bNeedsModified := True;
+                            Break; // We can break since we know we need to modify this reference in order to remove this one.
+                        end
+                        else if (IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(lref, 'Ref'))), 8) = MultiRefLODFormidStr) then bHadMultiRefLODCorrect := True;
+                    end;
+                end;
+                if not bHadMultiRefLODCorrect then bNeedsModified := True; // If we didn't find the MultiRefLOD, we need to add it.
+            end
+            else bNeedsModified := True;
+
+            if bNeedsModified then begin
+                AddMessage(#9 + Name(r));
+                AddRefToMyFormlist(r, flMultiRefLOD);
+                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+                n := CopyElementToFileWithVC(r, iCurrentPlugin);
+                RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
+                AddLinkedReference(n, '00195411', MultiRefLODFormidStr); // Add the MultiRefLOD keyword with the correct formid
+            end;
+        end;
+    end;
+end;
+
+function AddLinkedReference(e: IInterface; keyword, ref: String): Integer;
+{
+  Add a linked reference.
+}
+var
+    el, linkedrefs, lref: IInterface;
+    i: Integer;
+begin
+    Result := 0;
+    if not ElementExists(e, 'Linked References') then begin
+        linkedrefs := Add(e, 'Linked References', True);
+        lref := ElementByIndex(linkedrefs, 0);
+        SetElementEditValues(lref, 'Keyword/Ref', keyword);
+        SetElementEditValues(lref, 'Ref', ref);
+    end
+    else begin
+        linkedrefs := ElementByPath(e, 'Linked References');
+        lref := ElementAssign(linkedrefs, HighInteger, nil, False);
+        SetElementEditValues(lref, 'Keyword/Ref', keyword);
+        SetElementEditValues(lref, 'Ref', ref);
+    end;
+end;
+
+function RemoveLinkedReferenceByKeyword(e: IwbElement; keyword: String): Integer;
+{
+  Remove a linked reference by keyword.
+}
+var
+    linkedrefs, lref: IInterface;
+    i: Integer;
+begin
+    Result := 0;
+    if not ElementExists(e, 'Linked References') then Exit;
+    linkedrefs := ElementByPath(e, 'Linked References');
+    for i := Pred(ElementCount(linkedrefs)) downto 0 do begin
+        lref := ElementByIndex(linkedrefs, i);
+        if IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(lref, 'Keyword/Ref'))), 8) = keyword then begin
+            Remove(lref);
+            Result := 1; // Indicate that a reference was removed
+        end;
     end;
 end;
 
@@ -2281,8 +2416,11 @@ var
     sub: TJsonObject;
     c, a: integer;
     j, key: string;
-    bFirstRuleJson, bFirstMswpJson: Boolean;
+    bFirstRuleJson, bFirstMswpJson, bFirstMultiRefJson: Boolean;
 begin
+    bFirstRuleJson := True;
+    bFirstMswpJson := True;
+    bFirstMultiRefJson := True;
     //LOD Rules
     j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - LODRules.json';
     if ResourceExists(j) then begin
@@ -2293,12 +2431,15 @@ begin
         end
         else begin
             sub := TJsonObject.Create;
-            sub.LoadFromResource(j);
-            for c := 0 to Pred(sub.Count) do begin
-                key := sub.Names[c];
-                joRules.O[key].Assign(sub.O[key]);
+            try
+                sub.LoadFromResource(j);
+                for c := 0 to Pred(sub.Count) do begin
+                    key := sub.Names[c];
+                    joRules.O[key].Assign(sub.O[key]);
+                end;
+            finally
+                sub.Free;
             end;
-            sub.Free;
         end;
     end;
     //Material Swap Maps
@@ -2311,12 +2452,35 @@ begin
         end
         else begin
             sub := TJsonObject.Create;
-            sub.LoadFromResource(j);
-            for c := 0 to Pred(sub.Count) do begin
-                key := sub.Names[c];
-                for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
+            try
+                sub.LoadFromResource(j);
+                for c := 0 to Pred(sub.Count) do begin
+                    key := sub.Names[c];
+                    for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
+                end;
+            finally
+                sub.Free;
             end;
-            sub.Free;
+        end;
+    end;
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - MultiRefLOD.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Multi-Reference LOD File: ' + j);
+        if bFirstMultiRefJson then begin
+            bFirstMultiRefJson := False;
+            joMultiRefLOD.LoadFromResource(j);
+        end
+        else begin
+            try
+                sub := TJsonObject.Create;
+                sub.LoadFromResource(j);
+                for c := 0 to Pred(sub.Count) do begin
+                    key := sub.Names[c];
+                    for a := 0 to Pred(sub.A[key].Count) do joMultiRefLOD.A[key].Add(sub.A[key].S[a]);
+                end;
+            finally
+                sub.Free;
+            end;
         end;
     end;
 end;
@@ -2552,6 +2716,7 @@ var
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
+        slPluginFiles.Add(f);
         LoadRules(f);
     end;
     j := 'FOLIP\UserRules.json';
