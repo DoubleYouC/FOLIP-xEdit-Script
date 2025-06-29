@@ -1123,14 +1123,15 @@ procedure MultiRefLOD;
 }
 var
     c, a, i, colonPos, MultiRefFormid, RefFormid: integer;
-    MultiRefLODReference, ref, MultiRefLODFormidStr: string;
+    MultiRefLODReference, ref, MultiRefLODFormidStr, editorid: string;
     r, MultiRefLODElement, n, rCell, rWrld: IwbElement;
     MultiRefLODFile, refFile: IwbFile;
     linkedrefs, lref: IInterface;
     bNeedsModified, bHadMultiRefLODCorrect: Boolean;
 begin
     for c := 0 to Pred(joMultiRefLOD.Count) do begin
-        MultiRefLODReference := joMultiRefLOD.Names[c];
+        editorid := joMultiRefLOD.Names[c];
+        MultiRefLODReference := joMultiRefLOD.O[editorid].S['MultiRefLOD'];
         colonPos := Pos(':', MultiRefLODReference);
         MultiRefFormid := StrToInt('$' + Copy(MultiRefLODReference, 1, Pred(colonPos)));
         MultiRefLODFile := FileByIndex(slPluginFiles.IndexOf(Copy(MultiRefLODReference, Succ(colonPos), Length(MultiRefLODReference))));
@@ -1143,8 +1144,8 @@ begin
 
         AddMessage('MultiRefLOD: Processing ' + ShortName(MultiRefLODElement));
 
-        for a := 0 to Pred(joMultiRefLOD.A[MultiRefLODReference].Count) do begin
-            ref := joMultiRefLOD.A[MultiRefLODReference].S[a];
+        for a := 0 to Pred(joMultiRefLOD.O[editorid].A['References to add MultiRefLOD'].Count) do begin
+            ref := joMultiRefLOD.O[editorid].A['References to add MultiRefLOD'].S[a];
             colonPos := Pos(':', ref);
             RefFormid := StrToInt('$' + Copy(ref, 1, Pred(colonPos)));
             refFile := FileByIndex(slPluginFiles.IndexOf(Copy(ref, Succ(colonPos), Length(ref))));
@@ -2499,7 +2500,7 @@ begin
             sub.LoadFromResource(j);
             for c := 0 to Pred(sub.Count) do begin
                 key := sub.Names[c];
-                for a := 0 to Pred(sub.A[key].Count) do joMultiRefLOD.A[key].Add(sub.A[key].S[a]);
+                joMultiRefLOD.O[key].Assign(sub.O[key]);
             end;
         finally
             sub.Free;
