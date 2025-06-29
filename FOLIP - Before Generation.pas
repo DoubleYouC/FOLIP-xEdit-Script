@@ -1193,6 +1193,8 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                 n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
                 AddLinkedReference(n, '00195411', MultiRefLODFormidStr); // Add the MultiRefLOD keyword with the correct formid
