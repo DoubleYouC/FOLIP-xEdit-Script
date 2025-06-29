@@ -1644,6 +1644,10 @@ begin
         Add(Add(fakeStatic, 'Model', True), 'MODS', True);
         SetElementEditValues(fakeStatic, 'Model\MODS', IntToHex(GetLoadOrderFormID(ms), 8));
     end;
+
+    //Add Is Marker Flag
+    SetElementNativeValues(fakeStatic, 'Record Header\Record Flags\Is Marker', 1);
+
     Result := fakeStatic;
 end;
 
