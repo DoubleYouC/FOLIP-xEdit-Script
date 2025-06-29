@@ -19,8 +19,8 @@ var
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
     sFolipPluginFileName: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD: TJsonObject;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD: Boolean;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -30,6 +30,7 @@ const
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
     sEnableParentFormidExclusions = '060521A9,06056CC4,0301EB18,030376DF,0304FBD9,06048B7D,0301C678,03035ABD,03037610,06041575,0303FD65,0303DC6E,0301C687,0301C67B,03037573,03035A9C,03035AAB,0303DC5C,03035AAA,030375B8,06056CAB,06051FCA';
+    sUserSettingsFileName = 'FOLIP\UserSettings.json';
 
 // ----------------------------------------------------
 // Main functions and procedures go up immediately below.
@@ -40,31 +41,47 @@ function Initialize:integer;
     This function is called at the beginning.
 }
 begin
-    // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
-    bReportMissingLOD := False;
-    // This is used to report if a LOD material appears to be using a non-LOD texture.
-    bReportNonLODMaterials := False;
-    // This is used to report if a LOD mesh appears to have UVs outside of range.
-    bReportUVs := False;
-    // This is used to ensure enable parented objects use LOD Respects Enable State
-    bRespectEnableMarkers := True;
+    CreateObjects;
+    if ResourceExists(sUserSettingsFileName) then begin
+        AddMessage('Loading user settings from ' + sUserSettingsFileName);
+        joUserSettings.LoadFromResource(sUserSettingsFileName);
+        bFakeStatics := StrToBool(joUserSettings.S['FakeStatics']);
+        bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
+        bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
+        bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
+        bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
+        bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
+        bRespectEnableMarkers := StrToBool(joUserSettings.S['RespectEnableMarkers']);
+        sFolipPluginFileName := joUserSettings.S['BeforeGenerationPluginName'];
+    end
+    else begin
+        //Set default options.
+        bFakeStatics := True;
+        bForceLOD8 := False;
+        bIgnoreNoLOD := False;
+
+        // This is used to report if a LOD material appears to be using a non-LOD texture.
+        bReportNonLODMaterials := False;
+        // This is used to report if a LOD mesh appears to have UVs outside of range.
+        bReportUVs := False;
+        // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
+        bReportMissingLOD := False;
+        // This is used to ensure enable parented objects use LOD Respects Enable State
+        bRespectEnableMarkers := True;
+
+        //Default plugin name.
+        sFolipPluginFileName := 'FOLIP - Before Generation';
+    end;
 
     //Used to tell the Rule Editor whether or not to save changes.
     bSaveUserRules := False;
     bUserRulesChanged := False;
 
-    //Set default options.
-    bFakeStatics := True;
-    bForceLOD8 := False;
-
-    //Default plugin name.
-    sFolipPluginFileName := 'FOLIP - Before Generation';
-
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
     AddMessage('UI scale: ' + IntToStr(uiScale));
 
-    CreateObjects;
+
     FetchRules;
     slTopLevelModPatternPaths.Add('');
 
@@ -162,8 +179,19 @@ begin
         AddMessage('Saving ' + IntToStr(joUserRules.Count) + ' user rule(s) to ' + wbDataPath + 'FOLIP\UserRules.json');
         joUserRules.SaveToFile(wbDataPath + 'FOLIP\UserRules.json', False, TEncoding.UTF8, True);
     end;
-
     joUserRules.Free;
+
+    //Save user settings
+    AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
+    joUserSettings.S['FakeStatics'] := BoolToStr(bFakeStatics);
+    joUserSettings.S['ForceLOD8'] := BoolToStr(bForceLOD8);
+    joUserSettings.S['IgnoreNoLOD'] := BoolToStr(bIgnoreNoLOD);
+    joUserSettings.S['ReportNonLODMaterials'] := BoolToStr(bReportNonLODMaterials);
+    joUserSettings.S['ReportUVs'] := BoolToStr(bReportUVs);
+    joUserSettings.S['ReportMissingLOD'] := BoolToStr(bReportMissingLOD);
+    joUserSettings.S['RespectEnableMarkers'] := BoolToStr(bRespectEnableMarkers);
+    joUserSettings.S['BeforeGenerationPluginName'] := sFolipPluginFileName;
+    joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
 
     Result := 0;
 end;
@@ -212,6 +240,7 @@ begin
     joRules := TJsonObject.Create;
     joMswpMap := TJsonObject.Create;
     joMultiRefLOD := TJsonObject.Create;
+    joUserSettings := TJsonObject.Create;
 end;
 
 // ----------------------------------------------------
@@ -230,12 +259,12 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
+    chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
         frm.Caption := 'FOLIP xEdit Patcher';
-        frm.Width := 600;
+        frm.Width := 640;
         frm.Height := 540;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
@@ -251,7 +280,7 @@ begin
 		fImage.Parent := frm;
         fImage.Width := 576;
 		fImage.Height := 278;
-		fImage.Left := 6;
+		fImage.Left := 26;
 		fImage.Top := 12;
         fImage.Stretch := True;
 
@@ -294,7 +323,7 @@ begin
 
         chkForceLOD8 := TCheckBox.Create(gbOptions);
         chkForceLOD8.Parent := gbOptions;
-        chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 16;
+        chkForceLOD8.Left := chkFakeStatics.Left + chkFakeStatics.Width + 32;
         chkForceLOD8.Top := chkFakeStatics.Top;
         chkForceLOD8.Width := 120;
         chkForceLOD8.Caption := 'Force LOD8';
@@ -303,6 +332,8 @@ begin
             + #13#10 + 'LOD distance at the cost of some performance. This is better than'
             + #13#10 + 'increasing the fBlockLevel0Distance.';
         chkForceLOD8.ShowHint := True;
+
+
 
         chkReportNonLODMaterials := TCheckBox.Create(gbOptions);
         chkReportNonLODMaterials.Parent := gbOptions;
@@ -336,6 +367,17 @@ begin
             + #13#10 + 'enable parented references and works around'
             + #13#10 + 'engine bugs related to its usage.';
         chkRespectEnableMarkers.ShowHint := True;
+
+        chkIgnoreNoLOD := TCheckBox.Create(gbOptions);
+        chkIgnoreNoLOD.Parent := gbOptions;
+        chkIgnoreNoLOD.Left := chkFakeStatics.Left + chkFakeStatics.Width + 32;
+        chkIgnoreNoLOD.Top := chkRespectEnableMarkers.Top;
+        chkIgnoreNoLOD.Width := 150;
+        chkIgnoreNoLOD.Caption := 'Ignore NoLOD EditorIDs';
+        chkIgnoreNoLOD.Hint := 'If the editor id ends in NoLOD, normal operation,'
+            + #13#10 + 'would honor that and not attach LOD to it. Checking this'
+            + #13#10 + 'will ignore it and use LOD if available.';
+        chkIgnoreNoLOD.ShowHint := True;
 
         chkReportMissingLOD := TCheckBox.Create(gbOptions);
         chkReportMissingLOD.Parent := gbOptions;
@@ -378,6 +420,7 @@ begin
         edPluginName.Text := sFolipPluginFileName;
         chkFakeStatics.Checked := bFakeStatics;
         chkForceLOD8.Checked := bForceLOD8;
+        chkIgnoreNoLOD.Checked := bIgnoreNoLOD;
         chkReportNonLODMaterials.Checked := bReportNonLODMaterials;
         chkReportUVs.Checked := bReportUVs;
         chkReportMissingLOD.Checked := bReportMissingLOD;
@@ -392,6 +435,7 @@ begin
         sFolipPluginFileName := edPluginName.Text;
         bFakeStatics := chkFakeStatics.Checked;
         bForceLOD8 := chkForceLOD8.Checked;
+        bIgnoreNoLOD := chkIgnoreNoLOD.Checked;
         bReportNonLODMaterials := chkReportNonLODMaterials.Checked;
         bReportUVs := chkReportUVs.Checked;
         bReportMissingLOD := chkReportMissingLOD.Checked;
@@ -2416,71 +2460,49 @@ var
     sub: TJsonObject;
     c, a: integer;
     j, key: string;
-    bFirstRuleJson, bFirstMswpJson, bFirstMultiRefJson: Boolean;
 begin
-    bFirstRuleJson := True;
-    bFirstMswpJson := True;
-    bFirstMultiRefJson := True;
     //LOD Rules
     j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - LODRules.json';
     if ResourceExists(j) then begin
         AddMessage('Loaded LOD Rule File: ' + j);
-        if bFirstRuleJson then begin
-            bFirstRuleJson := False;
-            joRules.LoadFromResource(j);
-        end
-        else begin
-            sub := TJsonObject.Create;
-            try
-                sub.LoadFromResource(j);
-                for c := 0 to Pred(sub.Count) do begin
-                    key := sub.Names[c];
-                    joRules.O[key].Assign(sub.O[key]);
-                end;
-            finally
-                sub.Free;
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+                key := sub.Names[c];
+                joRules.O[key].Assign(sub.O[key]);
             end;
+        finally
+            sub.Free;
         end;
     end;
     //Material Swap Maps
     j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - MaterialSwapMap.json';
     if ResourceExists(j) then begin
         AddMessage('Loaded LOD Material Swap File: ' + j);
-        if bFirstMswpJson then begin
-            bFirstMswpJson := False;
-            joMswpMap.LoadFromResource(j);
-        end
-        else begin
-            sub := TJsonObject.Create;
-            try
-                sub.LoadFromResource(j);
-                for c := 0 to Pred(sub.Count) do begin
-                    key := sub.Names[c];
-                    for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
-                end;
-            finally
-                sub.Free;
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+                key := sub.Names[c];
+                for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
             end;
+        finally
+            sub.Free;
         end;
     end;
+    //MultiRefLOD
     j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - MultiRefLOD.json';
     if ResourceExists(j) then begin
-        AddMessage('Loaded Multi-Reference LOD File: ' + j);
-        if bFirstMultiRefJson then begin
-            bFirstMultiRefJson := False;
-            joMultiRefLOD.LoadFromResource(j);
-        end
-        else begin
-            try
-                sub := TJsonObject.Create;
-                sub.LoadFromResource(j);
-                for c := 0 to Pred(sub.Count) do begin
-                    key := sub.Names[c];
-                    for a := 0 to Pred(sub.A[key].Count) do joMultiRefLOD.A[key].Add(sub.A[key].S[a]);
-                end;
-            finally
-                sub.Free;
+        try
+            sub := TJsonObject.Create;
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+                key := sub.Names[c];
+                for a := 0 to Pred(sub.A[key].Count) do joMultiRefLOD.A[key].Add(sub.A[key].S[a]);
             end;
+        finally
+            sub.Free;
         end;
     end;
 end;
@@ -2530,7 +2552,7 @@ begin
         lod32 := joRules.O[editorid].S['level3'];
         if joRules.O[editorid].S['hasdistantlod'] = 'false' then ruleOverride := True;
     end
-    else if LowerCase(RightStr(editorid, 5)) = 'nolod' then begin
+    else if ((LowerCase(RightStr(editorid, 5)) = 'nolod') and (not bIgnoreNoLOD)) then begin
         slMessages.Add(ShortName(s) + ' - Editor ID ends in "nolod", so it will be skipped.');
         Result := False;
         Exit;
@@ -2739,14 +2761,12 @@ function CreatePlugins: Boolean;
     Creates the plugin files we need.
 }
 var
-    bFO4LODGen, bFolip, bFirstRuleJson, bFirstMswpJson: Boolean;
+    bFO4LODGen, bFolip: Boolean;
     i: integer;
     f: string;
 begin
     bFO4LODGen := False;
     bFolip := False;
-    bFirstRuleJson := True;
-    bFirstMswpJson := True;
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
 
