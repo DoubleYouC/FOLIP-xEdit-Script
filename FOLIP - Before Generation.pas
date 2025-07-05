@@ -15,12 +15,12 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
+    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
     sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMaterialMatchLODMaterial: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -141,8 +141,10 @@ begin
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
+    AddMessage('=======================================================================================');
 
     if bRespectEnableMarkers then ProcessEnableParents;
+    AddMessage('=======================================================================================');
 
     MultiRefLOD;
 
@@ -177,10 +179,10 @@ begin
     slMeshCheckNonLODMaterials.Free;
     slMeshCheckNoMaterialSpecified.Free;
     slCheckedModels.Free;
+    slMismatchedFullModelToLODMaterials.Free;
 
     joRules.Free;
     joMswpMap.Free;
-    joModelMaterialMatchLODMaterial.Free;
 
     //Save user rules
     if bSaveUserRules and bUserRulesChanged then begin
@@ -248,6 +250,10 @@ begin
     slMeshCheckNoMaterialSpecified.Sorted := True;
     slMeshCheckNoMaterialSpecified.Duplicates := dupIgnore;
 
+    slMismatchedFullModelToLODMaterials  := TStringList.Create;
+    slMismatchedFullModelToLODMaterials.Sorted := True;
+    slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
+
     slCheckedModels := TStringList.Create;
 
     slTopLevelModPatternPaths := TStringList.Create;
@@ -267,7 +273,6 @@ begin
     joMswpMap := TJsonObject.Create;
     joMultiRefLOD := TJsonObject.Create;
     joUserSettings := TJsonObject.Create;
-    joModelMaterialMatchLODMaterial := TJsonObject.Create;
 end;
 
 // ----------------------------------------------------
@@ -368,9 +373,7 @@ begin
         chkReportNonLODMaterials.Top := chkForceLOD8.Top + 30;
         chkReportNonLODMaterials.Width := 120;
         chkReportNonLODMaterials.Caption := 'Report Materials';
-        chkReportNonLODMaterials.Hint := 'Adds warnings to LOD materials that appear to be'
-            + #13#10 + 'using non-LOD textures. This is for information'
-            + #13#10 + 'purposes only and has no visual benefit.';
+        chkReportNonLODMaterials.Hint := 'Adds various warnings for debugging LOD materials.';
         chkReportNonLODMaterials.ShowHint := True;
 
         chkReportUVs := TCheckBox.Create(gbOptions);
@@ -2025,7 +2028,7 @@ procedure AssignLODToStat(s: IInterface; joLOD: TJsonObject);
 var
     n: IInterface;
 begin
-    AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
+    //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
     SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod']);
@@ -2478,7 +2481,7 @@ var
     i, c, hasDistantLOD, xBnd, yBnd, zBnd: integer;
     n: IInterface;
     colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
-    slTopPaths, slMaterialsFromModel: TStringList;
+    slTopPaths, slMaterialsFromFullModel: TStringList;
 begin
     hasChanged := False;
     ruleOverride := False;
@@ -2565,51 +2568,23 @@ begin
     //ruleOverride means that the record should not have distant LOD.
     if ruleOverride then hasDistantLOD := 0;
 
+    model := LowerCase(wbNormalizeResourceName(model, resMesh));
     if ((hasDistantLOD <> 0) and (slCheckedModels.IndexOf(model) = -1)) then begin
-        slCheckedModels.Add(wbNormalizeResourceName(model, resMesh));
+        slCheckedModels.Add(model);
 
-        slMaterialsFromModel := TStringList.Create;
+        slMaterialsFromFullModel := TStringList.Create;
+        slMaterialsFromFullModel.Sorted := True;
+        slMaterialsFromFullModel.Duplicates := dupIgnore;
         try
-            if model <> '' then AddMaterialsFromModel(model, slMaterialsFromModel);
-            joModelMaterialMatchLODMaterial.O[model].A['EditorIDs'].Add(editorid);
-            for c := 0 to Pred(slMaterialsFromModel.Count) do begin
-               joModelMaterialMatchLODMaterial.O[model].A['Materials'].Add(slMaterialsFromModel[c]);
-            end;
+            if (model <> '' and bReportNonLODMaterials) then AddMaterialsFromModel(model, slMaterialsFromFullModel);
+            AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
+            ProcessLODModel(model, lod4, colorRemap, slMaterialsFromFullModel);
+            ProcessLODModel(model, lod8, colorRemap, slMaterialsFromFullModel);
+            ProcessLODModel(model, lod16, colorRemap, slMaterialsFromFullModel);
+            ProcessLODModel(model, lod32, colorRemap, slMaterialsFromFullModel);
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
-            slMaterialsFromModel.Free;
-        end;
-
-        if lod4 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod4, resMesh));
-        if lod8 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod8, resMesh));
-        if lod16 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod16, resMesh));
-        if lod32 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod32, resMesh));
-
-        slMaterialsFromModel := TStringList.Create;
-        try
-            if lod4 <> '' then begin
-                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod4);
-                if MeshCheck(lod4, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
-            end;
-            if lod8 <> '' then begin
-                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod8);
-                if MeshCheck(lod8, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
-            end;
-            if lod16 <> '' then begin
-                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod16);
-                if MeshCheck(lod16, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
-            end;
-            if lod32 <> '' then begin
-                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod32);
-                if MeshCheck(lod32, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
-            end;
-
-            for c := 0 to Pred(slMaterialsFromModel.Count) do begin
-                joModelMaterialMatchLODMaterial.O[model].A['LOD Materials'].Add(slMaterialsFromModel[c]);
-            end;
-        except on E: Exception do
-            AddMessage('Error: ' + E.Message);
-        finally
-            slMaterialsFromModel.Free;
+            slMaterialsFromFullModel.Free;
         end;
     end;
 
@@ -2622,6 +2597,63 @@ begin
         joLOD.S['level3'] := lod32;
     end;
     if hasDistantLOD <> 0 then Result := True else Result := False;
+end;
+
+procedure ProcessLODModel(FullModel, LODModel, colorRemap: string; slMaterialsFromFullModel: TStringList);
+{
+    Processes a LOD model.
+}
+var
+    c, tp: integer;
+    slMaterialsFromLODModel, slTopPaths, slPossibleLODPaths, slExistingSubstitutions: TStringList;
+    material: string;
+begin
+    if LODModel = '' then Exit;
+    LODModel := wbNormalizeResourceName(LODModel, resMesh);
+
+    slMaterialsFromLODModel := TStringList.Create;
+    slMaterialsFromLODModel.Sorted := True;
+    slMaterialsFromLODModel.Duplicates := dupIgnore;
+
+    slPossibleLODPaths := TStringList.Create;
+    try
+        if (slUsedLODNifFiles.IndexOf(LODModel) = -1) then begin
+            slUsedLODNifFiles.Add(LODModel);
+            if bReportNonLODMaterials or bReportUVs then begin
+                if MeshCheck(LODModel, slMaterialsFromLODModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+            end;
+            if bReportNonLODMaterials then begin
+                //Check the full models materials for Possible LOD materials and populate slPossibleLODPaths.
+                for c := 0 to Pred(slMaterialsFromFullModel.Count) do begin
+                    material := slMaterialsFromFullModel[c];
+                    slTopPaths := TStringList.Create;
+                    slExistingSubstitutions := TStringList.Create;
+                    try
+                        for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+                            if ContainsText(material, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
+                        end;
+                        LODMaterial(material, colorRemap, slTopPaths, slExistingSubstitutions, slPossibleLODPaths);
+                    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
+                    finally
+                        slTopPaths.Free;
+                        slExistingSubstitutions.Free;
+                    end;
+                end;
+
+                //Check the LOD materials for matches in slPossibleLODPaths and warn if any are not matches.
+                for c := 0 to Pred(slMaterialsFromLODModel.Count) do begin
+                    material := TrimRightChars(slMaterialsFromLODModel[c], 10);
+                    if slPossibleLODPaths.IndexOf(material) = -1 then begin
+                        slMismatchedFullModelToLODMaterials.Add('Warning: ' + LODModel + #9 + ' has a LOD material that does not match the known full model materials: ' + #9 + material);
+                    end;
+                end;
+            end;
+        end;
+    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
+    finally
+        slMaterialsFromLODModel.Free;
+        slPossibleLODPaths.Free;
+    end;
 end;
 
 procedure AddMaterialsFromModel(model: string; var slMaterialsFromModel: TStringList);
@@ -2644,7 +2676,7 @@ begin
             if block.BlockType = 'BSLightingShaderProperty' then begin
                 mat := wbNormalizeResourceName(block.EditValues['Name'], resMaterial);
                 if not SameText(ExtractFileExt(mat), '.bgsm') then continue
-                else slMaterialsFromModel.Add(mat);
+                else slMaterialsFromModel.Add(LowerCase(mat));
             end;
         end;
     except on E: Exception do
@@ -2689,7 +2721,7 @@ begin
                     mat := wbNormalizeResourceName(mat, resMaterial);
                     if not ResourceExists(mat) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
                     if not ContainsText(ExtractFilePath(mat), 'lod') then slMeshCheckNonLODMaterials.Add('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
-                    slMaterialsFromModel.Add(mat);
+                    slMaterialsFromModel.Add(LowerCase(mat));
                 end;
             end;
             if not bReportUVs then continue;
@@ -2768,19 +2800,21 @@ begin
                 continue;
             end;
             if not IsInLODDir(f, 'meshes') then slNotInLODDirectory.Add('Warning: ' + f + #9 + ' is not in a LOD directory.');
-            if (not IsLODResourceModel(f)) and (not SameText(RightStr(f, 7), 'lod.nif')) then slDoesNotFollowLODNamingConvention.Add('Warning:' + f + #9 + ' does not follow LOD naming conventions.');
+            if (not IsLODResourceModel(f)) and (not SameText(RightStr(f, 7), 'lod.nif')) then slDoesNotFollowLODNamingConvention.Add('Warning: ' + f + #9 + ' does not follow LOD naming conventions.');
         end;
     finally
         AddMessage(IntToStr(i + 1) + ' of ' +  IntToStr(slUsedLODNifFiles.Count) + ' LOD models were checked.');
-        ListStringsInStringList(slMissingLODNifFiles);
-        ListStringsInStringList(slNotInLODDirectory);
-        ListStringsInStringList(slDoesNotFollowLODNamingConvention);
+        ListStringsInStringList(slMismatchedFullModelToLODMaterials);
         if bReportUVs then begin
             ListStringsInStringList(slMeshCheckMissingMaterials);
             ListStringsInStringList(slMeshCheckNonLODMaterials);
             ListStringsInStringList(slMeshCheckNoMaterialSpecified);
             ListStringsInStringList(slOutsideUVRange);
         end;
+        ListStringsInStringList(slMissingLODNifFiles);
+        ListStringsInStringList(slNotInLODDirectory);
+        ListStringsInStringList(slDoesNotFollowLODNamingConvention);
+
         slMissingLODNifFiles.Free;
         slNotInLODDirectory.Free;
         slDoesNotFollowLODNamingConvention.Free;
