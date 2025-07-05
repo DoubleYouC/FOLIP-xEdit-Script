@@ -2576,8 +2576,8 @@ begin
         slMaterialsFromFullModel.Sorted := True;
         slMaterialsFromFullModel.Duplicates := dupIgnore;
         try
-            if (model <> '' and bReportNonLODMaterials) then AddMaterialsFromModel(model, slMaterialsFromFullModel);
             AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
+            if ((model <> '') and bReportNonLODMaterials) then AddMaterialsFromModel(model, slMaterialsFromFullModel);
             ProcessLODModel(model, lod4, colorRemap, slMaterialsFromFullModel);
             ProcessLODModel(model, lod8, colorRemap, slMaterialsFromFullModel);
             ProcessLODModel(model, lod16, colorRemap, slMaterialsFromFullModel);
