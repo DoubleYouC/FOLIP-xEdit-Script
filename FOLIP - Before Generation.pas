@@ -15,12 +15,12 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slMatFiles, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
+    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
     sFolipPluginFileName: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMaterialMatchLODMaterial: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -130,6 +130,8 @@ begin
     //Add fake statics for MSTT, FURN, and ACTI that have lod.
     if bFakeStatics then ProcessActiFurnMstt;
 
+    CheckUsedLODModels;
+
     //Add Messages
     ListStringsInStringList(slMessages);
     ListStringsInStringList(slMissingLODMessages);
@@ -164,15 +166,21 @@ begin
 
     slPluginFiles.Free;
     slNifFiles.Free;
+    slUsedLODNifFiles.Free;
     slMatFiles.Free;
     slTopLevelModPatternPaths.Free;
     slMessages.Free;
     slMissingLODMessages.Free;
     slFullLODMessages.Free;
     slMissingColorRemaps.Free;
+    slMeshCheckMissingMaterials.Free;
+    slMeshCheckNonLODMaterials.Free;
+    slMeshCheckNoMaterialSpecified.Free;
+    slCheckedModels.Free;
 
     joRules.Free;
     joMswpMap.Free;
+    joModelMaterialMatchLODMaterial.Free;
 
     //Save user rules
     if bSaveUserRules and bUserRulesChanged then begin
@@ -224,6 +232,24 @@ begin
     slNifFiles.Sorted := True;
     slNifFiles.Duplicates := dupIgnore;
 
+    slUsedLODNifFiles := TStringList.Create;
+    slUsedLODNifFiles.Sorted := True;
+    slUsedLODNifFiles.Duplicates := dupIgnore;
+
+    slMeshCheckMissingMaterials := TStringList.Create;
+    slMeshCheckMissingMaterials.Sorted := True;
+    slMeshCheckMissingMaterials.Duplicates := dupIgnore;
+
+    slMeshCheckNonLODMaterials := TStringList.Create;
+    slMeshCheckNonLODMaterials.Sorted := True;
+    slMeshCheckNonLODMaterials.Duplicates := dupIgnore;
+
+    slMeshCheckNoMaterialSpecified := TStringList.Create;
+    slMeshCheckNoMaterialSpecified.Sorted := True;
+    slMeshCheckNoMaterialSpecified.Duplicates := dupIgnore;
+
+    slCheckedModels := TStringList.Create;
+
     slTopLevelModPatternPaths := TStringList.Create;
     slMessages := TStringList.Create;
     slMessages.Sorted := True;
@@ -241,6 +267,7 @@ begin
     joMswpMap := TJsonObject.Create;
     joMultiRefLOD := TJsonObject.Create;
     joUserSettings := TJsonObject.Create;
+    joModelMaterialMatchLODMaterial := TJsonObject.Create;
 end;
 
 // ----------------------------------------------------
@@ -921,7 +948,7 @@ begin
         if Pos(Uppercase(parentFormid), sEnableParentFormidExclusions) <> 0 then continue;
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
         bPluginHere := bPlugin;
-        AddMessage('Processing ' + Name(p));
+        AddMessage('Respect Enable Parnets: Processing ' + Name(p));
         if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
@@ -1892,29 +1919,32 @@ begin
         sMissingLodMessage := '';
         s := ObjectToElement(tlStats[i]);
         joLOD := TJsonObject.Create;
-        HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
+        try
+            HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
-        //Add lod change if the HasDistantLOD flag needs to be unset.
-        if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD);
+            //Add lod change if the HasDistantLOD flag needs to be unset.
+            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD);
 
-        //List relevant material swaps
-        if HasLOD then begin
-            cnt := ProcessReferences(s);
+            //List relevant material swaps
+            if HasLOD then begin
+                cnt := ProcessReferences(s);
 
-            if cnt > 0 then tlHasLOD.Add(s);
+                if cnt > 0 then tlHasLOD.Add(s);
 
-            //check for base material swap
-            if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
-                ms := LinksTo(ElementByPath(s, 'Model\MODS'));
-                if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+                //check for base material swap
+                if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
+                    ms := LinksTo(ElementByPath(s, 'Model\MODS'));
+                    if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+                end;
+
+                if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
+            end
+            else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
+                if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
             end;
-
-            if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
-        end
-        else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
-            if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
+        finally
+            joLOD.Free;
         end;
-        joLOD.Free;
     end;
 end;
 
@@ -2141,7 +2171,7 @@ procedure FilesInContainers(containers: TStringList);
 }
 var
     slArchivedFiles, slVanilla, slModded: TStringList;
-    i: integer;
+    i, total: integer;
     f, fNoLod, archive, tp: string;
 begin
     slArchivedFiles := TStringList.Create;
@@ -2204,7 +2234,8 @@ begin
 
         AddMessage('Please wait while we detect all LOD assets...');
 
-        for i := 0 to Pred(slArchivedFiles.Count) do begin
+        total := slArchivedFiles.Count;
+        for i := 0 to Pred(total) do begin
             f := LowerCase(slArchivedFiles[i]);
 
             //materials or meshes
@@ -2221,9 +2252,10 @@ begin
             end
             else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
                 slNifFiles.Add(f);
-                if not bReportUVs then continue;
-                //AddMessage(f);
-                if MeshOutsideUVRange(f) then AddMessage('Warning: ' + f + ' may have UVs outside proper 0 to 1 UV range.');
+            end;
+
+            if i mod 10000 = 0 then begin
+                AddMessage('Processed ' + IntToStr(i) + ' of ' + IntToStr(total) + ' files.');
             end;
         end;
     finally
@@ -2283,7 +2315,7 @@ begin
     bgsmVanilla := TwbBGSMFile.Create;
     try
         if not ResourceExists(f) then begin
-            AddMessage('Warning: ' + f + ' does not exist.');
+            AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
 
             Exit;
         end;
@@ -2292,141 +2324,64 @@ begin
         //Fetch vanilla container
         vanillaContainer := FetchVanillaContainer(f);
         if vanillaContainer = '' then begin
-            AddMessage('Warning: Could not find vanilla container for ' + f);
+            AddMessage(#9 + 'Warning: Could not find vanilla container for ' + f);
             Exit;
         end;
 
         bgsmVanilla.LoadFromResource(vanillaContainer, f);
 
         if bgsmVanilla.NativeValues['UOffset'] <> bgsmModded.NativeValues['UOffset'] then begin
-            AddMessage('Warning: ' + f + ' has a modified UOffset value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified UOffset value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['VOffset'] <> bgsmModded.NativeValues['VOffset'] then begin
-            AddMessage('Warning: ' + f + ' has a modified VOffset value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified VOffset value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['UScale'] <> bgsmModded.NativeValues['UScale'] then begin
-            AddMessage('Warning: ' + f + ' has a modified UScale value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified UScale value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['VScale'] <> bgsmModded.NativeValues['VScale'] then begin
-            AddMessage('Warning: ' + f + ' has a modified VScale value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified VScale value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['AlphaTest'] <> bgsmModded.NativeValues['AlphaTest'] then begin
-            AddMessage('Warning: ' + f + ' has a modified AlphaTest value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified AlphaTest value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['TwoSided'] <> bgsmModded.NativeValues['TwoSided'] then begin
-            AddMessage('Warning: ' + f + ' has a modified TwoSided value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified TwoSided value.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['GrayscaleToPaletteColor'] <> bgsmModded.NativeValues['GrayscaleToPaletteColor'] then begin
-            AddMessage('Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
             Result := True;
         end;
         if bgsmVanilla.EditValues['Textures\Diffuse'] <> bgsmModded.EditValues['Textures\Diffuse'] then begin
-            AddMessage('Warning: ' + f + ' has a modified Diffuse texture.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified Diffuse texture.');
             Result := True;
         end;
         if bgsmVanilla.EditValues['Textures\Normal'] <> bgsmModded.EditValues['Textures\Normal'] then begin
-            AddMessage('Warning: ' + f + ' has a modified Normal texture.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified Normal texture.');
             Result := True;
         end;
         if bgsmVanilla.EditValues['Textures\SmoothSpec'] <> bgsmModded.EditValues['Textures\SmoothSpec'] then begin
-            AddMessage('Warning: ' + f + ' has a modified Specular texture.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified Specular texture.');
             Result := True;
         end;
         if bgsmVanilla.EditValues['Textures\Grayscale'] <> bgsmModded.EditValues['Textures\Grayscale'] then begin
-            AddMessage('Warning: ' + f + ' has a modified Grayscale palette texture.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified Grayscale palette texture.');
             Result := True;
         end;
         if bgsmVanilla.NativeValues['GrayscaleToPaletteScale'] <> bgsmModded.NativeValues['GrayscaleToPaletteScale'] then begin
-            AddMessage('Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
             Result := True;
         end;
     finally
         bgsmModded.free;
         bgsmVanilla.free;
     end;
-end;
-
-function MeshOutsideUVRange(f: string): Boolean;
-{
-    Checks a mesh resource to see if its UVs are outside of range.
-}
-var
-    tsUV: TStrings;
-    j, k, vertexCount, iTimesOutsideRange: integer;
-    uv, u, v, mat: string;
-    nif: TwbNifFile;
-    arr, vertex: TdfElement;
-    block, b: TwbNifBlock;
-    bWasEverAbleToCheck, bIsTrishape, bModified: boolean;
-begin
-    bWasEverAbleToCheck := False;
-    bModified := False;
-    iTimesOutsideRange := 0;
-    nif := TwbNifFile.Create;
-    Result := True;
-    try
-        nif.LoadFromResource(f);
-        // iterate over all nif blocks
-        for j := 0 to Pred(nif.BlocksCount) do begin
-            block := nif.Blocks[j];
-            bIsTrishape := False;
-            //if ContainsText(block.Name, 'BSTriShape') then bIsTrishape := True;
-            //if ContainsText(block.Name, 'BSMeshLODTriShape') then bIsTrishape := True;
-            if block.BlockType = 'BSLightingShaderProperty' then begin
-                mat := block.EditValues['Name'];
-                if not SameText(ExtractFileExt(mat), '.bgsm') then begin
-                    AddMessage('Warning: ' + f + #9 + ' does not specify a material');
-                    Continue;
-                end;
-                mat := wbNormalizeResourceName(mat, resMaterial);
-                if not ResourceExists(mat) then begin
-                    AddMessage('Warning: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
-                end;
-                if not ContainsText(ExtractFilePath(mat), 'lod') then AddMessage('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
-            end;
-            if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
-            if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
-            if not bIsTrishape then continue;
-            vertexCount := block.NativeValues['Num Vertices'];
-            if vertexCount < 1 then continue;
-            arr := block.Elements['Vertex Data'];
-            for k := 0 to Pred(vertexCount) do begin
-                vertex := arr[k];
-                uv := vertex.EditValues['UV'];
-                if Length(uv) < 1 then break;
-                bWasEverAbleToCheck := True;
-                tsUV := SplitString(uv, ' ');
-                u := tsUV[0];
-                v := tsUV[1];
-                if StrToFloatDef(u, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
-                if StrToFloatDef(u, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
-                if StrToFloatDef(v, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
-                if StrToFloatDef(v, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
-                if iTimesOutsideRange = 0 then Result := False else begin
-                    Result := True;
-                    Exit;
-                end;
-            end;
-            // if block.IsNiObject('BSMeshLODTriShape', True) then begin
-            //     Turn this on if you want to convert LOD meshes with BSMeshLODTriShape to BSTriShape.
-            //     nif.ConvertBlock(j, 'BSTriShape');
-            //     bModified := True;
-            // end;
-        end;
-    finally
-        if bModified then begin
-            EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(f));
-            nif.SaveToFile(ScriptsPath() + 'FOLIP\output\' + f);
-        end;
-        nif.free;
-    end;
-    if not bWasEverAbleToCheck then Result := False;
 end;
 
 function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
@@ -2520,10 +2475,10 @@ function AssignLODModels(s: IInterface; joLOD: TJsonObject; var sMissingLodMessa
 }
 var
     hasChanged, ruleOverride: Boolean;
-    i, hasDistantLOD, xBnd, yBnd, zBnd: integer;
+    i, c, hasDistantLOD, xBnd, yBnd, zBnd: integer;
     n: IInterface;
     colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
-    slTopPaths: TStringList;
+    slTopPaths, slMaterialsFromModel: TStringList;
 begin
     hasChanged := False;
     ruleOverride := False;
@@ -2607,8 +2562,56 @@ begin
         if hasDistantLOD = 1 then hasChanged := True;
     end;
 
+    //ruleOverride means that the record should not have distant LOD.
     if ruleOverride then hasDistantLOD := 0;
 
+    if ((hasDistantLOD <> 0) and (slCheckedModels.IndexOf(model) = -1)) then begin
+        slCheckedModels.Add(wbNormalizeResourceName(model, resMesh));
+
+        slMaterialsFromModel := TStringList.Create;
+        try
+            if model <> '' then AddMaterialsFromModel(model, slMaterialsFromModel);
+            joModelMaterialMatchLODMaterial.O[model].A['EditorIDs'].Add(editorid);
+            for c := 0 to Pred(slMaterialsFromModel.Count) do begin
+               joModelMaterialMatchLODMaterial.O[model].A['Materials'].Add(slMaterialsFromModel[c]);
+            end;
+        finally
+            slMaterialsFromModel.Free;
+        end;
+
+        if lod4 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod4, resMesh));
+        if lod8 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod8, resMesh));
+        if lod16 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod16, resMesh));
+        if lod32 <> '' then slUsedLODNifFiles.Add(wbNormalizeResourceName(lod32, resMesh));
+
+        slMaterialsFromModel := TStringList.Create;
+        try
+            if lod4 <> '' then begin
+                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod4);
+                if MeshCheck(lod4, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+            end;
+            if lod8 <> '' then begin
+                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod8);
+                if MeshCheck(lod8, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+            end;
+            if lod16 <> '' then begin
+                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod16);
+                if MeshCheck(lod16, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+            end;
+            if lod32 <> '' then begin
+                joModelMaterialMatchLODMaterial.O[model].A['LODs'].Add(lod32);
+                if MeshCheck(lod32, slMaterialsFromModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+            end;
+
+            for c := 0 to Pred(slMaterialsFromModel.Count) do begin
+                joModelMaterialMatchLODMaterial.O[model].A['LOD Materials'].Add(slMaterialsFromModel[c]);
+            end;
+        except on E: Exception do
+            AddMessage('Error: ' + E.Message);
+        finally
+            slMaterialsFromModel.Free;
+        end;
+    end;
 
     if hasChanged then begin
         //AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
@@ -2619,6 +2622,170 @@ begin
         joLOD.S['level3'] := lod32;
     end;
     if hasDistantLOD <> 0 then Result := True else Result := False;
+end;
+
+procedure AddMaterialsFromModel(model: string; var slMaterialsFromModel: TStringList);
+{
+    Adds materials from a model to a string list of materials.
+}
+var
+    i: integer;
+    nif: TwbNifFile;
+    block: TwbNifBlock;
+    mat: string;
+begin
+    if model = '' then Exit;
+    model := wbNormalizeResourceName(model, resMesh);
+    nif := TwbNifFile.Create;
+    try
+        nif.LoadFromResource(model);
+        for i := 0 to Pred(nif.BlocksCount) do begin
+            block := nif.Blocks[i];
+            if block.BlockType = 'BSLightingShaderProperty' then begin
+                mat := wbNormalizeResourceName(block.EditValues['Name'], resMaterial);
+                if not SameText(ExtractFileExt(mat), '.bgsm') then continue
+                else slMaterialsFromModel.Add(mat);
+            end;
+        end;
+    except on E: Exception do
+        AddMessage(#9 + 'Error reading NIF: ' + E.Message + ' ' + model);
+    finally
+        nif.Free;
+    end;
+end;
+
+function MeshCheck(f: string; var slMaterialsFromModel: TStringList): Boolean;
+{
+    Various checks for LOD models.
+    Returns True if the model has UV coordinates outside the range of 0.0 to 1.0.
+}
+var
+    tsUV: TStrings;
+    j, k, vertexCount, iTimesOutsideRange: integer;
+    uv, u, v, mat: string;
+    nif: TwbNifFile;
+    arr, vertex: TdfElement;
+    block, b: TwbNifBlock;
+    bWasEverAbleToCheck, bIsTrishape, bModified: boolean;
+begin
+    f := wbNormalizeResourceName(f, resMesh);
+    bWasEverAbleToCheck := False;
+    bModified := False;
+    iTimesOutsideRange := 0;
+    nif := TwbNifFile.Create;
+    Result := True;
+    try
+        nif.LoadFromResource(f);
+        // iterate over all nif blocks
+        for j := 0 to Pred(nif.BlocksCount) do begin
+            block := nif.Blocks[j];
+            bIsTrishape := False;
+            if block.BlockType = 'BSLightingShaderProperty' then begin
+                mat := block.EditValues['Name'];
+                if not SameText(ExtractFileExt(mat), '.bgsm') then begin
+                    slMeshCheckNoMaterialSpecified.Add('Warning: ' + f + #9 + ' does not specify a material');
+                end
+                else begin
+                    mat := wbNormalizeResourceName(mat, resMaterial);
+                    if not ResourceExists(mat) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
+                    if not ContainsText(ExtractFilePath(mat), 'lod') then slMeshCheckNonLODMaterials.Add('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
+                    slMaterialsFromModel.Add(mat);
+                end;
+            end;
+            if not bReportUVs then continue;
+            if block.IsNiObject('BSTriShape', True) then bIsTrishape := True;
+            if block.IsNiObject('BSMeshLODTriShape', True) then bIsTrishape := True;
+            if not bIsTrishape then continue;
+            vertexCount := block.NativeValues['Num Vertices'];
+            if vertexCount < 1 then continue;
+            arr := block.Elements['Vertex Data'];
+            for k := 0 to Pred(vertexCount) do begin
+                vertex := arr[k];
+                uv := vertex.EditValues['UV'];
+                if Length(uv) < 1 then break;
+                bWasEverAbleToCheck := True;
+                tsUV := SplitString(uv, ' ');
+                u := tsUV[0];
+                v := tsUV[1];
+                if StrToFloatDef(u, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(u, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(v, 9) < -0.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if StrToFloatDef(v, 9) > 1.1 then iTimesOutsideRange := iTimesOutsideRange + 1;
+                if iTimesOutsideRange = 0 then Result := False else begin
+                    Result := True;
+                    Exit;
+                end;
+            end;
+            // if block.IsNiObject('BSMeshLODTriShape', True) then begin
+            //     Turn this on if you want to convert LOD meshes with BSMeshLODTriShape to BSTriShape.
+            //     nif.ConvertBlock(j, 'BSTriShape');
+            //     bModified := True;
+            // end;
+        end;
+    except on E: Exception do
+        AddMessage(#9 + 'Error reading NIF: ' + E.Message + ' ' + f);
+    finally
+        if bModified then begin
+            EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(f));
+            nif.SaveToFile(ScriptsPath() + 'FOLIP\output\' + f);
+        end;
+        nif.free;
+    end;
+    if not bWasEverAbleToCheck then Result := False;
+end;
+
+procedure CheckUsedLODModels;
+{
+    Checks all used LOD models for various issues.
+    Reports missing LOD nif files, not in LOD directory, or does not follow LOD naming convention.
+}
+var
+    i: integer;
+    f: string;
+    slMissingLODNifFiles, slNotInLODDirectory, slDoesNotFollowLODNamingConvention, slOutsideUVRange: TStringList;
+begin
+    slMissingLODNifFiles := TStringList.Create;
+    slMissingLODNifFiles.Sorted := True;
+    slMissingLODNifFiles.Duplicates := dupIgnore;
+
+    slNotInLODDirectory := TStringList.Create;
+    slNotInLODDirectory.Sorted := True;
+    slNotInLODDirectory.Duplicates := dupIgnore;
+
+    slDoesNotFollowLODNamingConvention := TStringList.Create;
+    slDoesNotFollowLODNamingConvention.Sorted := True;
+    slDoesNotFollowLODNamingConvention.Duplicates := dupIgnore;
+
+    slOutsideUVRange := TStringList.Create;
+    slOutsideUVRange.Sorted := True;
+    slOutsideUVRange.Duplicates := dupIgnore;
+
+    try
+        for i := 0 to Pred(slUsedLODNifFiles.Count) do begin
+            f := slUsedLODNifFiles[i];
+            if not ResourceExists(f) then begin
+                slMissingLODNifFiles.Add('Error: ' + f + #9 + ' does not exist.');
+                continue;
+            end;
+            if not IsInLODDir(f, 'meshes') then slNotInLODDirectory.Add('Warning: ' + f + #9 + ' is not in a LOD directory.');
+            if (not IsLODResourceModel(f)) and (not SameText(RightStr(f, 7), 'lod.nif')) then slDoesNotFollowLODNamingConvention.Add('Warning:' + f + #9 + ' does not follow LOD naming conventions.');
+        end;
+    finally
+        AddMessage(IntToStr(i + 1) + ' of ' +  IntToStr(slUsedLODNifFiles.Count) + ' LOD models were checked.');
+        ListStringsInStringList(slMissingLODNifFiles);
+        ListStringsInStringList(slNotInLODDirectory);
+        ListStringsInStringList(slDoesNotFollowLODNamingConvention);
+        if bReportUVs then begin
+            ListStringsInStringList(slMeshCheckMissingMaterials);
+            ListStringsInStringList(slMeshCheckNonLODMaterials);
+            ListStringsInStringList(slMeshCheckNoMaterialSpecified);
+            ListStringsInStringList(slOutsideUVRange);
+        end;
+        slMissingLODNifFiles.Free;
+        slNotInLODDirectory.Free;
+        slDoesNotFollowLODNamingConvention.Free;
+        slOutsideUVRange.Free;
+    end;
 end;
 
 function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
@@ -2941,10 +3108,12 @@ procedure ListStringsInStringList(sl: TStringList);
     Given a TStringList, add a message for all items in the list.
 }
 var
-    i: integer;
+    i, count: integer;
 begin
+    count := sl.Count;
+    if count < 1 then Exit;
     AddMessage('=======================================================================================');
-    for i := 0 to Pred(sl.Count) do AddMessage(sl[i]);
+    for i := 0 to Pred(count) do AddMessage(sl[i]);
     AddMessage('=======================================================================================');
 end;
 
