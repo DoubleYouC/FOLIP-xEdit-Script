@@ -2807,8 +2807,8 @@ begin
         ListStringsInStringList(slMismatchedFullModelToLODMaterials);
         if bReportUVs then begin
             ListStringsInStringList(slMeshCheckMissingMaterials);
-            ListStringsInStringList(slMeshCheckNonLODMaterials);
             ListStringsInStringList(slMeshCheckNoMaterialSpecified);
+            ListStringsInStringList(slMeshCheckNonLODMaterials);
             ListStringsInStringList(slOutsideUVRange);
         end;
         ListStringsInStringList(slMissingLODNifFiles);
