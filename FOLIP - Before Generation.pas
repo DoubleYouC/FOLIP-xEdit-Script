@@ -18,7 +18,7 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
-    sFolipPluginFileName: string;
+    sFolipPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD: Boolean;
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
@@ -29,7 +29,6 @@ const
     sFolipMasterFileName = 'FOLIP - Master.esm';
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
-    sEnableParentFormidExclusions = '060521A9,06056CC4,0301EB18,030376DF,0304FBD9,06048B7D,0301C678,03035ABD,03037610,06041575,0303FD65,0303DC6E,0301C687,0301C67B,03037573,03035A9C,03035AAB,0303DC5C,03035AAA,030375B8,06056CAB,06051FCA';
     sUserSettingsFileName = 'FOLIP\UserSettings.json';
 
 // ----------------------------------------------------
@@ -80,6 +79,9 @@ begin
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
     AddMessage('UI scale: ' + IntToStr(uiScale));
+
+    sIgnoredWorldspaces := '';
+    sEnableParentFormidExclusions := '';
 
 
     FetchRules;
@@ -948,7 +950,7 @@ begin
         bHasOppositeEnableRefs := False;
         parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
         if parentFormid = '00000014' then continue;
-        if Pos(Uppercase(parentFormid), sEnableParentFormidExclusions) <> 0 then continue;
+        if Pos(RecordFormIdFileId(p), sEnableParentFormidExclusions) <> 0 then continue;
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
         bPluginHere := bPlugin;
         AddMessage('Respect Enable Parnets: Processing ' + Name(p));
@@ -1373,6 +1375,8 @@ begin
         if GetIsCleanDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
         bXESP := ElementExists(r, 'XESP');
         if bXESP then begin
@@ -1386,7 +1390,7 @@ begin
             if bRespect then continue;
         end;
 
-        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+
         iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
         iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
         wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
@@ -1406,7 +1410,7 @@ end;
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
-    n, r, s, ms, rCell, fakeStatic: IInterface;
+    n, r, s, ms, rCell, rWrld, fakeStatic: IwbElement;
     HasLOD, bFullLOD: Boolean;
     joLOD: TJsonObject;
     fakeStaticFormID, sMissingLodMessage: string;
@@ -1421,8 +1425,6 @@ begin
         joLOD := TJsonObject.Create;
         HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
-        //AssignLODToStat(s, joLOD);
-
         //Process references that have lod.
         if HasLOD then begin
             cnt := 0;
@@ -1435,6 +1437,8 @@ begin
                 if GetIsCleanDeleted(r) then continue;
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
                 if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
                 //This reference should get lod if it passes these checks.
                 tlHasLOD.Add(s);
@@ -1445,7 +1449,7 @@ begin
                     fakeStatic := AddFakeStatic(s);
 
                     //Add LOD models
-                    AssignLODToStat(fakeStatic, joLOD);
+                    AssignLODToStat(fakeStatic, joLOD, True);
 
                     //Get formid
                     fakeStaticFormID := IntToHex(GetLoadOrderFormID(fakeStatic), 8);
@@ -1913,24 +1917,25 @@ procedure AssignLODModelsList;
 }
 var
     i, cnt: integer;
-    HasLOD: Boolean;
+    HasLOD, bHasEnableParent: Boolean;
     ms, s: IInterface;
     joLOD: TJsonObject;
     sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
+        bHasEnableParent := False;
         sMissingLodMessage := '';
         s := ObjectToElement(tlStats[i]);
         joLOD := TJsonObject.Create;
         try
             HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
-            //Add lod change if the HasDistantLOD flag needs to be unset.
-            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD);
+            //Add lod change if we are removing lod from it.
+            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD, False);
 
             //List relevant material swaps
             if HasLOD then begin
-                cnt := ProcessReferences(s);
+                cnt := ProcessReferences(s, bHasEnableParent);
 
                 if cnt > 0 then tlHasLOD.Add(s);
 
@@ -1940,7 +1945,7 @@ begin
                     if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
                 end;
 
-                if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD);
+                if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD, bHasEnableParent);
             end
             else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
                 if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
@@ -1954,7 +1959,7 @@ end;
 function IsObjectUsedInExterior(s: IInterface): boolean;
 var
     si, cnt: integer;
-    r, rCell: IInterface;
+    r, rCell, rWrld: IInterface;
 begin
     cnt := 0;
 
@@ -1970,6 +1975,8 @@ begin
         if GetIsDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
         //This reference should get lod if it passes these checks.
         cnt := cnt + 1;
@@ -1978,10 +1985,10 @@ begin
     if cnt > 0 then Result := True else Result := False;
 end;
 
-function ProcessReferences(s: IInterface;): integer;
+function ProcessReferences(s: IInterface; var bHasEnableParent: Boolean): integer;
 var
     si, cnt: integer;
-    ms, r, rCell, xesp, parentRef: IInterface;
+    ms, r, rCell, rWrld, xesp, parentRef: IInterface;
     parent: string;
 begin
     cnt := 0;
@@ -1990,7 +1997,7 @@ begin
         if Signature(r) = 'SCOL' then begin
             if not IsWinningOverride(r) then continue;
             if GetIsDeleted(r) then continue;
-            cnt := cnt + ProcessReferences(r);
+            cnt := cnt + ProcessReferences(r, bHasEnableParent);
             //check for base material swap on the SCOL record
             if (cnt > 0) and (ElementExists(r, 'Model\MODS - Material Swap')) then begin
                 ms := LinksTo(ElementByPath(r, 'Model\MODS'));
@@ -2009,6 +2016,8 @@ begin
             AddMessage('Skipped problem record: '+ GetFileName(rCell) + #9 + Name(rCell));
             continue;
         end;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
         cnt := cnt + 1;
         if not ElementExists(r, 'XMSP - Material Swap') then continue;
         ms := LinksTo(ElementByPath(r, 'XMSP'));
@@ -2019,19 +2028,21 @@ begin
         parent := GetElementEditValues(r, 'XESP\Reference');
         xesp := ElementByPath(r, 'XESP');
         parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
+        bHasEnableParent := True;
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end;
     Result := cnt;
 end;
 
-procedure AssignLODToStat(s: IInterface; joLOD: TJsonObject);
+procedure AssignLODToStat(s: IwbElement; joLOD: TJsonObject; bAddHasDistantLOD: Boolean;);
 var
-    n: IInterface;
+    n: IwbElement;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
-    SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod']);
+    if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
+    else SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
     Add(n, 'MNAM', True);
     SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
     SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
@@ -2475,6 +2486,47 @@ begin
             sub.Free;
         end;
     end;
+
+    //Ignore Enable Parents
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - Ignore Enable Parents.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Ignore Enable Parents File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            key := 'Ignore Enable Parents';
+            for a := 0 to Pred(sub.A[key].Count) do begin
+                if sEnableParentFormidExclusions = '' then
+                    sEnableParentFormidExclusions := sub.A[key].S[a]
+                else
+                    sEnableParentFormidExclusions := sEnableParentFormidExclusions + ',' + sub.A[key].S[a];
+            end;
+        finally
+            sub.Free;
+        end;
+    end;
+
+    //Ignore Worldspaces
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Ignore Worldspaces File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            key := 'Ignore Worldspaces';
+            for a := 0 to Pred(sub.A[key].Count) do begin
+                if sIgnoredWorldspaces = '' then
+                    sIgnoredWorldspaces := sub.A[key].S[a]
+                else
+                    sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
+            end;
+        finally
+            sub.Free;
+            AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
+            AddMessage('Ignored Enable Parents: ' + sEnableParentFormidExclusions);
+        end;
+    end;
+
 end;
 
 function AssignLODModels(s: IInterface; joLOD: TJsonObject; var sMissingLodMessage: string): Boolean;
@@ -3212,6 +3264,14 @@ begin
     SetFormVCS1(n, GetFormVCS1(e));
     SetFormVCS2(n, GetFormVCS2(e));
     Result := n;
+end;
+
+function RecordFormIdFileId(e: IwbElement): string;
+{
+    Returns the record ID of an element.
+}
+begin
+    Result := TrimRightChars(IntToHex(FixedFormID(e), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
 end;
 
 end.
