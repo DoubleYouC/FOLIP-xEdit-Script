@@ -4,11 +4,11 @@
 unit HasDistantLOD;
 
 var
-    iPluginFile, iBeforeGeneration, formLists : IInterface;
+    iPluginFile, iBeforeGeneration: IwbFile;
+    formLists: IwbGroupRecord;
     sFolipPluginFileName, sFolipBeforeGeneration : string;
-    slStats : TStringList;
-    tlStats : TList;
-    bLightPlugin : Boolean;
+    slStatsWithOverrides: TStringList;
+    bLightPlugin, bLimitedHasDistantLODRemoval: Boolean;
     uiScale: integer;
 
 const
@@ -19,15 +19,15 @@ function Initialize: integer;
     This function is called at the beginning.
 }
 var
-    i, j, idx: integer;
-    f, g, n, r, p, iFolip: IInterface;
-    editorid, recordId, filename: string;
+    i: integer;
+    f, iFolip: IwbFile;
+    filename: string;
 begin
-    slStats := TStringList.Create;
-    tlStats := TList.Create;
+    slStatsWithOverrides := TStringList.Create;
     sFolipBeforeGeneration := 'FOLIP - Before Generation';
     sFolipPluginFileName := 'FOLIP - After Generation';
     bLightPlugin := True;
+    bLimitedHasDistantLODRemoval := True;
 
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
@@ -80,43 +80,76 @@ begin
         AddMasterIfMissing(iPluginFile, 'Fallout4.esm');
     end;
 
-    for i := 0 to Pred(FileCount) do begin
-        f := FileByIndex(i);
-        //STAT
-        g := GroupBySignature(f, 'STAT');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := GetFileName(r) + #9 + ShortName(r);
-            idx := slStats.IndexOf(recordId);
-            if idx > -1 then continue;
-            if GetElementEditValues(r, 'Record Header\Record Flags\Has Distant LOD') <> '1' then continue;
-            editorid := GetElementEditValues(r, 'EDID');
-            if ContainsText(editorid, 'FOLIP_') then continue;
-            slStats.Add(recordId);
-            tlStats.Add(r);
-        end;
-    end;
-
-    for i := 0 to Pred(tlStats.Count) do begin
-        r := ObjectToElement(tlStats[i]);
-        p := RefMastersDeterminePlugin(r);
-        n := wbCopyElementToFile(r, p, False, True);
-        SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
-    end;
-
     SpecificRecordEdits;
+    RemoveHasDistantLOD;
 
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
 end;
 
-function DoesStatHaveCobj(r: IInterface): Boolean;
+procedure RemoveHasDistantLOD;
+{
+    Removes the Has Distant LOD flag from all STAT records.
+}
+var
+    i, j, idx: integer;
+    f, p: IwbFile;
+    g: IwbGroupRecord;
+    n, r: IwbElement;
+    recordId, editorid, loadOrderFormId: string;
+    slStats: TStringList;
+    tlStats: TList;
+begin
+    slStats := TStringList.Create;
+    tlStats := TList.Create;
+    try
+        for i := 0 to Pred(FileCount) do begin
+            f := FileByIndex(i);
+            //STAT
+            g := GroupBySignature(f, 'STAT');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := WinningOverride(ElementByIndex(g, j));
+                recordId := GetFileName(r) + #9 + ShortName(r);
+                idx := slStats.IndexOf(recordId);
+                if idx > -1 then continue;
+                slStats.Add(recordId);
+                if GetElementEditValues(r, 'Record Header\Record Flags\Has Distant LOD') <> '1' then continue;
+                editorid := GetElementEditValues(r, 'EDID');
+                if ContainsText(editorid, 'FOLIP_') then continue;
+                if not bLimitedHasDistantLODRemoval then begin
+                    tlStats.Add(r);
+                    continue;
+                end;
+                loadOrderFormId := IntToHex(GetLoadOrderFormID(r), 8);
+                idx := slStatsWithOverrides.IndexOf(loadOrderFormId);
+                if idx > -1 then begin
+                    tlStats.Add(r);
+                    continue;
+                end;
+                if DoesStatHaveCobj(r) then tlStats.Add(r);
+            end;
+        end;
+
+        for i := 0 to Pred(tlStats.Count) do begin
+            r := ObjectToElement(tlStats[i]);
+            p := RefMastersDeterminePlugin(r);
+            n := wbCopyElementToFile(r, p, False, True);
+            SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
+        end;
+    finally
+        slStats.Free;
+        tlStats.Free;
+    end;
+end;
+
+function DoesStatHaveCobj(r: IwbElement): Boolean;
 {
     Checks if the STAT record has a COBJ.
 }
 var
     i, j: integer;
-    e, f: IInterface;
+    e: IwbElement;
+    f: IwbFile;
 begin
     Result := False;
     for i := Pred(ReferencedByCount(r)) downto 0 do begin
@@ -143,7 +176,9 @@ procedure SpecificRecordEdits;
 }
 var
     i: integer;
-    f, r, rCell, rWrld, p, n: IInterface;
+    f, p: IwbFile;
+    r, rCell, rWrld, n: IwbElement;
+    base: IwbMainRecord;
     editorid: string;
     tlOverrides, tlParents, tlNeverfades, tlDecals: TList;
 begin
@@ -207,7 +242,9 @@ begin
     //Remove Visible when distant from Overrides.
     for i := 0 to Pred(tlOverrides.Count) do begin
         r := ObjectToElement(tlOverrides[i]);
-        editorid := GetElementEditValues(LinksTo(ElementByPath(r, 'NAME')),'EDID');
+        base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+        editorid := GetElementEditValues(base,'EDID');
+        slStatsWithOverrides.Add(IntToHex(GetLoadOrderFormID(base), 8));
         AddMessage(editorid);
         if ContainsText(editorid, 'FOLIP_') then continue; //Skip FOLIP Fake Statics
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
@@ -223,12 +260,12 @@ begin
     tlOverrides.Free;
 end;
 
-procedure AddFormlistToTList(flst: IInterface; var list: TList);
+procedure AddFormlistToTList(flst: IwbElement; var list: TList);
 {
     Adds all formids in a formlist to the input TList.
 }
 var
-    formids, r: IInterface;
+    formids, r: IwbElement;
     i: integer;
 begin
     formids := ElementByName(flst, 'FormIDs');
@@ -243,9 +280,7 @@ function Finalize: integer;
     This function is called at the end.
 }
 begin
-    slStats.Free;
-    tlStats.Free;
-
+    slStatsWithOverrides.Free;
     Result := 0;
 end;
 
@@ -261,7 +296,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkLightPlugin: TCheckBox;
+    chkLightPlugin, chkLimited: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -292,7 +327,7 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - After Generation';
-        gbOptions.Height := 104;
+        gbOptions.Height := 134;
 
         edBeforeGen := TEdit.Create(gbOptions);
         edBeforeGen.Parent := gbOptions;
@@ -323,6 +358,15 @@ begin
         chkLightPlugin.Hint := 'Flags the output plugin as ESL.';
         chkLightPlugin.ShowHint := True;
 
+        chkLimited := TCheckBox.Create(gbOptions);
+        chkLimited.Parent := gbOptions;
+        chkLimited.Left :=  edBeforeGen.Left;
+        chkLimited.Top := edPluginName.Top + 30;
+        chkLimited.Width := 240;
+        chkLimited.Caption := 'Limited HasDistantLOD Flag Removal';
+        chkLimited.Hint := 'Limits removal of HasDistantLOD flag to only STAT records that have either a constructable object record or an enable parented reference.';
+        chkLimited.ShowHint := True;
+
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
         btnStart.Caption := 'Start';
@@ -348,6 +392,7 @@ begin
         edPluginName.Text := sFolipPluginFileName;
         edBeforeGen.Text := sFolipBeforeGeneration;
         chkLightPlugin.Checked := bLightPlugin;
+        chkLimited.Checked := bLimitedHasDistantLODRemoval;
 
         frm.ActiveControl := btnStart;
         frm.ScaleBy(uiScale, 100);
@@ -363,6 +408,7 @@ begin
         sFolipPluginFileName := edPluginName.Text;
         sFolipBeforeGeneration := edBeforeGen.Text;
         bLightPlugin := chkLightPlugin.Checked;
+        bLimitedHasDistantLODRemoval := chkLimited.Checked;
 
     finally
         frm.Free;
@@ -397,7 +443,7 @@ begin
     Result.Caption := aCaption;
 end;
 
-function RefMastersDeterminePlugin(r: IInterface): IInterface;
+function RefMastersDeterminePlugin(r: IwbElement): IwbFile;
 {
     Adds masters required by the reference to the plugin and returns the plugin.
 }
