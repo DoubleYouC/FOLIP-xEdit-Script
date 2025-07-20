@@ -2392,26 +2392,31 @@ function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
     Checks to see if a material file resource contains non-lod textures.
 }
 var
-    i: integer;
     bgsm: TwbBGSMFile;
-    el: TdfElement;
 begin
     Result := False;
     bgsm := TwbBGSMFile.Create;
     try
         bgsm.LoadFromResource(f);
-        el := bgsm.Elements['Textures'];
-        for i := 0 to Pred(el.Count) do begin
-            tp := el[i].EditValue;
-            if Length(tp) < 4 then continue;
-            if ContainsText(tp, 'lod') then continue;
-            if ContainsText(tp, 'grad.dds') then continue;
-            if ContainsText(tp, 'grad_d.dds') then continue;
-            if ContainsText(tp, 'grad01.dds') then continue;
-            if ContainsText(tp, 'cubemap') then continue;
+
+        tp := bgsmVanilla.EditValues['Textures\Diffuse'];
+        if not ContainsText(tp, 'lod\') then begin
             Result := True;
             break;
         end;
+
+        tp := bgsmVanilla.EditValues['Textures\Normal'];
+        if not ContainsText(tp, 'lod\') then begin
+            Result := True;
+            break;
+        end;
+
+        tp := bgsmVanilla.EditValues['Textures\SmoothSpec'];
+        if not ContainsText(tp, 'lod\') then begin
+            Result := True;
+            break;
+        end;
+
     finally
         bgsm.free;
     end;
@@ -2535,11 +2540,11 @@ begin
         for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
             if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
         end;
-        lod4 := LODModelForLevel(model, colorRemap, '0', olod4, slTopPaths);
-        lod8 := LODModelForLevel(model, colorRemap, '1', olod8, slTopPaths);
+        lod4 := LODModelForLevel(s, model, colorRemap, '0', olod4, slTopPaths);
+        lod8 := LODModelForLevel(s, model, colorRemap, '1', olod8, slTopPaths);
         if bForceLOD8 and (lod8 = '') and (lod4 <> '') then lod8 := lod4;
-        lod16 := LODModelForLevel(model, colorRemap, '2', olod16, slTopPaths);
-        lod32 := LODModelForLevel(model, colorRemap, '3', olod32, slTopPaths);
+        lod16 := LODModelForLevel(s, model, colorRemap, '2', olod16, slTopPaths);
+        lod32 := LODModelForLevel(s, model, colorRemap, '3', olod32, slTopPaths);
         slTopPaths.Free;
 
         //If no lod4 model has been specified, report a list of models that would possibly benefit from having lod.
@@ -2822,7 +2827,7 @@ begin
     end;
 end;
 
-function LODModelForLevel(model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
+function LODModelForLevel(e: IwbElement; model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
 {
     Given a model and level, checks to see if an LOD model exists and returns it.
 }
@@ -2853,7 +2858,9 @@ begin
         //p1 is for specific level lod like 'model_lod_1.nif'
         p1 := searchModel + '_lod_' + level + '.nif';
         if slNifFiles.IndexOf(p1) > -1 then begin
-            if bColorRemap then slMissingColorRemaps.Add('Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model)
+            if bColorRemap then begin
+                slMissingColorRemaps.Add('Warning: Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model + #9 + ShortName(e));
+            end
             else begin
                 Result := TrimRightChars(p1, 7);
                 Exit;
