@@ -33,6 +33,7 @@ begin
     sIgnoredWorldspaces := '';
     bLoadDefaults := True;
 
+    //Load User Settings
     if ResourceExists(sUserSettingsFileName) then begin
         AddMessage('Loading user settings from ' + sUserSettingsFileName);
         joUserSettings.LoadFromResource(sUserSettingsFileName);
@@ -65,12 +66,14 @@ begin
     uiScale := Screen.PixelsPerInch * 100 / 96;
     AddMessage('UI scale: ' + IntToStr(uiScale));
 
+    //Warn users if Simple records are unchecked
     if wbSimpleRecords then begin
         MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
         Result := 1;
         Exit;
     end;
 
+    //Display Menu
     if not MainMenuForm then begin
         Result := 1;
         Exit;
@@ -101,8 +104,10 @@ begin
         end;
 
         if SameText(filename, sFolipFileName) then
+            //FOLIP - New LODs.esp
             iFolip := f
         else if SameText(filename, sFolipPluginFileName + '.esp') then begin
+            //FOLIP - After Generation.esp
             iPluginFile := f;
 
             //Clear out any previous edits to the file.
@@ -117,6 +122,7 @@ begin
             end;
         end
         else if SameText(filename, sFolipBeforeGeneration + '.esp') then begin
+            //FOLIP - Before Generation.esp
             iBeforeGeneration := f;
             // Get form lists from Before Generation plugin
             formLists := GroupBySignature(iBeforeGeneration, 'FLST');
@@ -257,8 +263,7 @@ function DoesStatHaveCobj(r: IwbElement): Boolean;
 }
 var
     i, j: integer;
-    e: IwbElement;
-    f: IwbFile;
+    e, f: IwbElement;
 begin
     Result := False;
     for i := Pred(ReferencedByCount(r)) downto 0 do begin
@@ -268,8 +273,8 @@ begin
             Exit;
         end
         else if Signature(e) = 'FLST' then begin
-            for j := Pred(ElementCount(e)) downto 0 do begin
-                f := ElementByIndex(e, j);
+            for j := Pred(ReferencedByCount(e)) downto 0 do begin
+                f := ReferencedByIndex(e, j);
                 if Signature(f) = 'COBJ' then begin
                     Result := True;
                     Exit;
@@ -331,7 +336,6 @@ begin
         f := WinningOverride(ElementByIndex(formLists, i));
         AddMessage(ShortName(f));
         editorid := GetElementEditValues(f, 'EDID');
-        AddMessage(editorid);
         if editorid = 'FOLIP_Overrides' then AddFormlistToTList(f, tlOverrides)
         else if editorid = 'FOLIP_Parents' then AddFormlistToTList(f, tlParents)
         else if editorid = 'FOLIP_Neverfades' then AddFormlistToTList(f, tlNeverfades)
