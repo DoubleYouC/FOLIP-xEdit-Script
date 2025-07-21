@@ -6,28 +6,60 @@ unit HasDistantLOD;
 var
     iPluginFile, iBeforeGeneration: IwbFile;
     formLists: IwbGroupRecord;
-    sFolipPluginFileName, sFolipBeforeGeneration : string;
-    slStatsWithOverrides: TStringList;
-    bLightPlugin, bLimitedHasDistantLODRemoval: Boolean;
+    sFolipPluginFileName, sFolipBeforeGeneration, sIgnoredWorldspaces: string;
+    slStatsWithOverrides, slOverrides: TStringList;
+    bLightPlugin, bLimitedHasDistantLODRemoval, bRemoveVWD, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration: Boolean;
     uiScale: integer;
+    joUserSettings: TJsonObject;
 
 const
     sFolipFileName = 'FOLIP - New LODs.esp';
+    sUserSettingsFileName = 'FOLIP\UserSettings.json';
 
 function Initialize: integer;
 {
     This function is called at the beginning.
 }
 var
-    i: integer;
+    i, a: integer;
     f, iFolip: IwbFile;
-    filename: string;
+    filename, j, key: string;
+    sub: TJsonObject;
+    bLoadDefaults: Boolean;
 begin
     slStatsWithOverrides := TStringList.Create;
-    sFolipBeforeGeneration := 'FOLIP - Before Generation';
-    sFolipPluginFileName := 'FOLIP - After Generation';
-    bLightPlugin := True;
-    bLimitedHasDistantLODRemoval := True;
+    slOverrides := TStringList.Create;
+    joUserSettings := TJsonObject.Create;
+    sIgnoredWorldspaces := '';
+    bLoadDefaults := True;
+
+    if ResourceExists(sUserSettingsFileName) then begin
+        AddMessage('Loading user settings from ' + sUserSettingsFileName);
+        joUserSettings.LoadFromResource(sUserSettingsFileName);
+        try
+            sFolipBeforeGeneration := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Before Generation');
+            sFolipPluginFileName := Fallback(joUserSettings.S['AfterGenerationPluginName'], 'FOLIP - After Generation');
+            bLightPlugin := StrToBool(Fallback(joUserSettings.S['LightPlugin'], 'true'));
+            bRemoveVWD := StrToBool(Fallback(joUserSettings.S['RemoveVWD'], 'true'));
+            bLimitedHasDistantLODRemoval := StrToBool(Fallback(joUserSettings.S['LimitedHasDistantLODRemoval'], 'true'));
+            bAddVWD := StrToBool(Fallback(joUserSettings.S['AddVWD'], 'true'));
+            bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'true'));
+            bRemoveBeforeGeneration := StrToBool(Fallback(joUserSettings.S['RemoveBeforeGeneration'], 'false'));
+            bLoadDefaults := False;
+        except
+            AddMessage('User settings are incomplete. Loading defaults.');
+        end;
+    end;
+    if bLoadDefaults then begin
+        sFolipBeforeGeneration := 'FOLIP - Before Generation';
+        sFolipPluginFileName := 'FOLIP - After Generation';
+        bLightPlugin := True;
+        bRemoveVWD := True;
+        bLimitedHasDistantLODRemoval := True;
+        bAddVWD := True;
+        bSkipPrecombined := True;
+        bRemoveBeforeGeneration := False;
+    end;
 
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
@@ -48,6 +80,26 @@ begin
         f := FileByIndex(i);
         filename := GetFileName(f);
 
+        // Load Ignore Worldspaces rules
+        j := 'FOLIP\' + TrimLeftChars(filename, 4) + ' - Ignore Worldspaces.json';
+        if ResourceExists(j) then begin
+            AddMessage('Loaded Ignore Worldspaces File: ' + j);
+            sub := TJsonObject.Create;
+            try
+                sub.LoadFromResource(j);
+                key := 'Ignore Worldspaces';
+                for a := 0 to Pred(sub.A[key].Count) do begin
+                    if sIgnoredWorldspaces = '' then
+                        sIgnoredWorldspaces := sub.A[key].S[a]
+                    else
+                        sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
+                end;
+            finally
+                sub.Free;
+                AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
+            end;
+        end;
+
         if SameText(filename, sFolipFileName) then
             iFolip := f
         else if SameText(filename, sFolipPluginFileName + '.esp') then begin
@@ -66,6 +118,7 @@ begin
         end
         else if SameText(filename, sFolipBeforeGeneration + '.esp') then begin
             iBeforeGeneration := f;
+            // Get form lists from Before Generation plugin
             formLists := GroupBySignature(iBeforeGeneration, 'FLST');
         end;
     end;
@@ -98,10 +151,11 @@ var
     n, r: IwbElement;
     recordId, editorid, loadOrderFormId: string;
     slStats: TStringList;
-    tlStats: TList;
+    tlStats, tlStatsWithVWD: TList;
 begin
     slStats := TStringList.Create;
     tlStats := TList.Create;
+    tlStatsWithVWD := TList.Create;
     try
         for i := 0 to Pred(FileCount) do begin
             f := FileByIndex(i);
@@ -109,13 +163,17 @@ begin
             g := GroupBySignature(f, 'STAT');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := WinningOverride(ElementByIndex(g, j));
-                recordId := GetFileName(r) + #9 + ShortName(r);
+                recordId := RecordFormIdFileId(r);
                 idx := slStats.IndexOf(recordId);
                 if idx > -1 then continue;
                 slStats.Add(recordId);
-                if GetElementEditValues(r, 'Record Header\Record Flags\Has Distant LOD') <> '1' then continue;
+                if GetElementEditValues(r, 'Record Header\Record Flags\Has Distant LOD') <> '1' then begin
+                    if bRemoveVWD then SetVisibleWhenDistantFromReferencedBase(r, False);
+                    continue;
+                end;
                 editorid := GetElementEditValues(r, 'EDID');
                 if ContainsText(editorid, 'FOLIP_') then continue;
+
                 if not bLimitedHasDistantLODRemoval then begin
                     tlStats.Add(r);
                     continue;
@@ -126,20 +184,71 @@ begin
                     tlStats.Add(r);
                     continue;
                 end;
-                if DoesStatHaveCobj(r) then tlStats.Add(r);
+                if DoesStatHaveCobj(r) then begin
+                    tlStats.Add(r);
+                    continue;
+                end;
+                if GetElementEditValues(r, 'Record Header\Record Flags\Is Marker') = '1' then begin
+                    tlStats.Add(r);
+                    continue;
+                end;
+                tlStatsWithVWD.Add(r);
             end;
         end;
 
         for i := 0 to Pred(tlStats.Count) do begin
             r := ObjectToElement(tlStats[i]);
-            p := RefMastersDeterminePlugin(r);
-            n := wbCopyElementToFile(r, p, False, True);
-            SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
+            if DoWeNeedToModifyStatHasDistantLOD(r, false) then begin
+                p := RefMastersDeterminePlugin(r);
+                n := wbCopyElementToFile(r, p, False, True);
+                SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', 0);
+                AddMessage('Removed Has Distant LOD flag from ' + ShortName(n));
+            end;
+            if bRemoveVWD then SetVisibleWhenDistantFromReferencedBase(r, False);
+        end;
+
+        if bAddVWD then begin
+            for i := 0 to Pred(tlStatsWithVWD.Count) do begin
+                r := ObjectToElement(tlStatsWithVWD[i]);
+                if DoWeNeedToModifyStatHasDistantLOD(r, true) then begin
+                    p := RefMastersDeterminePlugin(r);
+                    n := wbCopyElementToFile(r, p, False, True);
+                    SetElementEditValues(n, 'Record Header\Record Flags\Has Distant LOD', '1');
+                    AddMessage('Added Has Distant LOD flag to ' + ShortName(n));
+                end;
+                SetVisibleWhenDistantFromReferencedBase(r, True);
+            end;
         end;
     finally
         slStats.Free;
         tlStats.Free;
+        tlStatsWithVWD.Free;
     end;
+end;
+
+function DoWeNeedToModifyStatHasDistantLOD(r: IwbElement; desiredHasDistantLOD: Boolean): Boolean;
+{
+    Checks if the STAT record needs to be modified.
+}
+var
+    i: integer;
+    m, previousOverride, ovr: IwbElement;
+    filename: string;
+    bHasDistantLOD: Boolean;
+begin
+    Result := False;
+    m := MasterOrSelf(r);
+    if OverrideCount(m) > 0 then begin
+        for i := Pred(OverrideCount(m)) downto 0 do begin
+            ovr := OverrideByIndex(m, i);
+            filename := GetFileName(GetFile(ovr));
+            if (bRemoveBeforeGeneration and SameText(filename, sFolipBeforeGeneration + '.esp')) then continue else break;
+        end;
+    end else begin
+        ovr := r;
+    end;
+    if GetElementEditValues(ovr, 'Record Header\Record Flags\Has Distant LOD') <> '1' then bHasDistantLOD := False else bHasDistantLOD := True;
+    if bHasDistantLOD <> desiredHasDistantLOD then Result := true;
 end;
 
 function DoesStatHaveCobj(r: IwbElement): Boolean;
@@ -167,6 +276,37 @@ begin
                 end;
             end;
         end;
+    end;
+end;
+
+procedure SetVisibleWhenDistantFromReferencedBase(base: IwbElement; value: Boolean);
+var
+    i: integer;
+    p: IwbFile;
+    r, rCell, rWrld, n: IwbElement;
+begin
+    for i := Pred(ReferencedByCount(base)) downto 0 do begin
+        r := ReferencedByIndex(base, i);
+        if Signature(r) <> 'REFR' then continue;
+        if GetIsDeleted(r) then continue;
+        if not IsWinningOverride(r) then continue;
+        if (GetIsVisibleWhenDistant(r) = value) then continue;
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        if IsRefPrecombined(r) then continue;
+        if slOverrides.IndexOf(RecordFormIdFileId(r)) > -1 then continue; // Skip if already processed
+        if GetElementEditValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> '0' then continue;
+        p := RefMastersDeterminePlugin(rCell);
+        p := RefMastersDeterminePlugin(rWrld);
+        p := RefMastersDeterminePlugin(r);
+        n := wbCopyElementToFile(rCell, p, False, True);
+        n := wbCopyElementToFile(rWrld, p, False, True);
+        n := CopyElementToFileWithVC(r, p);
+        SetIsVisibleWhenDistant(n, value);
+        if value then AddMessage(#9 + 'Added Visible When Distant to ' + Name(n))
+        else AddMessage(#9 + 'Removed Visible When Distant from ' + Name(n));
     end;
 end;
 
@@ -245,7 +385,6 @@ begin
         base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
         editorid := GetElementEditValues(base,'EDID');
         slStatsWithOverrides.Add(IntToHex(GetLoadOrderFormID(base), 8));
-        AddMessage(editorid);
         if ContainsText(editorid, 'FOLIP_') then continue; //Skip FOLIP Fake Statics
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
@@ -256,6 +395,7 @@ begin
         n := wbCopyElementToFile(rWrld, p, False, True);
         n := CopyElementToFileWithVC(r, p);
         SetIsVisibleWhenDistant(n, False);
+        slOverrides.Add(RecordFormIdFileId(n));
     end;
     tlOverrides.Free;
 end;
@@ -281,6 +421,23 @@ function Finalize: integer;
 }
 begin
     slStatsWithOverrides.Free;
+    slOverrides.Free;
+
+    //Save user settings
+    AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
+    joUserSettings.S['BeforeGenerationPluginName'] := sFolipBeforeGeneration;
+    joUserSettings.S['AfterGenerationPluginName'] := sFolipPluginFileName;
+    joUserSettings.S['LightPlugin'] := BoolToStr(bLightPlugin);
+    joUserSettings.S['RemoveVWD'] := BoolToStr(bRemoveVWD);
+    joUserSettings.S['LimitedHasDistantLODRemoval'] := BoolToStr(bLimitedHasDistantLODRemoval);
+    joUserSettings.S['AddVWD'] := BoolToStr(bAddVWD);
+    joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
+    joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
+
+    joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
+
+    joUserSettings.Free;
+
     Result := 0;
 end;
 
@@ -296,7 +453,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkLightPlugin, chkLimited: TCheckBox;
+    chkLightPlugin, chkLimited, chkRemoveVWD, chkAddVWD, chkSkipPrecombined, chkRemoveBeforeGeneration: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -327,7 +484,7 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - After Generation';
-        gbOptions.Height := 134;
+        gbOptions.Height := 254;
 
         edBeforeGen := TEdit.Create(gbOptions);
         edBeforeGen.Parent := gbOptions;
@@ -363,9 +520,45 @@ begin
         chkLimited.Left :=  edBeforeGen.Left;
         chkLimited.Top := edPluginName.Top + 30;
         chkLimited.Width := 240;
-        chkLimited.Caption := 'Limited HasDistantLOD Flag Removal';
-        chkLimited.Hint := 'Limits removal of HasDistantLOD flag to only STAT records that have either a constructable object record or an enable parented reference.';
+        chkLimited.Caption := 'Limited Has Distant LOD Flag Removal';
+        chkLimited.Hint := 'Limits removal of Has Distant LOD flag to only STAT records that have either a constructable object record or an enable parented reference.';
         chkLimited.ShowHint := True;
+
+        chkRemoveVWD := TCheckBox.Create(gbOptions);
+        chkRemoveVWD.Parent := gbOptions;
+        chkRemoveVWD.Left :=  edBeforeGen.Left;
+        chkRemoveVWD.Top := chkLimited.Top + 30;
+        chkRemoveVWD.Width := 240;
+        chkRemoveVWD.Caption := 'Remove Visible When Distant';
+        chkRemoveVWD.Hint := 'Any REFRs whose base STAT record is not flagged Has Distant LOD will also have their Visible When Distant removed.';
+        chkRemoveVWD.ShowHint := True;
+
+        chkAddVWD := TCheckBox.Create(gbOptions);
+        chkAddVWD.Parent := gbOptions;
+        chkAddVWD.Left :=  edBeforeGen.Left;
+        chkAddVWD.Top := chkRemoveVWD.Top + 30;
+        chkAddVWD.Width := 240;
+        chkAddVWD.Caption := 'Add Visible When Distant';
+        chkAddVWD.Hint := 'Any REFRs whose base STAT record is flagged Has Distant LOD will also be flagged Visible When Distant.';
+        chkAddVWD.ShowHint := True;
+
+        chkSkipPrecombined := TCheckBox.Create(gbOptions);
+        chkSkipPrecombined.Parent := gbOptions;
+        chkSkipPrecombined.Left :=  edBeforeGen.Left;
+        chkSkipPrecombined.Top := chkAddVWD.Top + 30;
+        chkSkipPrecombined.Width := 240;
+        chkSkipPrecombined.Caption := 'Skip Precombined References';
+        chkSkipPrecombined.Hint := 'Any REFRs that are precombined will be skipped.';
+        chkSkipPrecombined.ShowHint := True;
+
+        chkRemoveBeforeGeneration := TCheckBox.Create(gbOptions);
+        chkRemoveBeforeGeneration.Parent := gbOptions;
+        chkRemoveBeforeGeneration.Left :=  edBeforeGen.Left;
+        chkRemoveBeforeGeneration.Top := chkAddVWD.Top + 30;
+        chkRemoveBeforeGeneration.Width := 300;
+        chkRemoveBeforeGeneration.Caption := 'I will be removing the Before Generation plugin';
+        chkRemoveBeforeGeneration.Hint := 'Check if you will be removing the Before Generation plugin once complete with the process.';
+        chkRemoveBeforeGeneration.ShowHint := True;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
@@ -393,6 +586,10 @@ begin
         edBeforeGen.Text := sFolipBeforeGeneration;
         chkLightPlugin.Checked := bLightPlugin;
         chkLimited.Checked := bLimitedHasDistantLODRemoval;
+        chkRemoveVWD.Checked := bRemoveVWD;
+        chkAddVWD.Checked := bAddVWD;
+        chkSkipPrecombined.Checked := bSkipPrecombined;
+        chkRemoveBeforeGeneration.Checked := bRemoveBeforeGeneration;
 
         frm.ActiveControl := btnStart;
         frm.ScaleBy(uiScale, 100);
@@ -409,6 +606,10 @@ begin
         sFolipBeforeGeneration := edBeforeGen.Text;
         bLightPlugin := chkLightPlugin.Checked;
         bLimitedHasDistantLODRemoval := chkLimited.Checked;
+        bRemoveVWD := chkRemoveVWD.Checked;
+        bAddVWD := chkAddVWD.Checked;
+        bSkipPrecombined := chkSkipPrecombined.Checked;
+        bRemoveBeforeGeneration := chkRemoveBeforeGeneration.Checked;
 
     finally
         frm.Free;
@@ -464,6 +665,75 @@ begin
     SetFormVCS1(n, GetFormVCS1(e));
     SetFormVCS2(n, GetFormVCS2(e));
     Result := n;
+end;
+
+function IsRefPrecombined(r: IwbElement): Boolean;
+{
+    Checks if a reference is precombined.
+}
+var
+    i, t, preCombinedRefsCount, rc: Integer;
+    rCell, refs: IwbElement;
+begin
+    Result := false;
+    t := ReferencedByCount(r) - 1;
+    if t < 0 then Exit;
+    for i := 0 to t do begin
+        rCell := ReferencedByIndex(r, i);
+        if Signature(rCell) <> 'CELL' then continue;
+        if not IsWinningOverride(rCell) then continue;
+        //AddMessage(ShortName(r) + ' is referenced in ' + Name(c));
+        Result := true;
+        Exit;
+    end;
+end;
+
+function BoolToStr(b: boolean): string;
+{
+    Given a boolean, return a string.
+}
+begin
+    if b then Result := 'true' else Result := 'false';
+end;
+
+function TrimRightChars(s: string; chars: integer): string;
+{
+    Returns right string - chars
+}
+begin
+    Result := RightStr(s, Length(s) - chars);
+end;
+
+function TrimLeftChars(s: string; chars: integer): string;
+{
+    Returns left string - chars
+}
+begin
+    Result := LeftStr(s, Length(s) - chars);
+end;
+
+function RecordFormIdFileId(e: IwbElement): string;
+{
+    Returns the record ID of an element.
+}
+begin
+    Result := TrimRightChars(IntToHex(FixedFormID(e), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+end;
+
+function StrToBool(str: string): boolean;
+{
+    Given a string, return a boolean.
+}
+begin
+    if (LowerCase(str) = 'true') or (str = '1') then Result := True else Result := False;
+end;
+
+function Fallback(str, fallback: string): string;
+{
+    Set a fallback value if blank.
+}
+begin
+    if str = '' then Result := fallback else Result := str;
 end;
 
 end.
