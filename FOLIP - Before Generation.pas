@@ -18,8 +18,8 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics: IInterface;
     uiScale: integer;
-    sFolipPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD: Boolean;
+    sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration: Boolean;
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
@@ -39,21 +39,37 @@ function Initialize:integer;
 {
     This function is called at the beginning.
 }
+var
+    bLoadDefaults: Boolean;
 begin
     CreateObjects;
+    bLoadDefaults := True;
     if ResourceExists(sUserSettingsFileName) then begin
         AddMessage('Loading user settings from ' + sUserSettingsFileName);
         joUserSettings.LoadFromResource(sUserSettingsFileName);
-        bFakeStatics := StrToBool(joUserSettings.S['FakeStatics']);
-        bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
-        bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
-        bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
-        bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
-        bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
-        bRespectEnableMarkers := StrToBool(joUserSettings.S['RespectEnableMarkers']);
-        sFolipPluginFileName := joUserSettings.S['BeforeGenerationPluginName'];
-    end
-    else begin
+        try
+            bFakeStatics := StrToBool(joUserSettings.S['FakeStatics']);
+            bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
+            bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
+            bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
+            bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
+            bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
+            bRespectEnableMarkers := StrToBool(joUserSettings.S['RespectEnableMarkers']);
+            sFolipPluginFileName := joUserSettings.S['BeforeGenerationPluginName'];
+
+            sFolipAfterGenerationPluginFileName := joUserSettings.S['AfterGenerationPluginName'];
+            bLightPlugin := StrToBool(joUserSettings.S['LightPlugin']);
+            bRemoveVWD := StrToBool(joUserSettings.S['RemoveVWD']);
+            bLimitedHasDistantLODRemoval := StrToBool(joUserSettings.S['LimitedHasDistantLODRemoval']);
+            bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
+            bSkipPrecombined := StrToBool(joUserSettings.S['SkipPrecombined']);
+            bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
+            bLoadDefaults := False;
+        except
+            AddMessage('User settings are incomplete. Loading defaults.');
+        end;
+    end;
+    if bLoadDefaults then begin
         //Set default options.
         bFakeStatics := True;
         bForceLOD8 := False;
@@ -70,6 +86,7 @@ begin
 
         //Default plugin name.
         sFolipPluginFileName := 'FOLIP - Before Generation';
+        sFolipAfterGenerationPluginFileName := 'FOLIP - After Generation';
     end;
 
     //Used to tell the Rule Editor whether or not to save changes.
@@ -203,6 +220,14 @@ begin
     joUserSettings.S['ReportMissingLOD'] := BoolToStr(bReportMissingLOD);
     joUserSettings.S['RespectEnableMarkers'] := BoolToStr(bRespectEnableMarkers);
     joUserSettings.S['BeforeGenerationPluginName'] := sFolipPluginFileName;
+    joUserSettings.S['AfterGenerationPluginName'] := sFolipAfterGenerationPluginFileName;
+    joUserSettings.S['LightPlugin'] := BoolToStr(bLightPlugin);
+    joUserSettings.S['RemoveVWD'] := BoolToStr(bRemoveVWD);
+    joUserSettings.S['LimitedHasDistantLODRemoval'] := BoolToStr(bLimitedHasDistantLODRemoval);
+    joUserSettings.S['AddVWD'] := BoolToStr(bAddVWD);
+    joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
+    joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
+
     joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
 
     Result := 0;
@@ -2041,6 +2066,10 @@ begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
+
+    //Test
+    bAddHasDistantLOD := True; //For testing purposes, always set Has Distant LOD flag.
+
     if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
     else SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
     Add(n, 'MNAM', True);
@@ -2503,6 +2532,7 @@ begin
             end;
         finally
             sub.Free;
+            AddMessage('Ignored Enable Parents: ' + sEnableParentFormidExclusions);
         end;
     end;
 
@@ -2523,7 +2553,6 @@ begin
         finally
             sub.Free;
             AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
-            AddMessage('Ignored Enable Parents: ' + sEnableParentFormidExclusions);
         end;
     end;
 
@@ -3159,7 +3188,7 @@ function StrToBool(str: string): boolean;
     Given a string, return a boolean.
 }
 begin
-    if (str = 'true') or (str = '1') then Result := True else Result := False;
+    if (LowerCase(str) = 'true') or (str = '1') then Result := True else Result := False;
 end;
 
 function Fallback(str, fallback: string): string;
