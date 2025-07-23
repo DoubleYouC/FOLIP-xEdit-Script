@@ -982,7 +982,7 @@ begin
         iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
         bPluginHere := bPlugin;
         AddMessage('Respect Enable Parents: Processing ' + Name(p));
-        if LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00' then bCanBeRespected := True;
+        if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p))) then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
@@ -1060,6 +1060,7 @@ begin
             // Ensure cell is added to prevent failure to copy reference.
             rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
             bPluginHere := bPlugin;
@@ -1094,9 +1095,18 @@ begin
 
             for oi := 0 to Pred(tlOppositeEnableRefs.Count) do begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
-                AddMessage(#9 + Name(r));
+
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                // Skip if in interior cell
+                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                // Check for ignored worldspace
+                if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+                // Check if WRLD inherits LOD from another worldspace
+                if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+
+                AddMessage(#9 + Name(r));
+
                 bPluginTemp := False;
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
                 iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
@@ -1123,9 +1133,9 @@ begin
 
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
                 SetIsVisibleWhenDistant(n, True);
-                bIsFullLOD := StrToBool(GetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD'));
+                if GetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLOD := true else bIsFullLOD := false;
                 if bIsFullLOD then begin
-                    SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
+                    SetElementNativeValues(n, 'Record Header\Record Flags\Is Full LOD', 0);
                     AddRefToMyFormlist(n, flRemoveIsFullLOD);
                 end;
                 AddRefToMyFormlist(n, flOverrides);
@@ -1146,12 +1156,18 @@ begin
             for oi := 0 to Pred(tlEnableRefs.Count) do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
 
-                bIsFullLOD := StrToBool(GetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD'));
+                if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLOD := true else bIsFullLOD := false;
 
                 if (not bCanBeRespected) or (not GetIsVisibleWhenDistant(r)) or bIsFullLOD then begin
                     AddMessage(#9 + Name(r));
                     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                    // Skip if in interior cell
+                    if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
                     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                    // Check for ignored worldspace
+                    if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+                    // Check if WRLD inherits LOD from another worldspace
+                    if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
                     bPluginTemp := False;
                     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
                     iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
@@ -1181,7 +1197,7 @@ begin
                     end;
 
                     if bIsFullLOD then begin
-                        SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
+                        SetElementNativeValues(n, 'Record Header\Record Flags\Is Full LOD', 0);
                         AddRefToMyFormlist(n, flRemoveIsFullLOD);
                     end;
 
@@ -1325,9 +1341,9 @@ begin
     end;
 end;
 
-function GetSuitableReplacement: IInterface;
+function GetSuitableReplacement: IwbElement;
 var
-    stolen, r, m, rCell, g, n: IInterface;
+    stolen, r, m, rCell, n: IwbElement;
     i, j: integer;
 begin
     Result := nil;
@@ -1376,9 +1392,9 @@ begin
     end;
 end;
 
-procedure AddRefToMyFormlist(r, frmlst: IInterface);
+procedure AddRefToMyFormlist(r, frmlst: IwbElement);
 var
-    formids, lnam: IInterface;
+    formids, lnam: IwbElement;
 begin
     if not ElementExists(frmlst, 'FormIDs') then begin
         formids := Add(frmlst, 'FormIDs', True);
@@ -1399,7 +1415,7 @@ end;
 function IsFullLOD(s: IInterface): Boolean;
 var
     model, editorid: string;
-    bIsFullLOD, bXESP, bRespect: Boolean;
+    bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
     r, n, rCell, rWrld, parentRef, xesp: IInterface;
 begin
@@ -1431,7 +1447,8 @@ begin
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
             bRespect := GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State');
         end;
-        if GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') then begin
+        if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLODFlagged := true else bIsFullLODFlagged := false;
+        if bIsFullLODFlagged then begin
             if not bXESP then continue;
             if GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') then continue;
             if bRespect then continue;
@@ -1486,6 +1503,9 @@ begin
                 if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+
+                // Check if WRLD inherits LOD from another worldspace
+                if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
 
                 //This reference should get lod if it passes these checks.
                 tlHasLOD.Add(MasterOrSelf(s));
@@ -1964,13 +1984,14 @@ procedure AssignLODModelsList;
 }
 var
     i, cnt: integer;
-    HasLOD, bHasEnableParent: Boolean;
+    HasLOD, bHasEnableParent, bHasSCOLNeedingLOD: Boolean;
     ms, s: IwbElement;
     joLOD: TJsonObject;
     sMissingLodMessage: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
         bHasEnableParent := False;
+        bHasSCOLNeedingLOD := False;
         sMissingLodMessage := '';
         s := ObjectToElement(tlStats[i]);
         joLOD := TJsonObject.Create;
@@ -1982,7 +2003,7 @@ begin
 
             //List relevant material swaps
             if HasLOD then begin
-                cnt := ProcessReferences(s, bHasEnableParent);
+                cnt := ProcessReferences(s, bHasEnableParent, bHasSCOLNeedingLOD);
 
                 if cnt > 0 then tlHasLOD.Add(MasterOrSelf(s));
 
@@ -2025,6 +2046,9 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
+        // Check if WRLD inherits LOD from another worldspace
+        if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+
         //This reference should get lod if it passes these checks.
         cnt := cnt + 1;
         break;
@@ -2032,7 +2056,7 @@ begin
     if cnt > 0 then Result := True else Result := False;
 end;
 
-function ProcessReferences(s: IInterface; var bHasEnableParent: Boolean): integer;
+function ProcessReferences(s: IwbElement; var bHasEnableParent: Boolean; var bHasSCOLNeedingLOD: Boolean): integer;
 var
     si, cnt: integer;
     ms, r, rCell, rWrld, xesp, parentRef, n: IwbElement;
@@ -2047,7 +2071,7 @@ begin
         if Signature(r) = 'SCOL' then begin
             if not IsWinningOverride(r) then continue;
             if GetIsDeleted(r) then continue;
-            cnt := cnt + ProcessReferences(r, bHasEnableParent);
+            cnt := cnt + ProcessReferences(r, bHasEnableParent, bHasSCOLNeedingLOD);
             continue;
         end;
         // skip anything else that isn't a REFR
@@ -2069,6 +2093,9 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
+        // Check if WRLD inherits LOD from another worldspace
+        if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+
         // Increment count if you made it this far.
         cnt := cnt + 1;
 
@@ -2087,7 +2114,7 @@ begin
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
         end;
 
-        if (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') = '1') then begin
+        if (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0') then begin
             if ElementExists(r, 'XESP - Enable Parent') then continue; //we will fix these when we check enable parents.
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
@@ -2101,6 +2128,7 @@ begin
         end;
     end;
     if (Signature(s) = 'SCOL') and (cnt > 0) then begin
+        bHasSCOLNeedingLOD := true;
         if tlHasLOD.IndexOf(MasterOrSelf(s)) = -1 then tlHasLOD.Add(MasterOrSelf(s));
         //check for base material swap on the SCOL record
         if ElementExists(r, 'Model\MODS - Material Swap') then begin
@@ -2118,9 +2146,6 @@ begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
-
-    //Test
-    bAddHasDistantLOD := True; //For testing purposes, always set Has Distant LOD flag.
 
     if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
     else SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
