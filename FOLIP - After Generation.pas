@@ -56,8 +56,8 @@ begin
         sFolipPluginFileName := 'FOLIP - After Generation';
         bLightPlugin := True;
         bRemoveVWD := True;
-        bLimitedHasDistantLODRemoval := True;
-        bAddVWD := True;
+        bLimitedHasDistantLODRemoval := False;
+        bAddVWD := False;
         bSkipPrecombined := True;
         bRemoveBeforeGeneration := False;
     end;
@@ -294,6 +294,7 @@ begin
         r := ReferencedByIndex(base, i);
         if Signature(r) <> 'REFR' then continue;
         if GetIsDeleted(r) then continue;
+        if GetIsCleanDeleted(r) then continue;
         if not IsWinningOverride(r) then continue;
         if (GetIsVisibleWhenDistant(r) = value) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
@@ -558,7 +559,7 @@ begin
         chkRemoveBeforeGeneration := TCheckBox.Create(gbOptions);
         chkRemoveBeforeGeneration.Parent := gbOptions;
         chkRemoveBeforeGeneration.Left :=  edBeforeGen.Left;
-        chkRemoveBeforeGeneration.Top := chkAddVWD.Top + 30;
+        chkRemoveBeforeGeneration.Top := chkSkipPrecombined.Top + 30;
         chkRemoveBeforeGeneration.Width := 300;
         chkRemoveBeforeGeneration.Caption := 'I will be removing the Before Generation plugin';
         chkRemoveBeforeGeneration.Hint := 'Check if you will be removing the Before Generation plugin once complete with the process.';
@@ -690,6 +691,18 @@ begin
         Result := true;
         Exit;
     end;
+end;
+
+function GetIsCleanDeleted(r: IwbElement): Boolean;
+{
+    Checks to see if a reference has an XESP set to opposite of the PlayerRef
+}
+begin
+    Result := False;
+    if not ElementExists(r, 'XESP') then Exit;
+    if not GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') = '1' then Exit;
+    if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
+    Result := True;
 end;
 
 function BoolToStr(b: boolean): string;
