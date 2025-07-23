@@ -1508,12 +1508,13 @@ begin
                 if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
 
                 //This reference should get lod if it passes these checks.
-                tlHasLOD.Add(MasterOrSelf(s));
                 cnt := cnt + 1;
                 //Perform these functions if this is the very first reference. We set up the base object as a Fake Static.
                 if cnt = 1 then begin
                     //Create Fake Static
                     fakeStatic := AddFakeStatic(s);
+
+                    tlHasLOD.Add(fakeStatic);
 
                     //Add LOD models
                     AssignLODToStat(fakeStatic, joLOD, True);
@@ -2518,19 +2519,19 @@ begin
     try
         bgsm.LoadFromResource(f);
 
-        tp := bgsmVanilla.EditValues['Textures\Diffuse'];
+        tp := bgsm.EditValues['Textures\Diffuse'];
         if not ContainsText(tp, 'lod\') then begin
             Result := True;
             break;
         end;
 
-        tp := bgsmVanilla.EditValues['Textures\Normal'];
+        tp := bgsm.EditValues['Textures\Normal'];
         if not ContainsText(tp, 'lod\') then begin
             Result := True;
             break;
         end;
 
-        tp := bgsmVanilla.EditValues['Textures\SmoothSpec'];
+        tp := bgsm.EditValues['Textures\SmoothSpec'];
         if not ContainsText(tp, 'lod\') then begin
             Result := True;
             break;
