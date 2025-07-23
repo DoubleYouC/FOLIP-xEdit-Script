@@ -2381,6 +2381,7 @@ begin
                 AddMessage('Processed ' + IntToStr(i) + ' of ' + IntToStr(total) + ' files.');
             end;
         end;
+    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         slVanilla.Free;
         slModded.Free;
@@ -2417,6 +2418,7 @@ begin
                 Exit;
             end;
         end;
+    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         slVanilla.Free;
         vanillaContainers.Free;
@@ -2501,6 +2503,7 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
             Result := True;
         end;
+    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsmModded.free;
         bgsmVanilla.free;
@@ -2520,23 +2523,23 @@ begin
         bgsm.LoadFromResource(f);
 
         tp := bgsm.EditValues['Textures\Diffuse'];
-        if not ContainsText(tp, 'lod\') then begin
+        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\'))  then begin
             Result := True;
-            break;
+            Exit;
         end;
 
         tp := bgsm.EditValues['Textures\Normal'];
-        if not ContainsText(tp, 'lod\') then begin
+        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\')) then begin
             Result := True;
-            break;
+            Exit;
         end;
 
         tp := bgsm.EditValues['Textures\SmoothSpec'];
-        if not ContainsText(tp, 'lod\') then begin
+        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\')) then begin
             Result := True;
-            break;
+            Exit;
         end;
-
+    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsm.free;
     end;
@@ -2562,6 +2565,7 @@ begin
                 key := sub.Names[c];
                 joRules.O[key].Assign(sub.O[key]);
             end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -2577,6 +2581,7 @@ begin
                 key := sub.Names[c];
                 for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
             end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -2591,6 +2596,7 @@ begin
                 key := sub.Names[c];
                 joMultiRefLOD.O[key].Assign(sub.O[key]);
             end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -2610,6 +2616,7 @@ begin
                 else
                     sEnableParentFormidExclusions := sEnableParentFormidExclusions + ',' + sub.A[key].S[a];
             end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
             AddMessage('Ignored Enable Parents: ' + sEnableParentFormidExclusions);
@@ -2630,6 +2637,7 @@ begin
                 else
                     sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
             end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
             AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
