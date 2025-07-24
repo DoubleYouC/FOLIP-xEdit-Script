@@ -14,8 +14,8 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlHasLOD, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles: TStringList;
+    tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlEnableParents, tlStolenForms, tlTxst: TList;
+    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
@@ -180,7 +180,6 @@ begin
     tlMswp.Free;
     tlMasterCells.Free;
     tlPluginCells.Free;
-    tlHasLOD.Free;
     tlEnableParents.Free;
     tlStolenForms.Free;
     tlTxst.Free;
@@ -199,6 +198,7 @@ begin
     slMeshCheckNoMaterialSpecified.Free;
     slCheckedModels.Free;
     slMismatchedFullModelToLODMaterials.Free;
+    slHasLOD.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -244,7 +244,6 @@ begin
     tlMswp := TList.Create;
     tlMasterCells := TList.Create;
     tlPluginCells := TList.Create;
-    tlHasLOD := TList.Create;
     tlEnableParents := TList.Create;
     tlStolenForms := TList.Create;
     tlTxst := TList.Create;
@@ -282,6 +281,7 @@ begin
     slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
 
     slCheckedModels := TStringList.Create;
+    slHasLOD := TStringList.Create;
 
     slTopLevelModPatternPaths := TStringList.Create;
     slMessages := TStringList.Create;
@@ -1018,8 +1018,8 @@ begin
             if GetIsDeleted(r) then continue;
             if GetIsCleanDeleted(r) then continue;
 
-            base := MasterOrSelf(LinksTo(ElementByPath(r, 'NAME')));
-            if (tlHasLOD.IndexOf(base) <> -1) then bBaseHasLOD := True;
+            base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+            if (slHasLOD.IndexOf(RecordFormIdFileId(base)) <> -1) then bBaseHasLOD := True;
 
             //Split between refs with LOD and not having LOD
             if not bBaseHasLOD then begin
@@ -1155,7 +1155,6 @@ begin
             end;
             for oi := 0 to Pred(tlEnableRefs.Count) do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
-
                 if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLOD := true else bIsFullLOD := false;
 
                 if (not bCanBeRespected) or (not GetIsVisibleWhenDistant(r)) or bIsFullLOD then begin
@@ -1514,10 +1513,10 @@ begin
                     //Create Fake Static
                     fakeStatic := AddFakeStatic(s);
 
-                    tlHasLOD.Add(fakeStatic);
-
                     //Add LOD models
                     AssignLODToStat(fakeStatic, joLOD, True);
+
+                    slHasLOD.Add(RecordFormIdFileId(fakeStatic));
 
                     //Get formid
                     fakeStaticFormID := IntToHex(GetLoadOrderFormID(fakeStatic), 8);
@@ -1699,7 +1698,7 @@ begin
     Result := n;
 end;
 
-procedure CopyObjectBounds(copyFrom, copyTo: IInterface);
+procedure CopyObjectBounds(copyFrom, copyTo: IwbElement);
 {
     Copies the object bounds of the first reference to the second reference.
 }
@@ -1712,12 +1711,13 @@ begin
     SetElementNativeValues(copyTo, 'OBND\Z2', GetElementNativeValues(copyFrom, 'OBND\Z2'));
 end;
 
-function AddFakeStatic(s: IInterface): IInterface;
+function AddFakeStatic(s: IwbElement): IwbElement;
 {
     Adds a fake static version of the non-static input and returns is.
 }
 var
-    patchStatGroup, ms, fakeStatic: IInterface;
+    ms, fakeStatic: IwbElement;
+    patchStatGroup: IwbGroupRecord;
     HasMS: Boolean;
     fakeStaticEditorId: string;
 begin
@@ -2006,7 +2006,7 @@ begin
             if HasLOD then begin
                 cnt := ProcessReferences(s, bHasEnableParent, bHasSCOLNeedingLOD);
 
-                if cnt > 0 then tlHasLOD.Add(MasterOrSelf(s));
+                if cnt > 0 then slHasLOD.Add(RecordFormIdFileId(s));
 
                 //check for base material swap
                 if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
@@ -2130,7 +2130,7 @@ begin
     end;
     if (Signature(s) = 'SCOL') and (cnt > 0) then begin
         bHasSCOLNeedingLOD := true;
-        if tlHasLOD.IndexOf(MasterOrSelf(s)) = -1 then tlHasLOD.Add(MasterOrSelf(s));
+        if (slHasLOD.IndexOf(RecordFormIdFileId(s)) = -1) then slHasLOD.Add(RecordFormIdFileId(s));
         //check for base material swap on the SCOL record
         if ElementExists(r, 'Model\MODS - Material Swap') then begin
             ms := LinksTo(ElementByPath(r, 'Model\MODS'));
