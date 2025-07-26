@@ -237,11 +237,11 @@ begin
     joUserSettings.Free;
 
     //Save Texgen files
-    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + ScriptsPath() + 'FOLIP\output\DynDOLOD');
+    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbDataPath + 'DynDOLOD');
     sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName);
-    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
 
 
     slTexgen_copy.Free;
