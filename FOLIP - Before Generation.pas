@@ -15,7 +15,7 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD: TStringList;
+    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha, slTexgen_copy, slTexgen_alpha, slTexgen_noalpha: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
@@ -174,6 +174,8 @@ function Finalize: integer;
 {
     This function is called at the end.
 }
+var
+    sFolipPluginFileNameSanitized: string;
 begin
     tlStats.Free;
     tlActiFurnMstt.Free;
@@ -199,6 +201,9 @@ begin
     slCheckedModels.Free;
     slMismatchedFullModelToLODMaterials.Free;
     slHasLOD.Free;
+    slFOLIPTexgen_noalpha.Free;
+    slFOLIPTexgen_copy.Free;
+    slFOLIPTexgen_alpha.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -229,6 +234,19 @@ begin
     joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
 
     joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
+    joUserSettings.Free;
+
+    //Save Texgen files
+    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + ScriptsPath() + 'FOLIP\output\DynDOLOD');
+    sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName);
+    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(ScriptsPath() + 'FOLIP\output\DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+
+
+    slTexgen_copy.Free;
+    slTexgen_noalpha.Free;
+    slTexgen_alpha.Free;
 
     Result := 0;
 end;
@@ -294,6 +312,16 @@ begin
 
     slMissingColorRemaps := TStringList.Create;
     slMissingColorRemaps.Sorted := True;
+
+    slFOLIPTexgen_noalpha := TStringList.Create;
+    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
+    slFOLIPTexgen_copy := TStringList.Create;
+    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+    slFOLIPTexgen_alpha := TStringList.Create;
+    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+    slTexgen_copy := TStringList.Create;
+    slTexgen_alpha := TStringList.Create;
+    slTexgen_noalpha := TStringList.Create;
 
     //TJsonObjects
     joRules := TJsonObject.Create;
@@ -1280,7 +1308,7 @@ begin
 
             if bNeedsModified then begin
                 AddMessage(#9 + Name(r));
-                AddRefToMyFormlist(r, flMultiRefLOD);
+                //AddRefToMyFormlist(r, flMultiRefLOD);
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
@@ -1694,7 +1722,7 @@ begin
     ElementAssign(xespDup, 0, nil, False);
     SetElementEditValues(n, 'XESP\Reference', parent);
 
-    AddRefToMyFormlist(n, flFakeStatics);
+    //AddRefToMyFormlist(n, flFakeStatics);
     Result := n;
 end;
 
@@ -2006,15 +2034,30 @@ begin
             if HasLOD then begin
                 cnt := ProcessReferences(s, bHasEnableParent, bHasSCOLNeedingLOD);
 
-                if cnt > 0 then slHasLOD.Add(RecordFormIdFileId(s));
-
                 //check for base material swap
                 if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
                     ms := LinksTo(ElementByPath(s, 'Model\MODS'));
                     if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
                 end;
 
-                if ((cnt > 0) and (joLOD.Count > 0)) then AssignLODToStat(s, joLOD, bHasEnableParent);
+                if ((cnt > 0) and (joLOD.Count > 0)) then begin
+                    slHasLOD.Add(RecordFormIdFileId(s));
+                    AssignLODToStat(s, joLOD, false);
+                    // Stripping this idea, since it more than doubles the amount of time required to do this, defeating the purpose of this idea.
+                    // if bHasEnableParent and (not bHasSCOLNeedingLOD) then begin
+                    //     tlActiFurnMstt.Add(s);
+                    //     joLOD.S['level0'] := '';
+                    //     joLOD.S['level1'] := '';
+                    //     joLOD.S['level2'] := '';
+                    //     joLOD.S['level3'] := '';
+                    //     joLOD.I['hasdistantlod'] := 0;
+                    //     AssignLODToStat(s, joLOD, True);
+                    // end
+                    // else begin
+                    //     slHasLOD.Add(RecordFormIdFileId(s));
+                    //     AssignLODToStat(s, joLOD, false);
+                    // end;
+                end;
             end
             else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
                 if IsObjectUsedInExterior(s) then slMissingLODMessages.Add(sMissingLodMessage);
@@ -2116,7 +2159,6 @@ begin
         end;
 
         if (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0') then begin
-            if ElementExists(r, 'XESP - Enable Parent') then continue; //we will fix these when we check enable parents.
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
             iCurrentPlugin := RefMastersDeterminePlugin(r, True);
@@ -2155,6 +2197,15 @@ begin
     SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
     SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
     SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
+
+    // if Equals(GetFile(s), GetFile(n)) then Exit;
+    // if GetElementEditValues(s, 'MNAM\LOD #0 (Level 0)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh') then Exit;
+    // if GetElementEditValues(s, 'MNAM\LOD #1 (Level 1)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #1 (Level 1)\Mesh') then Exit;
+    // if GetElementEditValues(s, 'MNAM\LOD #2 (Level 2)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #2 (Level 2)\Mesh') then Exit;
+    // if GetElementEditValues(s, 'MNAM\LOD #3 (Level 3)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #3 (Level 3)\Mesh') then Exit;
+    // if GetElementEditValues(s, 'Record Header\Record Flags\Has Distant LOD') <> GetElementEditValues(n, 'Record Header\Record Flags\Has Distant LOD') then Exit;
+    // AddMessage('Removing ITM: ' + ShortName(s));
+    // Remove(n);
 end;
 
 procedure CollectRecords;
@@ -3301,6 +3352,20 @@ function TrimLeftChars(s: string; chars: integer): string;
 }
 begin
     Result := LeftStr(s, Length(s) - chars);
+end;
+
+function StripNonAlphanumeric(Input: string): string;
+var
+  i: Integer;
+  c: char;
+begin
+    Result := '';
+    i := 1;
+    while i <= Length(Input) do begin
+        c := Copy(Input,i,1);
+        if Pos(c,'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') <> 0 then Result := Result + c;
+        inc(i);
+    end;
 end;
 
 procedure EnsureDirectoryExists(f: string);
