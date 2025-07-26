@@ -234,27 +234,38 @@ end;
 
 function DoWeNeedToModifyStatHasDistantLOD(r: IwbElement; desiredHasDistantLOD: Boolean): Boolean;
 {
-    Checks if the STAT record needs to be modified.
+    Checks if the STAT record needs to be modified based off its Has Distant LOD value.
+}
+var
+    ovr: IwbElement;
+    bHasDistantLOD: Boolean;
+begin
+    Result := False;
+    if bRemoveBeforeGeneration then ovr := WinningOverrideIgnoringThisFile(r, sFolipBeforeGeneration + '.esp') else ovr := WinningOverride(r);
+    if GetElementEditValues(ovr, 'Record Header\Record Flags\Has Distant LOD') <> '1' then bHasDistantLOD := False else bHasDistantLOD := True;
+    if bHasDistantLOD <> desiredHasDistantLOD then Result := true;
+end;
+
+function WinningOverrideIgnoringThisFile(r: IwbElement; f: string): IwbElement;
+{
+    Given a record and filename, return the winning override ignoring the given filename if present.
 }
 var
     i: integer;
     m, previousOverride, ovr: IwbElement;
     filename: string;
-    bHasDistantLOD: Boolean;
 begin
-    Result := False;
     m := MasterOrSelf(r);
     if OverrideCount(m) > 0 then begin
         for i := Pred(OverrideCount(m)) downto 0 do begin
             ovr := OverrideByIndex(m, i);
             filename := GetFileName(GetFile(ovr));
-            if (bRemoveBeforeGeneration and SameText(filename, sFolipBeforeGeneration + '.esp')) then continue else break;
+            if SameText(filename, f) then continue else break;
         end;
     end else begin
         ovr := r;
     end;
-    if GetElementEditValues(ovr, 'Record Header\Record Flags\Has Distant LOD') <> '1' then bHasDistantLOD := False else bHasDistantLOD := True;
-    if bHasDistantLOD <> desiredHasDistantLOD then Result := true;
+    Result := ovr;
 end;
 
 function DoesStatHaveCobj(r: IwbElement): Boolean;
