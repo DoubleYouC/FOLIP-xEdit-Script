@@ -1244,20 +1244,16 @@ procedure MultiRefLOD;
     Adds MultiRefLOD keyword to references specified in FOLIP MultiRefLOD.json rules.
 }
 var
-    c, a, i, colonPos, MultiRefFormid, RefFormid: integer;
+    c, a, i: integer;
     MultiRefLODReference, ref, MultiRefLODFormidStr, editorid: string;
     r, MultiRefLODElement, n, rCell, rWrld: IwbElement;
-    MultiRefLODFile, refFile: IwbFile;
     linkedrefs, lref: IInterface;
     bNeedsModified, bHadMultiRefLODCorrect: Boolean;
 begin
     for c := 0 to Pred(joMultiRefLOD.Count) do begin
         editorid := joMultiRefLOD.Names[c];
         MultiRefLODReference := joMultiRefLOD.O[editorid].S['MultiRefLOD'];
-        colonPos := Pos(':', MultiRefLODReference);
-        MultiRefFormid := StrToInt('$' + Copy(MultiRefLODReference, 1, Pred(colonPos)));
-        MultiRefLODFile := FileByIndex(slPluginFiles.IndexOf(Copy(MultiRefLODReference, Succ(colonPos), Length(MultiRefLODReference))));
-        MultiRefLODElement := RecordByFormID(MultiRefLODFile, MultiRefFormid, False);
+        MultiRefLODElement := GetRecordFromFormIdFileId(MultiRefLODReference);
         MultiRefLODFormidStr := IntToHex(GetLoadOrderFormID(MultiRefLODElement), 8);
         if not Assigned(MultiRefLODElement) then begin
             AddMessage('MultiRefLOD: Could not find record for ' + MultiRefLODReference);
@@ -1268,10 +1264,7 @@ begin
 
         for a := 0 to Pred(joMultiRefLOD.O[editorid].A['References to add MultiRefLOD'].Count) do begin
             ref := joMultiRefLOD.O[editorid].A['References to add MultiRefLOD'].S[a];
-            colonPos := Pos(':', ref);
-            RefFormid := StrToInt('$' + Copy(ref, 1, Pred(colonPos)));
-            refFile := FileByIndex(slPluginFiles.IndexOf(Copy(ref, Succ(colonPos), Length(ref))));
-            r := WinningOverride(RecordByFormID(refFile, RefFormid, False));
+            r := WinningOverride(GetRecordFromFormIdFileId(ref));
             if not Assigned(r) then begin
                 AddMessage('MultiRefLOD: Could not find reference ' + ref + ' for ' + MultiRefLODReference);
                 Continue;
@@ -1867,8 +1860,12 @@ begin
                 if slLODReplacements.Count > 0 then hasLODReplacementMaterial := True;
                 if not hasLODReplacementMaterial then begin
                     if ResourceExists(replacementMat) then begin
-                        if colorRemap = '' then slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
-                        else slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                        if colorRemap = '' then begin
+                            slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
+                        end
+                        else begin
+                            slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                        end;
                     end
                     else AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
                     continue;
@@ -3454,6 +3451,23 @@ function RecordFormIdFileId(e: IwbElement): string;
 }
 begin
     Result := TrimRightChars(IntToHex(FixedFormID(e), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+end;
+
+function GetRecordFromFormIdFileId(recordId: string): IwbElement;
+{
+    Returns the record from the given formid:filename.
+}
+var
+    colonPos, recordFormId, c: integer;
+    f: IwbFile;
+    fileMasterIndex: string;
+begin
+    colonPos := Pos(':', recordId);
+    f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
+    c := MasterCount(f);
+    if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
+    recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
+    Result := RecordByFormID(f, recordFormId, False);
 end;
 
 end.
