@@ -15,7 +15,10 @@ unit FOLIP;
 // ----------------------------------------------------
 var
     tlStats, tlActiFurnMstt, tlMswp, tlMasterCells, tlPluginCells, tlEnableParents, tlStolenForms, tlTxst: TList;
-    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials, slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages, slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha, slTexgen_copy, slTexgen_alpha, slTexgen_noalpha: TStringList;
+    slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
+    slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
+    slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
+    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha: TStringList;
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
@@ -360,7 +363,7 @@ begin
         frm.OnKeyDown := FormKeyDown;
 
         picFolip := TPicture.Create;
-        picFolip.LoadFromFile(ScriptsPath() + 'FOLIP\FOLIP.jpg');
+        picFolip.LoadFromFile(wbScriptsPath + 'FOLIP\FOLIP.jpg');
 
         fImage := TImage.Create(frm);
 		fImage.Picture := picFolip;
@@ -1861,14 +1864,23 @@ begin
                 if not hasLODReplacementMaterial then begin
                     if ResourceExists(replacementMat) then begin
                         if colorRemap = '' then begin
-                            slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om)
+                            if not CreateLODMaterialReplacement(om, rm, replacementMat) then begin
+                                slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                                continue;
+                            end else begin
+                                slLODReplacements.Add(rm);
+                                slMatFiles.Add(rm);
+                            end;
                         end
                         else begin
                             slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD color remap replacement material: ' + rm + #9 + ' from ' + #9 + om);
+                            continue;
                         end;
                     end
-                    else AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
-                    continue;
+                    else begin
+                        AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material referencing a material that does not exist: ' + replacementMat);
+                        continue;
+                    end;
                 end;
                 //ListStringsInStringList(slLODReplacements);
 
@@ -1912,6 +1924,227 @@ begin
         slMissingMaterials.Free;
         slMismatchedMaterials.Free;
         slDummy.Free;
+    end;
+end;
+
+function CreateLODMaterialReplacement(om, rm, replacementMat: string): Boolean;
+{
+    Creates a LOD material replacement if it does not already exist.
+    om is the path to the original lod material.
+    rm is the path to the replacement lod material to be created.
+    replacementMat is the path to the base material that the lod replacement is based on.
+}
+var
+    ombgsm, rmbgsm, replacementMatbgsm: TwbBGSMFile;
+    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, lodDiffuse, lodNormal, lodSpecular: string;
+    specularMult: float;
+begin
+    Result := False;
+
+    ombgsm := TwbBGSMFile.Create;
+    replacementMatbgsm := TwbBGSMFile.Create;
+    try
+        ombgsm.LoadFromResource(om);
+        replacementMatbgsm.LoadFromResource(replacementMat);
+
+        //Check if the replacement material is alterring the UV offsets or scales, and if so, exit without creating a replacement.
+        if ombgsm.NativeValues['UOffset'] <> replacementMatbgsm.NativeValues['UOffset'] then Exit;
+        if ombgsm.NativeValues['VOffset'] <> replacementMatbgsm.NativeValues['VOffset'] then Exit;
+        if ombgsm.NativeValues['UScale'] <> replacementMatbgsm.NativeValues['UScale'] then Exit;
+        if ombgsm.NativeValues['VScale'] <> replacementMatbgsm.NativeValues['VScale'] then Exit;
+
+        //Get lod diffuse texture of the original material
+        omDiffuse := ombgsm.EditValues['Textures\Diffuse']
+        omDiffuseNormalized := wbNormalizeResourceName(omDiffuse, resTexture);
+
+        //Get the base replacement material's textures
+        replacementDiffuse := replacementMatbgsm.EditValues['Textures\Diffuse'];
+        replacementDiffuseNormalized:= wbNormalizeResourceName(replacementDiffuse, resTexture);
+        replacementNormal := replacementMatbgsm.EditValues['Textures\Normal'];
+        replacementNormalNormalized := wbNormalizeResourceName(replacementNormal, resTexture);
+        replacementSpecular := replacementMatbgsm.EditValues['Textures\SmoothSpec'];
+        replacementSpecularNormalized := wbNormalizeResourceName(replacementSpecular, resTexture);
+
+        specularMult := replacementMatbgsm.NativeValues['SpecularMult'];
+
+        //In case the replacement material does not have a normal or specular texture, use a flat texture. In the case of specular, use a black texture, so there is no specular.
+        if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
+        if replacementSpecularNormalized = '' then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
+
+        //Attempt to add texgen rules to create the new lod replacement textures.
+        if not AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, specularMult) then Exit;
+
+        //If we got this far, we can create the new lod material.
+
+        lodDiffuse := StringReplace(TrimRightChars(ChangeFullToLodDirectory(replacementDiffuseNormalized), 9), '\', '/', [rfReplaceAll]);
+        lodNormal := TrimLeftChars(replacementNormalNormalized, 6) + '_n.dds';
+        lodSpecular := TrimLeftChars(replacementSpecularNormalized, 6) + '_s.dds';
+        replacementMatbgsm.EditValues['Textures\Diffuse'] := lodDiffuse;
+        replacementMatbgsm.EditValues['Textures\Normal'] := lodNormal;
+        replacementMatbgsm.EditValues['Textures\SmoothSpec'] := lodSpecular;
+        AddMessage('Creating LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
+        replacementMatbgsm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+        Result := True;
+    except
+        on E: Exception do begin
+            AddMessage('<' + E.Message + '>');
+            Exit;
+        end;
+    finally
+        ombgsm.Free;
+        replacementMatbgsm.Free;
+    end;
+end;
+
+function AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized: string; specularMult: float): Boolean;
+{
+    Adds texgen rules to create the new lod replacement textures.
+    Returns true if successful, false otherwise.
+}
+var
+    new_line, tempDiffuse: string;
+begin
+    Result := False;
+    if ProcessTexgenFile(slFOLIPTexgen_noalpha, omDiffuseNormalized, replacementDiffuseNormalized, new_line) then begin
+        TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, False, specularMult, tempDiffuse);
+        slTexgen_noalpha.Add(StringReplace(new_line, replacementDiffuseNormalized, tempDiffuse, []));
+        Result := True;
+    end
+    else if ProcessTexgenFile(slFOLIPTexgen_alpha, omDiffuseNormalized, replacementDiffuseNormalized, new_line) then begin
+        TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, True, specularMult, tempDiffuse);
+        slTexgen_alpha.Add(StringReplace(new_line, replacementDiffuseNormalized, tempDiffuse, []));
+        Result := True;
+    end;
+end;
+
+function TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized: string; alpha: Boolean; specularMult: float; var tempDiffuse: string): Boolean;
+{
+    Adds texgen copy and adjustment rules to create the new lod replacement textures.
+    Returns true if adjustments were needed, false otherwise.
+}
+var
+    lodNormal, lodSpecular, tempNormal, tempSpecular, diffuseLine, normalLine, specularLine: string;
+    specularMultInt: integer;
+begin
+    Result := False;
+    // We always need to copy the diffuse map to the tempDiffuse in case we don't need to adjust the specular.
+    tempDiffuse := replacementDiffuseNormalized;
+
+    // If the diffuse and normal do not have the same base name, we need to add a copy rule for the normal map.
+    lodNormal := TrimLeftChars(replacementDiffuseNormalized, 6) + '_n.dds';
+    if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementNormalNormalized, 6) then begin
+        slTexgen_copy.Add(replacementNormalNormalized + ',' + lodNormal);
+        Result := True;
+    end;
+
+    // If the diffuse and specular do not have the same base name, we need to add a copy rule for the specular map.
+    lodSpecular := TrimLeftChars(replacementDiffuseNormalized, 6) + '_s.dds';
+    if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementSpecularNormalized, 6) then begin
+        slTexgen_copy.Add(replacementSpecularNormalized + ',' + lodSpecular);
+        Result := True;
+    end;
+
+    // If the specular multiplier is less than 1, we need to add a rule to adjust the specular map.
+    if specularMult < 1 then begin
+        Result := True;
+        specularMultInt := -100 * Round(specularMult, 2);
+        tempDiffuse := 'DynDOLOD-Temp\' + replacementDiffuseNormalized;
+        tempNormal := 'DynDOLOD-Temp\' + lodNormal;
+        tempSpecular := 'DynDOLOD-Temp\' + lodSpecular;
+
+        diffuseLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
+                        replacementDiffuseNormalized +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempDiffuse + #9 + '0' + #9 + 'x';
+
+        normalLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
+                        lodNormal +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempNormal + #9 + '0' + #9 + 'x';
+
+        specularLine := IntToStr(specularMultInt) + #9 + '-1' + #9 + '1' + #9 + '1' + #9 +
+                        lodSpecular +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempSpecular + #9 + '0' + #9 + 'x';
+
+        if alpha then begin
+            slTexgen_alpha.Add(diffuseLine);
+            slTexgen_alpha.Add(normalLine);
+            slTexgen_alpha.Add(specularLine);
+        end
+        else begin
+            slTexgen_noalpha.Add(diffuseLine);
+            slTexgen_noalpha.Add(normalLine);
+            slTexgen_noalpha.Add(specularLine);
+        end;
+    end;
+end;
+
+function ProcessTexgenFile(slTexGen_file: TStringList; omDiffuseNormalized, replacementDiffuseNormalized: string; var new_line: string;): Boolean;
+{
+    Adds texgen rules to create the new lod replacement textures.
+    Returns true if successful, false otherwise.
+}
+var
+    slTextureList, slLine: TStringList;
+    i, c, t: integer;
+    bTextureMatch: boolean;
+begin
+    Result := False;
+    slTextureList := TStringList.Create;
+    try
+        slTextureList.Add(omDiffuse);
+
+        //Check noalpha
+        for i := 0 to Pred(slTexGen_file.Count) do begin
+            bTextureMatch := False;
+
+            for t := 0 to Pred(slTextureList.Count) do begin
+                if ContainsText(slTexGen_file[i], slTextureList[t]) then begin
+                    bTextureMatch := True;
+                    Break; // Exit the inner loop if a match is found
+                end;
+            end;
+
+            if bTextureMatch then begin
+
+                slLine := TStringList.Create;
+                try
+                    slLine.Delimiter := #9; // Set delimiter to tab character
+                    slLine.DelimitedText := slTexGen_file[i];
+
+                    if ContainsText(slLine[0], '//') then begin // skip comment lines
+                        continue;
+                    end else if slLine[5] = 'x' then begin // skip x lines (temporary texture setup for mipmaps, typically for adjusting specular, which we should do automatically)
+                        slTextureList.Add(TrimLeftChars(slLine[9], 5)); // Add the texture to the match list, removing the d.dds suffix
+                        continue;
+                    end else if slLine[5] = 'r' then begin // skip r lines (rotation lines)
+                        Exit; //If rotation is required, we want to manually handle this, so exit the function.
+                        // slTextureList.Add(slLine[9]); // Add the texture to the match list
+                        // continue;
+                    end;
+
+                    if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin // This one is complicated. Temporary texture(s) are being used to create the new lod texture.
+
+                        slTextureList.Add(slLine[9]); // Add the texture to the match list
+                        Exit; // If a temporary texture is being used, we want to manually handle this, so exit the function.
+                        //continue; // Skip for now.
+                    end;
+
+                    new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
+                                + replacementDiffuseNormalized
+                                + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
+                                + ChangeFullToLodDirectory(replacementDiffuseNormalized)
+                                + #9 + slLine[10] + #9 + slLine[11];
+
+                finally
+                    slLine.Free;
+                end;
+            end;
+        end;
+    finally
+        slTextureList.Free;
     end;
 end;
 
@@ -1960,8 +2193,8 @@ begin
                 if bgsmOm.EditValues['TwoSided'] = 'yes' then begin
                     slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
                     bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
-                    EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(rm));
-                    bgsmRm.SaveToFile(ScriptsPath() + 'FOLIP\output\' + rm);
+                    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
+                    bgsmRm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
                 end;
             end;
             if bgsmOm.NativeValues['UOffset'] <> bgsmRm.NativeValues['UOffset'] then begin
@@ -2980,8 +3213,8 @@ begin
         AddMessage(#9 + 'Error reading NIF: ' + E.Message + ' ' + f);
     finally
         if bModified then begin
-            EnsureDirectoryExists(ScriptsPath() + 'FOLIP\output\' + ExtractFilePath(f));
-            nif.SaveToFile(ScriptsPath() + 'FOLIP\output\' + f);
+            EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(f));
+            nif.SaveToFile(wbScriptsPath + 'FOLIP\output\' + f);
         end;
         nif.free;
     end;
@@ -3104,12 +3337,12 @@ var
     searchMaterial, p1, p2, p3, p4: string;
 begin
     // DLC04\Architecture\GalacticZone\MetalPanelTrimCR02.BGSM, _0.93
-    Result := '';
+    Result := ChangeFullToLodDirectory(material);
     for i := 0 to Pred(slTopPaths.Count) do begin
         // materials\dlc01\test.bgsm to materials\dlc01\lod\test.bgsm
         searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
         p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
-        if Result = '' then Result := p1;
+        //if Result = '' then Result := p1;
         if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
             //sanity check
             //AddMessage(TrimRightChars(p1, 10));
@@ -3292,6 +3525,24 @@ begin
         except
             Break;
         end;
+    end;
+end;
+
+function ChangeFullToLodDirectory(f: string): string;
+{
+    Given a file path, changes the directory to the LOD directory.
+    f is the file path.
+}
+var
+    parts: TStringDynArray;
+begin
+    parts := SplitString(f, '\');
+    if slTopLevelModPatternPaths.IndexOf(parts[1]) = -1 then begin
+        //meshes\path\to\model.nif to meshes\lod\path\to\model.nif
+        Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
+    end else begin
+        //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
+        Result := StringReplace(f, parts[1], parts[1] + '\lod', [rfIgnoreCase]);
     end;
 end;
 
