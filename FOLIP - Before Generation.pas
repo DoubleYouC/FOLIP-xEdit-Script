@@ -317,11 +317,20 @@ begin
     slMissingColorRemaps.Sorted := True;
 
     slFOLIPTexgen_noalpha := TStringList.Create;
-    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
+    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then begin
+        slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
+        AddMessage('Loaded TexGen noalpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
+    end;
     slFOLIPTexgen_copy := TStringList.Create;
-    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then begin
+        slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+        AddMessage('Loaded TexGen copy rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+    end;
     slFOLIPTexgen_alpha := TStringList.Create;
-    if ResourceExists('DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then begin
+        slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+        AddMessage('Loaded TexGen alpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+    end;
     slTexgen_copy := TStringList.Create;
     slTexgen_alpha := TStringList.Create;
     slTexgen_noalpha := TStringList.Create;
@@ -1936,8 +1945,9 @@ function CreateLODMaterialReplacement(om, rm, replacementMat: string): Boolean;
 }
 var
     ombgsm, rmbgsm, replacementMatbgsm: TwbBGSMFile;
-    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, lodDiffuse, lodNormal, lodSpecular: string;
+    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, replacementLodDiffuse, lodDiffuse, lodNormal, lodSpecular: string;
     specularMult: float;
+    bLodTextureExists: Boolean;
 begin
     Result := False;
 
@@ -1948,18 +1958,38 @@ begin
         replacementMatbgsm.LoadFromResource(replacementMat);
 
         //Check if the replacement material is alterring the UV offsets or scales, and if so, exit without creating a replacement.
-        if ombgsm.NativeValues['UOffset'] <> replacementMatbgsm.NativeValues['UOffset'] then Exit;
-        if ombgsm.NativeValues['VOffset'] <> replacementMatbgsm.NativeValues['VOffset'] then Exit;
-        if ombgsm.NativeValues['UScale'] <> replacementMatbgsm.NativeValues['UScale'] then Exit;
-        if ombgsm.NativeValues['VScale'] <> replacementMatbgsm.NativeValues['VScale'] then Exit;
+        if ombgsm.NativeValues['UOffset'] <> replacementMatbgsm.NativeValues['UOffset'] then begin
+            AddMessage('Original material ' + om + ' has a different UOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            Exit;
+        end;
+        if ombgsm.NativeValues['VOffset'] <> replacementMatbgsm.NativeValues['VOffset'] then begin
+            AddMessage('Original material ' + om + ' has a different VOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            Exit;
+        end;
+        if ombgsm.NativeValues['UScale'] <> replacementMatbgsm.NativeValues['UScale'] then begin
+            AddMessage('Original material ' + om + ' has a different UScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            Exit;
+        end;
+        if ombgsm.NativeValues['VScale'] <> replacementMatbgsm.NativeValues['VScale'] then begin
+            AddMessage('Original material ' + om + ' has a different VScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            Exit;
+        end;
+
+        //Check if the replacement material has the Hide Secret Flag set, and if so, exit without creating a replacement.
+        if replacementMatbgsm.EditValues['Hide Secret'] = 'yes' then begin
+            AddMessage('Replacement material ' + replacementMat + ' has the Hide Secret Flag set, skipping creation of LOD material replacement.');
+            Exit;
+        end;
 
         //Get lod diffuse texture of the original material
-        omDiffuse := ombgsm.EditValues['Textures\Diffuse']
+        omDiffuse := ombgsm.EditValues['Textures\Diffuse'];
         omDiffuseNormalized := wbNormalizeResourceName(omDiffuse, resTexture);
 
         //Get the base replacement material's textures
         replacementDiffuse := replacementMatbgsm.EditValues['Textures\Diffuse'];
         replacementDiffuseNormalized:= wbNormalizeResourceName(replacementDiffuse, resTexture);
+        replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
+
         replacementNormal := replacementMatbgsm.EditValues['Textures\Normal'];
         replacementNormalNormalized := wbNormalizeResourceName(replacementNormal, resTexture);
         replacementSpecular := replacementMatbgsm.EditValues['Textures\SmoothSpec'];
@@ -1971,26 +2001,65 @@ begin
         if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
         if replacementSpecularNormalized = '' then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
 
+        //Debug
+        // AddMessage('Creating LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+        // AddMessage('Original Material: ' + om + #9 + 'Diffuse: ' + omDiffuseNormalized);
+        // AddMessage('Replacement Material: ' + rm + #9 + 'Diffuse: ' + replacementLodDiffuse);
+
+        //Check if the replacementDiffuse already has a lod texture being created by TexGen.
+        bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse);
+
         //Attempt to add texgen rules to create the new lod replacement textures.
-        if not AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, specularMult) then Exit;
+        if not bLodTextureExists then begin
+            AddMessage('TexGen does not have a texture for ' + replacementLodDiffuse + ', creating TexGen rules.');
+            if not AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, specularMult) then Exit;
+        end else AddMessage('TexGen already has a texture for ' + replacementLodDiffuse + ', skipping TexGen rules creation.');
 
         //If we got this far, we can create the new lod material.
 
-        lodDiffuse := StringReplace(TrimRightChars(ChangeFullToLodDirectory(replacementDiffuseNormalized), 9), '\', '/', [rfReplaceAll]);
-        lodNormal := TrimLeftChars(replacementNormalNormalized, 6) + '_n.dds';
-        lodSpecular := TrimLeftChars(replacementSpecularNormalized, 6) + '_s.dds';
+        lodDiffuse := StringReplace(TrimRightChars(replacementLodDiffuse, 9), '\', '/', [rfReplaceAll]);
+        lodNormal := TrimLeftChars(lodDiffuse, 6) + '_n.dds';
+        lodSpecular := TrimLeftChars(lodDiffuse, 6) + '_s.dds';
         replacementMatbgsm.EditValues['Textures\Diffuse'] := lodDiffuse;
         replacementMatbgsm.EditValues['Textures\Normal'] := lodNormal;
         replacementMatbgsm.EditValues['Textures\SmoothSpec'] := lodSpecular;
-        AddMessage('Creating LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+        replacementMatbgsm.EditValues['SpecularEnabled'] := 'yes';
+
+        replacementMatbgsm.EditValues['ScreenSpaceReflections'] := 'no';
+        replacementMatbgsm.EditValues['WetnessControlScreenSpaceReflections'] := 'no';
+        replacementMatbgsm.EditValues['Decal'] := 'no';
+        replacementMatbgsm.EditValues['DecalNoFade'] := 'no';
+        replacementMatbgsm.EditValues['Refraction'] := 'no';
+        replacementMatbgsm.EditValues['EnvironmentMapping'] := 'no';
+
+        replacementMatbgsm.EditValues['Textures\Envmap'] := '';
+        replacementMatbgsm.EditValues['Textures\Glow'] := '';
+        replacementMatbgsm.EditValues['Textures\InnerLayer'] := '';
+        replacementMatbgsm.EditValues['Textures\Wrinkles'] := '';
+        replacementMatbgsm.EditValues['Textures\Displacement'] := '';
+        replacementMatbgsm.EditValues['RimLighting'] := 'no';
+        replacementMatbgsm.EditValues['SubsurfaceLighting'] := 'no';
+        replacementMatbgsm.EditValues['AnisoLighting'] := 'no';
+        replacementMatbgsm.EditValues['EmitEnabled'] := 'no';
+        replacementMatbgsm.EditValues['ModelSpaceNormals'] := 'no';
+        replacementMatbgsm.EditValues['ExternalEmittance'] := 'no';
+        replacementMatbgsm.EditValues['ReceiveShadows'] := 'no';
+        replacementMatbgsm.EditValues['CastShadows'] := 'no';
+        replacementMatbgsm.EditValues['DissolveFade'] := 'no';
+        replacementMatbgsm.EditValues['AssumeShadowmask'] := 'no';
+        replacementMatbgsm.EditValues['Glowmap'] := 'no';
+        replacementMatbgsm.EditValues['EnvironmentMappingWindow'] := 'no';
+        replacementMatbgsm.EditValues['EnvironmentMappingEye'] := 'no';
+        replacementMatbgsm.EditValues['Hair'] := 'no';
+        replacementMatbgsm.EditValues['Tree'] := 'no';
+        replacementMatbgsm.EditValues['Facegen'] := 'no';
+        replacementMatbgsm.EditValues['SkinTint'] := 'no';
+        replacementMatbgsm.EditValues['Tessellate'] := 'no';
+        replacementMatbgsm.EditValues['SkewSpecularAlpha'] := 'no';
         EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
         replacementMatbgsm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+        AddMessage('Created LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
         Result := True;
-    except
-        on E: Exception do begin
-            AddMessage('<' + E.Message + '>');
-            Exit;
-        end;
     finally
         ombgsm.Free;
         replacementMatbgsm.Free;
@@ -2035,6 +2104,7 @@ begin
     lodNormal := TrimLeftChars(replacementDiffuseNormalized, 6) + '_n.dds';
     if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementNormalNormalized, 6) then begin
         slTexgen_copy.Add(replacementNormalNormalized + ',' + lodNormal);
+        AddMessage('Adding TexGen copy rule for normal map: ' + replacementNormalNormalized + ' to ' + lodNormal);
         Result := True;
     end;
 
@@ -2042,6 +2112,7 @@ begin
     lodSpecular := TrimLeftChars(replacementDiffuseNormalized, 6) + '_s.dds';
     if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementSpecularNormalized, 6) then begin
         slTexgen_copy.Add(replacementSpecularNormalized + ',' + lodSpecular);
+        AddMessage('Adding TexGen copy rule for specular map: ' + replacementSpecularNormalized + ' to ' + lodSpecular);
         Result := True;
     end;
 
@@ -2072,11 +2143,13 @@ begin
             slTexgen_alpha.Add(diffuseLine);
             slTexgen_alpha.Add(normalLine);
             slTexgen_alpha.Add(specularLine);
+            AddMessage('Adding TexGen alpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
         end
         else begin
             slTexgen_noalpha.Add(diffuseLine);
             slTexgen_noalpha.Add(normalLine);
             slTexgen_noalpha.Add(specularLine);
+            AddMessage('Adding TexGen noalpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
         end;
     end;
 end;
@@ -2094,11 +2167,12 @@ begin
     Result := False;
     slTextureList := TStringList.Create;
     try
-        slTextureList.Add(omDiffuse);
+        slTextureList.Add(omDiffuseNormalized);
 
         //Check noalpha
         for i := 0 to Pred(slTexGen_file.Count) do begin
             bTextureMatch := False;
+            if slTexGen_file[i] = '' then continue; // Skip empty lines
 
             for t := 0 to Pred(slTextureList.Count) do begin
                 if ContainsText(slTexGen_file[i], slTextureList[t]) then begin
@@ -2120,13 +2194,14 @@ begin
                         slTextureList.Add(TrimLeftChars(slLine[9], 5)); // Add the texture to the match list, removing the d.dds suffix
                         continue;
                     end else if slLine[5] = 'r' then begin // skip r lines (rotation lines)
+                        AddMessage('Original material requires rotation: ' + slLine[9]);
                         Exit; //If rotation is required, we want to manually handle this, so exit the function.
                         // slTextureList.Add(slLine[9]); // Add the texture to the match list
                         // continue;
                     end;
 
                     if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin // This one is complicated. Temporary texture(s) are being used to create the new lod texture.
-
+                        AddMessage('Original material requires temporary texture: ' + slLine[9]);
                         slTextureList.Add(slLine[9]); // Add the texture to the match list
                         Exit; // If a temporary texture is being used, we want to manually handle this, so exit the function.
                         //continue; // Skip for now.
@@ -2145,6 +2220,47 @@ begin
         end;
     finally
         slTextureList.Free;
+    end;
+end;
+
+function DoesTexGenAlreadyHaveTexture(texture: string): Boolean;
+{
+    Checks if TexGen already creates the texture.
+    Returns true if the texture is found, false otherwise.
+}
+begin
+    Result := False;
+    if CheckTexGenFileForTexture(slFOLIPTexgen_noalpha, texture) then Result := True
+    else if CheckTexGenFileForTexture(slFOLIPTexgen_alpha, texture) then Result := True;
+end;
+
+function CheckTexGenFileForTexture(slTexGen_file: TStringList; texture: string): Boolean;
+{
+    Checks if the given TexGen file already has a rule for the given texture.
+    Returns true if the texture is found, false otherwise.
+}
+var
+    i: integer;
+    slLine: TStringList;
+begin
+    Result := False;
+    texture := LowerCase(texture);
+    for i := 0 to Pred(slTexGen_file.Count) do begin
+        if slTexGen_file[i] = '' then continue; // Skip empty lines
+        slLine := TStringList.Create;
+        try
+            slLine.Delimiter := #9; // Set delimiter to tab character
+            slLine.DelimitedText := slTexGen_file[i];
+
+            if ContainsText(slLine[0], '//') then continue; // skip comment lines
+
+            if ((slLine.Count > 9) and SameText(LowerCase(slLine[9]), texture)) then begin
+                Result := True;
+                Break; // Exit the loop if the texture is found
+            end;
+        finally
+            slLine.Free;
+        end;
     end;
 end;
 
@@ -2168,17 +2284,31 @@ procedure CompareMaterialSwaps(slMismatchedMaterials: TStringList; om, rm: Strin
 var
     bgsmOm, bgsmRm: TwbBGSMFile;
     bgemOm, bgemRm: TwbBGEMFile;
+    omScriptsPath, rmScriptsPath: string;
+    bOmAutoGenerated, bRmAutoGenerated: Boolean;
 begin
     om := wbNormalizeResourceName(om, resMaterial);
     rm := wbNormalizeResourceName(rm, resMaterial);
+    bOmAutoGenerated := False;
+    bRmAutoGenerated := False;
 
     if not ResourceExists(om) then begin
-        AddMessage('Error: ' + om + ' does not exist.');
-        Exit;
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + om) then begin
+            omScriptsPath := wbScriptsPath + 'FOLIP\output\' + om;
+            bOmAutoGenerated := True;
+        end else begin
+            AddMessage('Error: ' + om + ' does not exist.');
+            Exit;
+        end;
     end;
     if not ResourceExists(rm) then begin
-        AddMessage('Error: ' + rm + ' does not exist.');
-        Exit;
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + rm) then begin
+            rmScriptsPath := wbScriptsPath + 'FOLIP\output\' + rm;
+            bRmAutoGenerated := True;
+        end else begin
+            AddMessage('Error: ' + rm + ' does not exist.');
+            Exit;
+        end;
     end;
     bgsmOm := TwbBGSMFile.Create;
     bgsmRm := TwbBGSMFile.Create;
@@ -2186,12 +2316,12 @@ begin
     bgemRm := TwbBGEMFile.Create;
     try
         if RightStr(om, 5) = '.bgsm' then begin
-            bgsmOm.LoadFromResource(om);
-            bgsmRm.LoadFromResource(rm);
+            if not bOmAutoGenerated then bgsmOm.LoadFromResource(om) else bgsmOm.LoadFromFile(omScriptsPath);
+            if not bRmAutoGenerated then bgsmRm.LoadFromResource(rm) else bgsmRm.LoadFromFile(rmScriptsPath);
 
             if bgsmOm.NativeValues['TwoSided'] <> bgsmRm.NativeValues['TwoSided'] then begin
                 if bgsmOm.EditValues['TwoSided'] = 'yes' then begin
-                    slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
+                    //slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
                     bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
                     EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
                     bgsmRm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
