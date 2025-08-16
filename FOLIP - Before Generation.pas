@@ -2246,11 +2246,15 @@ begin
                         // continue;
                     end;
 
-                    if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin // This one is complicated. Temporary texture(s) are being used to create the new lod texture.
-                        AddMessage('Original material requires temporary texture: ' + slLine[9]);
+                    if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin
+                        AddMessage('Warning: Original LOD texture has a TexGen rule that uses a temporary texture: ' + slLine[9]);
                         slTextureList.Add(slLine[9]); // Add the texture to the match list
-                        Exit; // If a temporary texture is being used, we want to manually handle this, so exit the function.
-                        //continue; // Skip for now.
+                        continue;
+                    end;
+
+                    if ContainsText(slLine[5], 'DynDOLOD-Temp') then begin
+                        AddMessage('Warning: Original LOD texture has a TexGen rule that uses a temporary texture: ' + slLine[9]);
+                        //Don't skip this line, as this is likely the main rule.
                     end;
 
                     new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
