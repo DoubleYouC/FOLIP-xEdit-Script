@@ -1873,7 +1873,7 @@ begin
                 if not hasLODReplacementMaterial then begin
                     if ResourceExists(replacementMat) then begin
                         if colorRemap = '' then begin
-                            if not CreateLODMaterialReplacement(om, rm, replacementMat) then begin
+                            if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat) then begin
                                 slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
                                 continue;
                             end else begin
@@ -2073,17 +2073,30 @@ function AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, repla
 }
 var
     new_line, tempDiffuse: string;
+    slNew_lines: TStringList;
+    i: integer;
 begin
     Result := False;
-    if ProcessTexgenFile(slFOLIPTexgen_noalpha, omDiffuseNormalized, replacementDiffuseNormalized, new_line) then begin
-        TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, False, specularMult, tempDiffuse);
-        slTexgen_noalpha.Add(StringReplace(new_line, replacementDiffuseNormalized, tempDiffuse, []));
-        Result := True;
-    end
-    else if ProcessTexgenFile(slFOLIPTexgen_alpha, omDiffuseNormalized, replacementDiffuseNormalized, new_line) then begin
-        TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, True, specularMult, tempDiffuse);
-        slTexgen_alpha.Add(StringReplace(new_line, replacementDiffuseNormalized, tempDiffuse, []));
-        Result := True;
+    slNew_lines := TStringList.Create;
+    try
+        if ProcessTexgenFile(slFOLIPTexgen_noalpha, omDiffuseNormalized, replacementDiffuseNormalized, slNew_lines) then begin
+            TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, False, specularMult, tempDiffuse);
+            for i := 0 to Pred(slNew_lines.Count) do begin
+                new_line := StringReplace(slNew_lines[i], replacementDiffuseNormalized, tempDiffuse, [rfIgnoreCase]);
+                slTexgen_noalpha.Add(new_line);
+            end;
+            Result := True;
+        end
+        else if ProcessTexgenFile(slFOLIPTexgen_alpha, omDiffuseNormalized, replacementDiffuseNormalized, slNew_lines) then begin
+            TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, True, specularMult, tempDiffuse);
+            for i := 0 to Pred(slNew_lines.Count) do begin
+                new_line := StringReplace(slNew_lines[i], replacementDiffuseNormalized, tempDiffuse, [rfIgnoreCase]);
+                slTexgen_alpha.Add(new_line);
+            end;
+            Result := True;
+        end;
+    finally
+        slNew_lines.Free;
     end;
 end;
 
@@ -2154,7 +2167,7 @@ begin
     end;
 end;
 
-function ProcessTexgenFile(slTexGen_file: TStringList; omDiffuseNormalized, replacementDiffuseNormalized: string; var new_line: string;): Boolean;
+function ProcessTexgenFile(slTexGen_file: TStringList; omDiffuseNormalized, replacementDiffuseNormalized: string; var slNew_lines: TStringList;): Boolean;
 {
     Adds texgen rules to create the new lod replacement textures.
     Returns true if successful, false otherwise.
@@ -2163,11 +2176,14 @@ var
     slTextureList, slLine: TStringList;
     i, c, t: integer;
     bTextureMatch: boolean;
+    new_line, lodDiffuse: string;
 begin
     Result := False;
     slTextureList := TStringList.Create;
+    lodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
     try
         slTextureList.Add(omDiffuseNormalized);
+        AddMessage('Processing TexGen file for texture: ' + omDiffuseNormalized);
 
         //Check noalpha
         for i := 0 to Pred(slTexGen_file.Count) do begin
@@ -2176,12 +2192,14 @@ begin
 
             for t := 0 to Pred(slTextureList.Count) do begin
                 if ContainsText(slTexGen_file[i], slTextureList[t]) then begin
+
                     bTextureMatch := True;
                     Break; // Exit the inner loop if a match is found
                 end;
             end;
 
             if bTextureMatch then begin
+                AddMessage(slTexGen_file[i]);
 
                 slLine := TStringList.Create;
                 try
@@ -2210,8 +2228,10 @@ begin
                     new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
                                 + replacementDiffuseNormalized
                                 + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
-                                + ChangeFullToLodDirectory(replacementDiffuseNormalized)
+                                + lodDiffuse
                                 + #9 + slLine[10] + #9 + slLine[11];
+                    slNew_lines.Add(new_line);
+                    Result := True;
 
                 finally
                     slLine.Free;
