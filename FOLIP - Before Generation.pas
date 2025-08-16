@@ -22,7 +22,7 @@ var
     iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration: Boolean;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials: Boolean;
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
@@ -67,6 +67,7 @@ begin
             bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
             bSkipPrecombined := StrToBool(joUserSettings.S['SkipPrecombined']);
             bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
+            bMakeMissingMaterials := StrToBool(joUserSettings.S['MakeMissingMaterials']);
             bLoadDefaults := False;
         except
             AddMessage('User settings are incomplete. Loading defaults.');
@@ -77,6 +78,8 @@ begin
         bFakeStatics := True;
         bForceLOD8 := False;
         bIgnoreNoLOD := False;
+
+        bMakeMissingMaterials := True;
 
         // This is used to report if a LOD material appears to be using a non-LOD texture.
         bReportNonLODMaterials := False;
@@ -123,6 +126,7 @@ procedure BeforeGeneration;
 var
     slContainers: TStringList;
     bSkip: Boolean;
+    sFolipPluginFileNameSanitized, cmdline: string;
 begin
     bSkip := False;
     //Create FOLIP plugins
@@ -130,6 +134,9 @@ begin
 
     SpecificRecordEdits;
     if bSkip then Exit;
+
+    //Clear output directory
+    DeleteDirectory(wbScriptsPath + 'FOLIP\output');
 
     AddMessage('Collecting assets...');
     //Scan archives and loose files.
@@ -170,15 +177,31 @@ begin
 
     MultiRefLOD;
 
-    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
+    //Save Texgen files
+    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD');
+    sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName) + 'esp';
+    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\');
+    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
+    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+
+    //Zip up output for easy installation
+    AddMessage('Zipping up output for easy installation...');
+    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
+    AddMessage(cmdline);
+    AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
+
+    //Open the output folder in Explorer
+    cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
+    ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
+
+    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.'+ #13#10#13#10 + 'Also install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
 end;
 
 function Finalize: integer;
 {
     This function is called at the end.
 }
-var
-    sFolipPluginFileNameSanitized: string;
 begin
     tlStats.Free;
     tlActiFurnMstt.Free;
@@ -207,6 +230,9 @@ begin
     slFOLIPTexgen_noalpha.Free;
     slFOLIPTexgen_copy.Free;
     slFOLIPTexgen_alpha.Free;
+    slTexgen_copy.Free;
+    slTexgen_noalpha.Free;
+    slTexgen_alpha.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -235,21 +261,10 @@ begin
     joUserSettings.S['AddVWD'] := BoolToStr(bAddVWD);
     joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
     joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
+    joUserSettings.S['MakeMissingMaterials'] := BoolToStr(bMakeMissingMaterials);
 
     joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
     joUserSettings.Free;
-
-    //Save Texgen files
-    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbDataPath + 'DynDOLOD');
-    sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName);
-    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
-
-
-    slTexgen_copy.Free;
-    slTexgen_noalpha.Free;
-    slTexgen_alpha.Free;
 
     Result := 0;
 end;
@@ -358,7 +373,7 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
+    chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkMakeMissingMaterials, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -476,6 +491,16 @@ begin
             + #13#10 + 'will ignore it and use LOD if available.';
         chkIgnoreNoLOD.ShowHint := True;
 
+        chkMakeMissingMaterials := TCheckBox.Create(gbOptions);
+        chkMakeMissingMaterials.Parent := gbOptions;
+        chkMakeMissingMaterials.Left := chkReportNonLODMaterials.Left;
+        chkMakeMissingMaterials.Top := chkReportUVs.Top + 30;
+        chkMakeMissingMaterials.Width := 200;
+        chkMakeMissingMaterials.Caption := 'Auto Generate Missing Materials';
+        chkMakeMissingMaterials.Hint := 'Missing LOD materials will be'
+            + #13#10 + 'automatically generated.';
+        chkMakeMissingMaterials.ShowHint := True;
+
         chkReportMissingLOD := TCheckBox.Create(gbOptions);
         chkReportMissingLOD.Parent := gbOptions;
         chkReportMissingLOD.Left := chkFakeStatics.Left;
@@ -522,6 +547,7 @@ begin
         chkReportUVs.Checked := bReportUVs;
         chkReportMissingLOD.Checked := bReportMissingLOD;
         chkRespectEnableMarkers.Checked := bRespectEnableMarkers;
+        chkMakeMissingMaterials.Checked := bMakeMissingMaterials;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -537,6 +563,7 @@ begin
         bReportUVs := chkReportUVs.Checked;
         bReportMissingLOD := chkReportMissingLOD.Checked;
         bRespectEnableMarkers := chkRespectEnableMarkers.Checked;
+        bMakeMissingMaterials := chkMakeMissingMaterials.Checked;
 
     finally
         frm.Free;
@@ -1950,6 +1977,7 @@ var
     bLodTextureExists: Boolean;
 begin
     Result := False;
+    if not bMakeMissingMaterials then Exit;
 
     ombgsm := TwbBGSMFile.Create;
     replacementMatbgsm := TwbBGSMFile.Create;
@@ -2341,10 +2369,12 @@ begin
 
             if bgsmOm.NativeValues['TwoSided'] <> bgsmRm.NativeValues['TwoSided'] then begin
                 if bgsmOm.EditValues['TwoSided'] = 'yes' then begin
-                    //slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.');
-                    bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
-                    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
-                    bgsmRm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+                    if not bMakeMissingMaterials then slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.')
+                    else begin
+                        bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
+                        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
+                        bgsmRm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+                    end;
                 end;
             end;
             if bgsmOm.NativeValues['UOffset'] <> bgsmRm.NativeValues['UOffset'] then begin
@@ -3869,6 +3899,46 @@ begin
     if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
     recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
     Result := RecordByFormID(f, recordFormId, False);
+end;
+
+function DeleteDirectory(dir: string): boolean;
+{
+    Deletes a directory and all files and subdirectories in it. Returns true if successful.
+}
+var
+    srFind : TSearchRec;
+    f: string;
+begin
+    Result := True;
+    if not DirectoryExists(dir) then Exit;
+
+    if FindFirst(dir + '\*', faAnyFile, srFind) = 0 then begin
+        repeat
+            if ((srFind.Name <> '.') and (srFind.Name <> '..')) then begin
+                f := dir + '\' + srFind.Name;
+
+                if ((srFind.attr and faDirectory) = faDirectory) then begin
+                    if (not DeleteDirectory(f)) then begin
+                        Result := False;
+                        Exit;
+                    end;
+                end
+                else begin
+                    if (not DeleteFile(f)) then begin
+                        Result := False;
+                        Exit;
+                    end;
+                end;
+            end;
+        until FindNext(srFind) <> 0;
+
+        FindClose(srFind);
+    end;
+
+    if (not RemoveDir(dir)) then begin
+        Result := False;
+        Exit;
+    end;
 end;
 
 end.
