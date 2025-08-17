@@ -53,23 +53,23 @@ begin
         AddMessage('Loading user settings from ' + sUserSettingsFileName);
         joUserSettings.LoadFromResource(sUserSettingsFileName);
         try
-            bFakeStatics := StrToBool(joUserSettings.S['FakeStatics']);
+            bFakeStatics := StrToBool(Fallback(joUserSettings.S['FakeStatics'], 'True'));
             bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
             bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
+            bMakeMissingMaterials := StrToBool(Fallback(joUserSettings.S['MakeMissingMaterials'], 'True'));
             bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
             bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
             bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
-            bRespectEnableMarkers := StrToBool(joUserSettings.S['RespectEnableMarkers']);
-            sFolipPluginFileName := joUserSettings.S['BeforeGenerationPluginName'];
+            bRespectEnableMarkers := StrToBool(Fallback(joUserSettings.S['RespectEnableMarkers'], 'True'));
+            sFolipPluginFileName := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Before Generation');
 
-            sFolipAfterGenerationPluginFileName := joUserSettings.S['AfterGenerationPluginName'];
-            bLightPlugin := StrToBool(joUserSettings.S['LightPlugin']);
-            bRemoveVWD := StrToBool(joUserSettings.S['RemoveVWD']);
+            sFolipAfterGenerationPluginFileName := Fallback(joUserSettings.S['AfterGenerationPluginName'], 'FOLIP - After Generation');
+            bLightPlugin := StrToBool(Fallback(joUserSettings.S['LightPlugin'], 'True'));
+            bRemoveVWD := StrToBool(Fallback(joUserSettings.S['RemoveVWD'], 'True'));
             bLimitedHasDistantLODRemoval := StrToBool(joUserSettings.S['LimitedHasDistantLODRemoval']);
             bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
-            bSkipPrecombined := StrToBool(joUserSettings.S['SkipPrecombined']);
+            bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'True'));
             bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
-            bMakeMissingMaterials := StrToBool(joUserSettings.S['MakeMissingMaterials']);
             bLoadDefaults := False;
         except
             AddMessage('User settings are incomplete. Loading defaults.');
@@ -95,6 +95,11 @@ begin
         //Default plugin name.
         sFolipPluginFileName := 'FOLIP - Before Generation';
         sFolipAfterGenerationPluginFileName := 'FOLIP - After Generation';
+
+        bLightPlugin := True;
+        bRemoveVWD := True;
+        bSkipPrecombined := True;
+        bRemoveBeforeGeneration := False;
     end;
 
     //Used to tell the Rule Editor whether or not to save changes.
@@ -181,14 +186,12 @@ begin
     MultiRefLOD;
 
     //Save the plugin.
-    // Unfortunately, this does not work if the plugin didn't previously exist
-    if bPreviousBeforeGenerationPresent then begin
-        fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipPluginFileName + '.esp', fmCreate);
-        try
-            FileWriteToStream(iFolipPluginFile, fs);
-        finally
-            fs.Free;
-        end;
+    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
+    fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipPluginFileName + '.esp', fmCreate);
+    try
+        FileWriteToStream(iFolipPluginFile, fs, 0);
+    finally
+        fs.Free;
     end;
 
     //Save Texgen files
@@ -199,19 +202,19 @@ begin
         if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
         if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
         if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+    end;
 
-        //Zip up output for easy installation
-        AddMessage('Zipping up output for easy installation...');
-        cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
-        AddMessage(cmdline);
-        AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
+    //Zip up output for easy installation
+    AddMessage('Zipping up output for easy installation...');
+    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
+    AddMessage(cmdline);
+    AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
 
-        //Open the output folder in Explorer
-        cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
-        ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
+    //Open the output folder in Explorer
+    cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
+    ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
 
-        MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.' + #13#10#13#10 + 'Also Install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
-    end else MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
+    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
 end;
 
 function Finalize: integer;
@@ -1921,7 +1924,7 @@ begin
                 if not hasLODReplacementMaterial then begin
                     if ResourceExists(replacementMat) then begin
                         if colorRemap = '' then begin
-                            if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat) then begin
+                            if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat, False) then begin
                                 slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
                                 continue;
                             end else begin
@@ -1984,7 +1987,7 @@ begin
     end;
 end;
 
-function CreateLODMaterialReplacement(om, rm, replacementMat: string): Boolean;
+function CreateLODMaterialReplacement(om, rm, replacementMat: string; bForceTexGenRedo: Boolean): Boolean;
 {
     Creates a LOD material replacement if it does not already exist.
     om is the path to the original lod material.
@@ -1999,7 +2002,7 @@ var
 begin
     Result := False;
     if not bMakeMissingMaterials then Exit;
-    AddMessage('Attempting to create a missing LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+    if not bForceTexGenRedo then AddMessage('Attempting to create a missing LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
     bOmAutoGenerated := False;
 
     if not ResourceExists(om) then begin
@@ -2056,7 +2059,8 @@ begin
         replacementSpecular := replacementMatbgsm.EditValues['Textures\SmoothSpec'];
         replacementSpecularNormalized := wbNormalizeResourceName(replacementSpecular, resTexture);
 
-        specularMult := replacementMatbgsm.NativeValues['SpecularMult'];
+        specularMult := replacementMatbgsm.NativeValues['SpecularMult'] * replacementMatbgsm.NativeValues['Smoothness'];
+        AddMessage(FloatToStr(specularMult));
 
         //In case the replacement material does not have a normal or specular texture, use a flat texture. In the case of specular, use a black texture, so there is no specular.
         if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
@@ -2064,13 +2068,14 @@ begin
 
 
         //Check if the replacementDiffuse already has a lod texture being created by TexGen.
-        bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse);
+        if not bForceTexGenRedo then bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse) else bLodTextureExists := False;
 
         //Attempt to add texgen rules to create the new lod replacement textures.
         if not bLodTextureExists then begin
-            AddMessage(#9 + 'TexGen does not have a texture for ' + replacementLodDiffuse + ', creating TexGen rules.');
+            if not bForceTexGenRedo then AddMessage(#9 + 'TexGen does not have a texture for ' + replacementLodDiffuse + ', creating TexGen rules.');
             if not AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, specularMult) then Exit;
-        end else AddMessage(#9 + 'TexGen already has a texture for ' + replacementLodDiffuse + ', skipping TexGen rules creation.');
+        end
+        else AddMessage(#9 + 'TexGen already has a texture for ' + replacementLodDiffuse + ', skipping TexGen rules creation.');
 
         //If we got this far, we can create the new lod material.
 
@@ -2189,7 +2194,7 @@ begin
     // If the specular multiplier is less than 1, we need to add a rule to adjust the specular map.
     if specularMult < 1 then begin
         Result := True;
-        specularMultInt := -100 * Round(specularMult, 2);
+        specularMultInt := Round(100 * (specularMult - 1));
         tempDiffuse := 'DynDOLOD-Temp\' + replacementDiffuseNormalized;
         tempNormal := 'DynDOLOD-Temp\' + lodNormal;
         tempSpecular := 'DynDOLOD-Temp\' + lodSpecular;
@@ -2547,7 +2552,7 @@ end;
 function ProcessReferences(s: IwbElement; var bHasEnableParent: Boolean; var bHasSCOLNeedingLOD: Boolean): integer;
 var
     si, cnt: integer;
-    ms, r, rCell, rWrld, xesp, parentRef, n: IwbElement;
+    ms, r, rCell, rWrld, xesp, parentRef, n, base: IwbElement;
     parent: string;
 begin
     cnt := 0;
@@ -2602,7 +2607,9 @@ begin
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
         end;
 
-        if (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0') then begin
+        base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+
+        if ((Signature(base) <> 'SCOL') and (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0')) then begin
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
             iCurrentPlugin := RefMastersDeterminePlugin(r, True);
@@ -2862,7 +2869,7 @@ begin
 
                 fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
                 if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
-                    if not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm') then CompareModdedMaterialToVanilla(fNoLod, f);
+                    if ((not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
                 end;
 
                 if not bReportNonLODMaterials then continue;
@@ -2938,7 +2945,6 @@ begin
     try
         if not ResourceExists(f) then begin
             AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
-
             Exit;
         end;
         bgsmModded.LoadFromResource(f);
@@ -3000,6 +3006,7 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
             Result := True;
         end;
+        if Result and bMakeMissingMaterials then CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
     except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsmModded.free;
