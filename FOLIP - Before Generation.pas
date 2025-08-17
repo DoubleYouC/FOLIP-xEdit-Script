@@ -18,11 +18,12 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
-    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha: TStringList;
-    iFolipMainFile, iFolipMasterFile, iFolipPluginFile, iCurrentPlugin, flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
+    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange: TStringList;
+    flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
+    iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials: Boolean;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials, bPreviousBeforeGenerationPresent: Boolean;
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
@@ -47,6 +48,7 @@ var
 begin
     CreateObjects;
     bLoadDefaults := True;
+    bPreviousBeforeGenerationPresent := False;
     if ResourceExists(sUserSettingsFileName) then begin
         AddMessage('Loading user settings from ' + sUserSettingsFileName);
         joUserSettings.LoadFromResource(sUserSettingsFileName);
@@ -127,6 +129,7 @@ var
     slContainers: TStringList;
     bSkip: Boolean;
     sFolipPluginFileNameSanitized, cmdline: string;
+    fs: TFileStream;
 begin
     bSkip := False;
     //Create FOLIP plugins
@@ -177,25 +180,38 @@ begin
 
     MultiRefLOD;
 
+    //Save the plugin.
+    // Unfortunately, this does not work if the plugin didn't previously exist
+    if bPreviousBeforeGenerationPresent then begin
+        fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipPluginFileName + '.esp', fmCreate);
+        try
+            FileWriteToStream(iFolipPluginFile, fs);
+        finally
+            fs.Free;
+        end;
+    end;
+
     //Save Texgen files
-    if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD');
-    sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName) + 'esp';
-    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\');
-    if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
-    if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+    if bMakeMissingMaterials then begin
+        if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD');
+        sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName) + 'esp';
+        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\');
+        if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
+        if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
+        if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
 
-    //Zip up output for easy installation
-    AddMessage('Zipping up output for easy installation...');
-    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
-    AddMessage(cmdline);
-    AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
+        //Zip up output for easy installation
+        AddMessage('Zipping up output for easy installation...');
+        cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
+        AddMessage(cmdline);
+        AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
 
-    //Open the output folder in Explorer
-    cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
-    ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
+        //Open the output folder in Explorer
+        cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
+        ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
 
-    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.'+ #13#10#13#10 + 'Also install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
+        MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.' + #13#10#13#10 + 'Also Install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
+    end else MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
 end;
 
 function Finalize: integer;
@@ -233,6 +249,7 @@ begin
     slTexgen_copy.Free;
     slTexgen_noalpha.Free;
     slTexgen_alpha.Free;
+    slOutsideUVRange.Free;
 
     joRules.Free;
     joMswpMap.Free;
@@ -324,6 +341,10 @@ begin
     slMessages.Sorted := True;
     slMissingLODMessages := TStringList.Create;
     slMissingLODMessages.Sorted := True;
+
+    slOutsideUVRange := TStringList.Create;
+    slOutsideUVRange.Sorted := True;
+    slOutsideUVRange.Duplicates := dupIgnore;
 
     slFullLODMessages := TStringList.Create;
     slFullLODMessages.Sorted := True;
@@ -1972,40 +1993,52 @@ function CreateLODMaterialReplacement(om, rm, replacementMat: string): Boolean;
 }
 var
     ombgsm, rmbgsm, replacementMatbgsm: TwbBGSMFile;
-    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, replacementLodDiffuse, lodDiffuse, lodNormal, lodSpecular: string;
+    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, replacementLodDiffuse, lodDiffuse, lodNormal, lodSpecular, omAuto: string;
     specularMult: float;
-    bLodTextureExists: Boolean;
+    bLodTextureExists, bOmAutoGenerated: Boolean;
 begin
     Result := False;
     if not bMakeMissingMaterials then Exit;
+    AddMessage('Attempting to create a missing LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+    bOmAutoGenerated := False;
+
+    if not ResourceExists(om) then begin
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + om) then begin
+            omAuto := wbScriptsPath + 'FOLIP\output\' + om;
+            bOmAutoGenerated := True;
+        end else begin
+            AddMessage(#9 + 'Error: ' + om + ' does not exist.');
+            Exit;
+        end;
+    end;
 
     ombgsm := TwbBGSMFile.Create;
     replacementMatbgsm := TwbBGSMFile.Create;
     try
-        ombgsm.LoadFromResource(om);
+        if not bOmAutoGenerated then ombgsm.LoadFromResource(om) else ombgsm.LoadFromFile(omAuto);
         replacementMatbgsm.LoadFromResource(replacementMat);
 
         //Check if the replacement material is alterring the UV offsets or scales, and if so, exit without creating a replacement.
         if ombgsm.NativeValues['UOffset'] <> replacementMatbgsm.NativeValues['UOffset'] then begin
-            AddMessage('Original material ' + om + ' has a different UOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different UOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['VOffset'] <> replacementMatbgsm.NativeValues['VOffset'] then begin
-            AddMessage('Original material ' + om + ' has a different VOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different VOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['UScale'] <> replacementMatbgsm.NativeValues['UScale'] then begin
-            AddMessage('Original material ' + om + ' has a different UScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different UScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['VScale'] <> replacementMatbgsm.NativeValues['VScale'] then begin
-            AddMessage('Original material ' + om + ' has a different VScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different VScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
             Exit;
         end;
 
         //Check if the replacement material has the Hide Secret Flag set, and if so, exit without creating a replacement.
         if replacementMatbgsm.EditValues['Hide Secret'] = 'yes' then begin
-            AddMessage('Replacement material ' + replacementMat + ' has the Hide Secret Flag set, skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Replacement material ' + replacementMat + ' has the Hide Secret Flag set, skipping creation of LOD material replacement.');
             Exit;
         end;
 
@@ -2029,19 +2062,15 @@ begin
         if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
         if replacementSpecularNormalized = '' then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
 
-        //Debug
-        // AddMessage('Creating LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
-        // AddMessage('Original Material: ' + om + #9 + 'Diffuse: ' + omDiffuseNormalized);
-        // AddMessage('Replacement Material: ' + rm + #9 + 'Diffuse: ' + replacementLodDiffuse);
 
         //Check if the replacementDiffuse already has a lod texture being created by TexGen.
         bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse);
 
         //Attempt to add texgen rules to create the new lod replacement textures.
         if not bLodTextureExists then begin
-            AddMessage('TexGen does not have a texture for ' + replacementLodDiffuse + ', creating TexGen rules.');
+            AddMessage(#9 + 'TexGen does not have a texture for ' + replacementLodDiffuse + ', creating TexGen rules.');
             if not AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized, specularMult) then Exit;
-        end else AddMessage('TexGen already has a texture for ' + replacementLodDiffuse + ', skipping TexGen rules creation.');
+        end else AddMessage(#9 + 'TexGen already has a texture for ' + replacementLodDiffuse + ', skipping TexGen rules creation.');
 
         //If we got this far, we can create the new lod material.
 
@@ -2086,7 +2115,7 @@ begin
         replacementMatbgsm.EditValues['SkewSpecularAlpha'] := 'no';
         EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
         replacementMatbgsm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
-        AddMessage('Created LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
+        AddMessage(#9 + 'Successfully created LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
         Result := True;
     finally
         ombgsm.Free;
@@ -2145,7 +2174,7 @@ begin
     lodNormal := TrimLeftChars(replacementDiffuseNormalized, 6) + '_n.dds';
     if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementNormalNormalized, 6) then begin
         slTexgen_copy.Add(replacementNormalNormalized + ',' + lodNormal);
-        AddMessage('Adding TexGen copy rule for normal map: ' + replacementNormalNormalized + ' to ' + lodNormal);
+        AddMessage(#9 + 'Adding TexGen copy rule for normal map: ' + replacementNormalNormalized + ' to ' + lodNormal);
         Result := True;
     end;
 
@@ -2153,7 +2182,7 @@ begin
     lodSpecular := TrimLeftChars(replacementDiffuseNormalized, 6) + '_s.dds';
     if TrimLeftChars(replacementDiffuseNormalized, 6) <> TrimLeftChars(replacementSpecularNormalized, 6) then begin
         slTexgen_copy.Add(replacementSpecularNormalized + ',' + lodSpecular);
-        AddMessage('Adding TexGen copy rule for specular map: ' + replacementSpecularNormalized + ' to ' + lodSpecular);
+        AddMessage(#9 + 'Adding TexGen copy rule for specular map: ' + replacementSpecularNormalized + ' to ' + lodSpecular);
         Result := True;
     end;
 
@@ -2184,13 +2213,13 @@ begin
             slTexgen_alpha.Add(diffuseLine);
             slTexgen_alpha.Add(normalLine);
             slTexgen_alpha.Add(specularLine);
-            AddMessage('Adding TexGen alpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
+            AddMessage(#9 + 'Adding TexGen alpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
         end
         else begin
             slTexgen_noalpha.Add(diffuseLine);
             slTexgen_noalpha.Add(normalLine);
             slTexgen_noalpha.Add(specularLine);
-            AddMessage('Adding TexGen noalpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
+            AddMessage(#9 + 'Adding TexGen noalpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
         end;
     end;
 end;
@@ -2211,7 +2240,7 @@ begin
     lodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
     try
         slTextureList.Add(omDiffuseNormalized);
-        AddMessage('Processing TexGen file for texture: ' + omDiffuseNormalized);
+        AddMessage(#9 + 'Checking TexGen file for texture: ' + omDiffuseNormalized);
 
         //Check noalpha
         for i := 0 to Pred(slTexGen_file.Count) do begin
@@ -2227,7 +2256,7 @@ begin
             end;
 
             if bTextureMatch then begin
-                AddMessage(slTexGen_file[i]);
+                AddMessage(#9 + 'Match found: ' + slTexGen_file[i]);
 
                 slLine := TStringList.Create;
                 try
@@ -2240,20 +2269,20 @@ begin
                         slTextureList.Add(TrimLeftChars(slLine[9], 5)); // Add the texture to the match list, removing the d.dds suffix
                         continue;
                     end else if slLine[5] = 'r' then begin // skip r lines (rotation lines)
-                        AddMessage('Original material requires rotation: ' + slLine[9]);
+                        AddMessage(#9 + 'Original material requires rotation: ' + slLine[9]);
                         Exit; //If rotation is required, we want to manually handle this, so exit the function.
                         // slTextureList.Add(slLine[9]); // Add the texture to the match list
                         // continue;
                     end;
 
                     if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin
-                        AddMessage('Warning: Original LOD texture has a TexGen rule that uses a temporary texture: ' + slLine[9]);
+                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture. It is possible that auto-generating the texture based off this may not produce the expected appearance.');
                         slTextureList.Add(slLine[9]); // Add the texture to the match list
                         continue;
                     end;
 
-                    if ContainsText(slLine[5], 'DynDOLOD-Temp') then begin
-                        AddMessage('Warning: Original LOD texture has a TexGen rule that uses a temporary texture: ' + slLine[9]);
+                    if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
+                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture.  It is possible that auto-generating the texture based off this may not produce the expected appearance.');
                         //Don't skip this line, as this is likely the main rule.
                     end;
 
@@ -2262,6 +2291,7 @@ begin
                                 + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
                                 + lodDiffuse
                                 + #9 + slLine[10] + #9 + slLine[11];
+                    AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
                     slNew_lines.Add(new_line);
                     Result := True;
 
@@ -2832,7 +2862,7 @@ begin
 
                 fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
                 if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
-                    if not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm') then CompareModdedMaterialToVanilla(fNoLod);
+                    if not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm') then CompareModdedMaterialToVanilla(fNoLod, f);
                 end;
 
                 if not bReportNonLODMaterials then continue;
@@ -2890,10 +2920,12 @@ begin
     end;
 end;
 
-function CompareModdedMaterialToVanilla(f: string): Boolean;
+function CompareModdedMaterialToVanilla(f, lodMaterial: string): Boolean;
 {
     Compares a modded material file to the vanilla material file.
     Returns True if the modded material is different from the vanilla material.
+    f is the full material path.
+    lodMaterial is the lod material path.
 }
 var
     i: integer;
@@ -2988,19 +3020,19 @@ begin
         bgsm.LoadFromResource(f);
 
         tp := bgsm.EditValues['Textures\Diffuse'];
-        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\'))  then begin
+        if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
             Result := True;
             Exit;
         end;
 
         tp := bgsm.EditValues['Textures\Normal'];
-        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\')) then begin
+        if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
             Result := True;
             Exit;
         end;
 
         tp := bgsm.EditValues['Textures\SmoothSpec'];
-        if (not ContainsText(tp, 'lod/') or not ContainsText(tp, 'lod\')) then begin
+        if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
             Result := True;
             Exit;
         end;
@@ -3259,7 +3291,7 @@ begin
         if (slUsedLODNifFiles.IndexOf(LODModel) = -1) then begin
             slUsedLODNifFiles.Add(LODModel);
             if bReportNonLODMaterials or bReportUVs then begin
-                if MeshCheck(LODModel, slMaterialsFromLODModel) then slOutsideUVRange.Add('Warning: ' + f + #9 + ' has UVs outside the 0 to 1 range.');
+                if MeshCheck(LODModel, slMaterialsFromLODModel) then slOutsideUVRange.Add('Warning: ' + LODModel + #9 + ' has UVs outside the 0 to 1 range.');
             end;
             if bReportNonLODMaterials then begin
                 //Check the full models materials for Possible LOD materials and populate slPossibleLODPaths.
@@ -3303,13 +3335,26 @@ var
     i: integer;
     nif: TwbNifFile;
     block: TwbNifBlock;
-    mat: string;
+    mat, modelAuto: string;
+    bModelAutoGenerated: Boolean;
 begin
     if model = '' then Exit;
     model := wbNormalizeResourceName(model, resMesh);
+    bModelAutoGenerated := False;
+
+    if not ResourceExists(model) then begin
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + model) then begin
+            modelAuto := wbScriptsPath + 'FOLIP\output\' + model;
+            bModelAutoGenerated := True;
+        end else begin
+            AddMessage(#9 + 'Error: ' + model + ' does not exist.');
+            Exit;
+        end;
+    end;
+
     nif := TwbNifFile.Create;
     try
-        nif.LoadFromResource(model);
+        if not bModelAutoGenerated then nif.LoadFromResource(model) else nif.LoadFromFile(modelAuto);
         for i := 0 to Pred(nif.BlocksCount) do begin
             block := nif.Blocks[i];
             if block.BlockType = 'BSLightingShaderProperty' then begin
@@ -3333,20 +3378,32 @@ function MeshCheck(f: string; var slMaterialsFromModel: TStringList): Boolean;
 var
     tsUV: TStrings;
     j, k, vertexCount, iTimesOutsideRange: integer;
-    uv, u, v, mat: string;
+    uv, u, v, mat, modelAuto: string;
     nif: TwbNifFile;
     arr, vertex: TdfElement;
     block, b: TwbNifBlock;
-    bWasEverAbleToCheck, bIsTrishape, bModified: boolean;
+    bWasEverAbleToCheck, bIsTrishape, bModified, bModelAutoGenerated: boolean;
 begin
     f := wbNormalizeResourceName(f, resMesh);
     bWasEverAbleToCheck := False;
     bModified := False;
     iTimesOutsideRange := 0;
     nif := TwbNifFile.Create;
+
+    bModelAutoGenerated := False;
+    if not ResourceExists(f) then begin
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + f) then begin
+            modelAuto := wbScriptsPath + 'FOLIP\output\' + f;
+            bModelAutoGenerated := True;
+        end else begin
+            AddMessage(#9 + 'Error: ' + f + ' does not exist.');
+            Exit;
+        end;
+    end;
+
     Result := True;
     try
-        nif.LoadFromResource(f);
+        if not bModelAutoGenerated then nif.LoadFromResource(f) else nif.LoadFromFile(modelAuto);
         // iterate over all nif blocks
         for j := 0 to Pred(nif.BlocksCount) do begin
             block := nif.Blocks[j];
@@ -3358,7 +3415,7 @@ begin
                 end
                 else begin
                     mat := wbNormalizeResourceName(mat, resMaterial);
-                    if not ResourceExists(mat) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
+                    if not (ResourceExists(mat) or FileExists(wbScriptsPath + 'FOLIP\output\' + mat)) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
                     if not ContainsText(ExtractFilePath(mat), 'lod') then slMeshCheckNonLODMaterials.Add('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
                     slMaterialsFromModel.Add(LowerCase(mat));
                 end;
@@ -3413,7 +3470,7 @@ procedure CheckUsedLODModels;
 var
     i: integer;
     f: string;
-    slMissingLODNifFiles, slNotInLODDirectory, slDoesNotFollowLODNamingConvention, slOutsideUVRange: TStringList;
+    slMissingLODNifFiles, slNotInLODDirectory, slDoesNotFollowLODNamingConvention: TStringList;
 begin
     slMissingLODNifFiles := TStringList.Create;
     slMissingLODNifFiles.Sorted := True;
@@ -3426,15 +3483,10 @@ begin
     slDoesNotFollowLODNamingConvention := TStringList.Create;
     slDoesNotFollowLODNamingConvention.Sorted := True;
     slDoesNotFollowLODNamingConvention.Duplicates := dupIgnore;
-
-    slOutsideUVRange := TStringList.Create;
-    slOutsideUVRange.Sorted := True;
-    slOutsideUVRange.Duplicates := dupIgnore;
-
     try
         for i := 0 to Pred(slUsedLODNifFiles.Count) do begin
             f := slUsedLODNifFiles[i];
-            if not ResourceExists(f) then begin
+            if not (ResourceExists(f) or FileExists(wbScriptsPath + 'FOLIP\output\' + f)) then begin
                 slMissingLODNifFiles.Add('Error: ' + f + #9 + ' does not exist.');
                 continue;
             end;
@@ -3457,7 +3509,6 @@ begin
         slMissingLODNifFiles.Free;
         slNotInLODDirectory.Free;
         slDoesNotFollowLODNamingConvention.Free;
-        slOutsideUVRange.Free;
     end;
 end;
 
@@ -3474,14 +3525,14 @@ begin
     for i := 0 to Pred(slTopPaths.Count) do begin
         // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
-        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.500 as well.
+        // meshes\dlc01\lod\test.nif  to  meshes\dlc01\lod\test_lod. Add colorRemap as _0.5 as well.
         searchModel := TrimLeftChars(searchModel, 4);
 
         bColorRemap := false;
         if Length(colorRemap) > 0 then bColorRemap := true;
 
         if bColorRemap then begin
-            //p3 is for specific color remap level lod like 'model_lod_1.nif'
+            //p3 is for specific color remap level lod like 'model_0.5_lod_1.nif'
             p3 := searchModel + colorRemap + '_lod_' + level + '.nif';
             if slNifFiles.IndexOf(p3) > -1 then begin
                 Result := TrimRightChars(p3, 7);
@@ -3493,7 +3544,17 @@ begin
         p1 := searchModel + '_lod_' + level + '.nif';
         if slNifFiles.IndexOf(p1) > -1 then begin
             if bColorRemap then begin
-                slMissingColorRemaps.Add('Warning: Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model + #9 + ShortName(e));
+                if bMakeMissingMaterials then begin
+                    if not AttemptCreateColorRemapLODModel(p1, p3, colorRemap)
+                    then slMissingColorRemaps.Add('Warning: Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model + #9 + ShortName(e))
+                    else begin
+                        Result := TrimRightChars(p3, 7);
+                        slNifFiles.Add(p3); // Add the newly created color remapped LOD model to the list of NIF files.
+                        AddMessage(#9 + 'Successfully created missing color remap of ' + colorRemap + ' for model: ' + #9 + model + #9 + ShortName(e));
+                        Exit;
+                    end;
+                end
+                else slMissingColorRemaps.Add('Warning: Possible missing color remap of ' + colorRemap + ' for model: ' + #9 + model + #9 + ShortName(e));
             end
             else begin
                 Result := TrimRightChars(p1, 7);
@@ -3510,6 +3571,97 @@ begin
     end;
     //If you made it this far, no lod models were found using the expected paths, so return the original specified lod model in the record, if any.
     Result := original;
+end;
+
+function AttemptCreateColorRemapLODModel(lodModelNoRemap, lodModelWithRemap, colorRemap: string): Boolean;
+{
+    Attempts to create a color remapped version of an existing LOD model.
+}
+var
+    lodModelNoRemapNif: TwbNifFile;
+    i: integer;
+    block: TwbNifBlock;
+    mat, matColorRemap, lodModelNoRemapAuto: string;
+    bHadColorRemap, bModelAutoGenerated: Boolean;
+begin
+    Result := False;
+    AddMessage('Attempting to create missing color remapped LOD Model: ' + #9 + lodModelWithRemap);
+    bHadColorRemap := False;
+
+    if not ResourceExists(lodModelNoRemap) then begin
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + lodModelNoRemap) then begin
+            lodModelNoRemapAuto := wbScriptsPath + 'FOLIP\output\' + lodModelNoRemap;
+            bModelAutoGenerated := True;
+        end else begin
+            AddMessage(#9 + 'Error: ' + lodModelNoRemap + ' does not exist. Color remapped LOD model creation aborted.');
+            Exit;
+        end;
+    end;
+
+    lodModelNoRemapNif := TwbNifFile.Create;
+    try
+        if not bModelAutoGenerated then lodModelNoRemapNif.LoadFromResource(lodModelNoRemap) else lodModelNoRemapNif.LoadFromFile(lodModelNoRemapAuto);
+        for i := 0 to Pred(lodModelNoRemapNif.BlocksCount) do begin
+            block := lodModelNoRemapNif.Blocks[i];
+            if block.BlockType = 'BSLightingShaderProperty' then begin
+                mat := wbNormalizeResourceName(block.EditValues['Name'], resMaterial);
+                if not SameText(ExtractFileExt(mat), '.bgsm') then continue
+                matColorRemap := CreateColorRemapBGSM(mat, colorRemap);
+                if not SameText(matColorRemap, mat) then bHadColorRemap := True;
+                block.EditValues['Name'] := matColorRemap;
+            end;
+        end;
+        if not bHadColorRemap then begin
+            AddMessage(#9 + 'Color remapped LOD model could not be created, as the base lod model does not use grayscale to palette scale for its materials.');
+            Exit; //No color remap change was created, so exit without saving.
+        end;
+        //Save the color remapped version of the LOD model.
+        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(lodModelWithRemap));
+        lodModelNoRemapNif.SaveToFile(wbScriptsPath + 'FOLIP\output\' + lodModelWithRemap);
+        Result := True;
+    except on E: Exception do AddMessage(#9 + 'Error creating color remapped LOD model: ' + E.Message);
+    finally
+        lodModelNoRemapNif.Free;
+    end;
+end;
+
+function CreateColorRemapBGSM(material, colorRemap: string): string;
+{
+    Creates a color remapped version of a BGSM material.
+    Color remap is the string to append to the material name, like '_0.5'.
+    Returns the new material name.
+}
+var
+    materialBGSM: TwbBGSMFile;
+    renamedMaterial, materialAuto: string;
+    bMaterialAutoGenerated: Boolean;
+begin
+    Result := material;
+
+    if not ResourceExists(material) then begin
+        if FileExists(wbScriptsPath + 'FOLIP\output\' + material) then begin
+            materialAuto := wbScriptsPath + 'FOLIP\output\' + material;
+            bMaterialAutoGenerated := True;
+        end else begin
+            AddMessage(#9 + 'Error: ' + material + ' does not exist.');
+            Exit;
+        end;
+    end;
+
+    materialBGSM := TwbBGSMFile.Create;
+    try
+        if not bMaterialAutoGenerated then materialBGSM.LoadFromResource(material) else materialBGSM.LoadFromFile(materialAuto);
+        if materialBGSM.EditValues['GrayscaleToPaletteColor'] <> 'yes' then Exit;
+        materialBGSM.EditValues['GrayscaleToPaletteScale'] := TrimRightChars(colorRemap, 1);
+        renamedMaterial := TrimLeftChars(material, 5) + colorRemap + '.bgsm';
+        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(renamedMaterial));
+        materialBGSM.SaveToFile(wbScriptsPath + 'FOLIP\output\' + renamedMaterial);
+        slMatFiles.Add(renamedMaterial); // Add the newly created color remapped material to the list of materials.
+        Result := renamedMaterial;
+    except on E: Exception do AddMessage(#9 + 'Error creating color remapped BGSM: ' + E.Message);
+    finally
+        material.Free;
+    end;
 end;
 
 function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList): string;
@@ -3621,8 +3773,10 @@ begin
 
         if SameText(f, sFolipMasterFileName) then
             iFolipMasterFile := FileByIndex(i)
-        else if SameText(f, sFolipPluginFileName + '.esp') then
-            iFolipPluginFile := FileByIndex(i)
+        else if SameText(f, sFolipPluginFileName + '.esp') then begin
+            iFolipPluginFile := FileByIndex(i);
+            bPreviousBeforeGenerationPresent := True;
+        end
         else if SameText(f, sFO4LODGenFileName) then
             bFO4LODGen := True
         else if SameText(f, sFolipFileName) then
