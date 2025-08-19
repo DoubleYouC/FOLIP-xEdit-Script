@@ -2064,6 +2064,9 @@ begin
         end;
         replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
 
+        //In case the diffuse texture doesn't follow proper naming conventions...
+        if RightStr(LowerCase(replacementLodDiffuse), 6) <> '_d.dds' then replacementLodDiffuse := TrimLeftChars(replacementLodDiffuse, 4) + '_d.dds';
+
         replacementNormal := replacementMatbgsm.EditValues['Textures\Normal'];
         replacementNormalNormalized := wbNormalizeResourceName(replacementNormal, resTexture);
         if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds'
@@ -2075,7 +2078,7 @@ begin
         else if not ResourceExists(replacementSpecularNormalized) then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
 
         specularMult := replacementMatbgsm.NativeValues['SpecularMult'] * replacementMatbgsm.NativeValues['Smoothness'];
-        AddMessage(FloatToStr(specularMult));
+        //AddMessage(FloatToStr(specularMult));
 
         //Check if the replacementDiffuse already has a lod texture being created by TexGen.
         if not bForceTexGenRedo then bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse) else bLodTextureExists := False;
@@ -2178,12 +2181,18 @@ function TexGenCopy(replacementDiffuseNormalized, replacementNormalNormalized, r
     Returns true if adjustments were needed, false otherwise.
 }
 var
-    lodNormal, lodSpecular, tempNormal, tempSpecular, diffuseLine, normalLine, specularLine: string;
+    lodNormal, lodSpecular, tempNormal, tempSpecular, diffuseLine, normalLine, specularLine, replacementDiffuseNormalizedActual: string;
     specularMultInt: integer;
 begin
     Result := False;
     // We always need to copy the diffuse map to the tempDiffuse in case we don't need to adjust the specular.
     tempDiffuse := replacementDiffuseNormalized;
+
+    //In case the diffuse texture doesn't follow proper naming convention of ending in _d.dds
+    replacementDiffuseNormalizedActual := replacementDiffuseNormalized;
+    if RightStr(LowerCase(replacementDiffuseNormalized), 6) <> '_d.dds' then begin
+        replacementDiffuseNormalized := TrimLeftChars(replacementDiffuseNormalized, 4) + '_d.dds';
+    end;
 
     // If the diffuse and normal do not have the same base name, we need to add a copy rule for the normal map.
     lodNormal := TrimLeftChars(replacementDiffuseNormalized, 6) + '_n.dds';
@@ -2210,7 +2219,7 @@ begin
         tempSpecular := 'DynDOLOD-Temp\' + lodSpecular;
 
         diffuseLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
-                        replacementDiffuseNormalized +
+                        replacementDiffuseNormalizedActual +
                         #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
                         tempDiffuse + #9 + '0' + #9 + 'x';
 
@@ -2220,6 +2229,40 @@ begin
                         tempNormal + #9 + '0' + #9 + 'x';
 
         specularLine := IntToStr(specularMultInt) + #9 + '-1' + #9 + '1' + #9 + '1' + #9 +
+                        lodSpecular +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempSpecular + #9 + '0' + #9 + 'x';
+
+        if alpha then begin
+            slTexgen_alpha.Add(diffuseLine);
+            slTexgen_alpha.Add(normalLine);
+            slTexgen_alpha.Add(specularLine);
+            AddMessage(#9 + 'Adding TexGen alpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
+        end
+        else begin
+            slTexgen_noalpha.Add(diffuseLine);
+            slTexgen_noalpha.Add(normalLine);
+            slTexgen_noalpha.Add(specularLine);
+            AddMessage(#9 + 'Adding TexGen noalpha rules for diffuse: ' + replacementDiffuseNormalized + ', normal: ' + lodNormal + ', specular: ' + lodSpecular);
+        end;
+    end
+    else if replacementDiffuseNormalizedActual <> replacementDiffuseNormalized then begin //This is triggered if the diffuse texture didn't follow proper naming standard of _d.dds, and didn't already get handled because of needed specular changes.
+        Result := True;
+        tempDiffuse := 'DynDOLOD-Temp\' + replacementDiffuseNormalized;
+        tempNormal := 'DynDOLOD-Temp\' + lodNormal;
+        tempSpecular := 'DynDOLOD-Temp\' + lodSpecular;
+
+        diffuseLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
+                        replacementDiffuseNormalizedActual +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempDiffuse + #9 + '0' + #9 + 'x';
+
+        normalLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
+                        lodNormal +
+                        #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
+                        tempNormal + #9 + '0' + #9 + 'x';
+
+        specularLine := '0' + #9 + '1' + #9 + '1' + #9 + '1' + #9 +
                         lodSpecular +
                         #9 + 'x' + #9 + '7' + #9 + '0' + #9 + '0' + #9 +
                         tempSpecular + #9 + '0' + #9 + 'x';
