@@ -18,12 +18,14 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
-    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange: TStringList;
+    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers: TStringList;
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
     uiScale: integer;
-    sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces: string;
-    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers, bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials, bPreviousBeforeGenerationPresent: Boolean;
+    sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, FOLIPTempPath: string;
+    bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
+    bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
+    bPreviousBeforeGenerationPresent: Boolean;
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
 
     lvRules: TListView;
@@ -131,7 +133,6 @@ end;
 
 procedure BeforeGeneration;
 var
-    slContainers: TStringList;
     bSkip: Boolean;
     sFolipPluginFileNameSanitized, cmdline: string;
     fs: TFileStream;
@@ -145,6 +146,8 @@ begin
 
     //Clear output directory
     DeleteDirectory(wbScriptsPath + 'FOLIP\output');
+    FOLIPTempPath := wbScriptsPath + 'FOLIP\Temp';
+    DeleteDirectory(FOLIPTempPath);
 
     AddMessage('Collecting assets...');
     //Scan archives and loose files.
@@ -184,6 +187,8 @@ begin
     AddMessage('=======================================================================================');
 
     MultiRefLOD;
+
+    DeleteDirectory(FOLIPTempPath);
 
     //Save the plugin.
     EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
@@ -1924,6 +1929,7 @@ begin
                 if not hasLODReplacementMaterial then begin
                     if ResourceExists(replacementMat) then begin
                         if colorRemap = '' then begin
+                            if bMakeMissingMaterials then AddMessage(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
                             if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat, False) then begin
                                 slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
                                 continue;
@@ -2023,25 +2029,25 @@ begin
 
         //Check if the replacement material is alterring the UV offsets or scales, and if so, exit without creating a replacement.
         if ombgsm.NativeValues['UOffset'] <> replacementMatbgsm.NativeValues['UOffset'] then begin
-            AddMessage(#9 + 'Original material ' + om + ' has a different UOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different UOffset than the replacement material ' + replacementMat + '. Skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['VOffset'] <> replacementMatbgsm.NativeValues['VOffset'] then begin
-            AddMessage(#9 + 'Original material ' + om + ' has a different VOffset than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different VOffset than the replacement material ' + replacementMat + '. Skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['UScale'] <> replacementMatbgsm.NativeValues['UScale'] then begin
-            AddMessage(#9 + 'Original material ' + om + ' has a different UScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different UScale than the replacement material ' + replacementMat + '. Skipping creation of LOD material replacement.');
             Exit;
         end;
         if ombgsm.NativeValues['VScale'] <> replacementMatbgsm.NativeValues['VScale'] then begin
-            AddMessage(#9 + 'Original material ' + om + ' has a different VScale than the replacement material ' + replacementMat + ', skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Original material ' + om + ' has a different VScale than the replacement material ' + replacementMat + '. Skipping creation of LOD material replacement.');
             Exit;
         end;
 
         //Check if the replacement material has the Hide Secret Flag set, and if so, exit without creating a replacement.
         if replacementMatbgsm.EditValues['Hide Secret'] = 'yes' then begin
-            AddMessage(#9 + 'Replacement material ' + replacementMat + ' has the Hide Secret Flag set, skipping creation of LOD material replacement.');
+            AddMessage(#9 + 'Replacement material ' + replacementMat + ' has the Hide Secret Flag set. Skipping creation of LOD material replacement.');
             Exit;
         end;
 
@@ -2052,20 +2058,24 @@ begin
         //Get the base replacement material's textures
         replacementDiffuse := replacementMatbgsm.EditValues['Textures\Diffuse'];
         replacementDiffuseNormalized:= wbNormalizeResourceName(replacementDiffuse, resTexture);
+        if not ResourceExists(replacementDiffuseNormalized) then begin
+            AddMessage(#9 + 'Replacement material ' + replacementMat + ' uses a diffuse texture that does not exist. Skipping creation of LOD material replacement.');
+            Exit;
+        end;
         replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
 
         replacementNormal := replacementMatbgsm.EditValues['Textures\Normal'];
         replacementNormalNormalized := wbNormalizeResourceName(replacementNormal, resTexture);
+        if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds'
+        else if not ResourceExists(replacementNormalNormalized) then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
+
         replacementSpecular := replacementMatbgsm.EditValues['Textures\SmoothSpec'];
         replacementSpecularNormalized := wbNormalizeResourceName(replacementSpecular, resTexture);
+        if replacementSpecularNormalized = '' then replacementSpecularNormalized := 'textures\shared\black01_d.dds'
+        else if not ResourceExists(replacementSpecularNormalized) then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
 
         specularMult := replacementMatbgsm.NativeValues['SpecularMult'] * replacementMatbgsm.NativeValues['Smoothness'];
         AddMessage(FloatToStr(specularMult));
-
-        //In case the replacement material does not have a normal or specular texture, use a flat texture. In the case of specular, use a black texture, so there is no specular.
-        if replacementNormalNormalized = '' then replacementNormalNormalized := 'textures\shared\flatflat_n.dds';
-        if replacementSpecularNormalized = '' then replacementSpecularNormalized := 'textures\shared\black01_d.dds';
-
 
         //Check if the replacementDiffuse already has a lod texture being created by TexGen.
         if not bForceTexGenRedo then bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse) else bLodTextureExists := False;
@@ -2896,38 +2906,70 @@ function FetchVanillaContainer(f: string): string;
     Fetches the vanilla container for a given file.
 }
 var
-    i, li: integer;
-    slVanilla, vanillaContainers: TStringList;
-    archive: string;
+    i: integer;
+    slCurrentContainers, slVanillaContainers: TStringList;
+    currentContainer: string;
 begin
-    Result := '';
-    slVanilla := TStringList.Create;
-    vanillaContainers := TStringList.Create;
+    slCurrentContainers := TStringList.Create;
+    slVanillaContainers := TStringList.Create;
     try
-        vanillaContainers.Add(wbDataPath + 'Fallout4 - Materials.ba2');
-        vanillaContainers.Add(wbDataPath + 'DLCworkshop01 - Main.ba2');
-        vanillaContainers.Add(wbDataPath + 'DLCworkshop02 - Main.ba2');
-        vanillaContainers.Add(wbDataPath + 'DLCworkshop03 - Main.ba2');
-        vanillaContainers.Add(wbDataPath + 'DLCCoast - Main.ba2');
-        vanillaContainers.Add(wbDataPath + 'DLCNukaWorld - Main.ba2');
-        for i := Pred(vanillaContainers.Count) downto 0 do begin
-            ResourceList(vanillaContainers[i], slVanilla);
-            for li := 0 to Pred(slVanilla.Count) do begin
-                slVanilla[li] := LowerCase(slVanilla[li]);
-            end;
-            if slVanilla.IndexOf(f) > -1 then begin
-                Result := vanillaContainers[i];
-                Exit;
+        slVanillaContainers.Add(wbDataPath + 'Fallout4 - Materials.ba2');
+        slVanillaContainers.Add(wbDataPath + 'DLCworkshop01 - Main.ba2');
+        slVanillaContainers.Add(wbDataPath + 'DLCworkshop02 - Main.ba2');
+        slVanillaContainers.Add(wbDataPath + 'DLCworkshop03 - Main.ba2');
+        slVanillaContainers.Add(wbDataPath + 'DLCCoast - Main.ba2');
+        slVanillaContainers.Add(wbDataPath + 'DLCNukaWorld - Main.ba2');
+        ResourceCount(f, slCurrentContainers);
+        for i := Pred(slCurrentContainers.Count) downto 0 do begin
+            currentContainer := slCurrentContainers[i];
+            if slVanillaContainers.IndexOf(currentContainer) > -1 then begin
+                Result := currentContainer;
+                break;
             end;
         end;
-    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
-        slVanilla.Free;
-        vanillaContainers.Free;
+        slCurrentContainers.Free;
+        slVanillaContainers.Free;
     end;
 end;
 
-function CompareModdedMaterialToVanilla(f, lodMaterial: string): Boolean;
+function FetchCurrentContainer(f: string): string;
+{
+    Fetches the current container for a given file.
+}
+var
+    slCurrentContainers: TStringList;
+begin
+    slCurrentContainers := TStringList.Create;
+    try
+        ResourceCount(f, slCurrentContainers);
+        Result := slCurrentContainers[Pred(slCurrentContainers.Count)];
+    finally
+        slCurrentContainers.Free;
+    end;
+end;
+
+function ExtractResourceToTempDirectory(f: string): Boolean;
+{
+    Extracts the resource f to the FOLIPTempPath. Returns true if successful.
+}
+var
+    container, folder, filename, outfile: string;
+begin
+    Result := False;
+    try
+        folder := ExtractFilePath(f);
+        filename := ExtractFileName(f);
+        outfile := FOLIPTempPath + '\' + folder + filename;
+        container := FetchCurrentContainer(f);
+        EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
+        ResourceCopy(container, f, outfile);
+        Result := True;
+    except on E: Exception do AddMessage(#9 + 'Error accessing resource ' + f + #9 + E.Message);
+    end;
+end;
+
+function CompareModdedMaterialToVanilla(f, lodMaterial: string;): Boolean;
 {
     Compares a modded material file to the vanilla material file.
     Returns True if the modded material is different from the vanilla material.
@@ -2936,25 +2978,29 @@ function CompareModdedMaterialToVanilla(f, lodMaterial: string): Boolean;
 }
 var
     i: integer;
-    bgsmModded, bgsmVanilla: TwbBGSMFile;
+    bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
     vanillaContainer: string;
 begin
     Result := False; //Assume no differences found.
+    if not ResourceExists(f) then begin
+        AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
+        Exit;
+    end;
+    // if not ExtractResourceToTempDirectory(f) then begin
+    //     AddMessage(#9 + 'Warning: ' + f + ' could not be extracted to temp path.');
+    //     Exit;
+    // end;
+    //Fetch vanilla container
+    vanillaContainer := FetchVanillaContainer(f);
+    if vanillaContainer = '' then begin
+        AddMessage(#9 + 'Warning: Could not find vanilla container for ' + f);
+        Exit;
+    end;
     bgsmModded := TwbBGSMFile.Create;
     bgsmVanilla := TwbBGSMFile.Create;
     try
-        if not ResourceExists(f) then begin
-            AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
-            Exit;
-        end;
+        //bgsmModded.LoadFromFile(FOLIPTempPath + '\' + f);
         bgsmModded.LoadFromResource(f);
-
-        //Fetch vanilla container
-        vanillaContainer := FetchVanillaContainer(f);
-        if vanillaContainer = '' then begin
-            AddMessage(#9 + 'Warning: Could not find vanilla container for ' + f);
-            Exit;
-        end;
 
         bgsmVanilla.LoadFromResource(vanillaContainer, f);
 
@@ -2982,10 +3028,6 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified TwoSided value.');
             Result := True;
         end;
-        if bgsmVanilla.NativeValues['GrayscaleToPaletteColor'] <> bgsmModded.NativeValues['GrayscaleToPaletteColor'] then begin
-            AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
-            Result := True;
-        end;
         if bgsmVanilla.EditValues['Textures\Diffuse'] <> bgsmModded.EditValues['Textures\Diffuse'] then begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Diffuse texture.');
             Result := True;
@@ -3006,7 +3048,23 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteScale value.');
             Result := True;
         end;
-        if Result and bMakeMissingMaterials then CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+        if bgsmVanilla.NativeValues['GrayscaleToPaletteColor'] <> bgsmModded.NativeValues['GrayscaleToPaletteColor'] then begin
+            AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
+            Result := True;
+        end;
+        if Result then begin
+            bgsmLod := TwbBGSMFile.Create;
+            try
+                bgsmLod.LoadFromResource(lodMaterial);
+                if ((bgsmLod.EditValues['GrayscaleToPaletteColor'] = 'no') and (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes')) then begin
+                    AddMessage(#9 + 'Warning: ' + f + ' cannot have an autogenerated matching LOD material created due to its use of Grayscale To Palette Color where its LOD requires a non Grayscale to Palette Color material. It would require manual handling to fix.');
+                    Result := False;
+                end
+                else if bMakeMissingMaterials then CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+            finally
+                bgsmLod.free;
+            end;
+        end;
     except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsmModded.free;
@@ -3882,10 +3940,15 @@ var
     parts: TStringDynArray;
 begin
     parts := SplitString(f, '\');
-    if slTopLevelModPatternPaths.IndexOf(parts[1]) = -1 then begin
+    if Length(parts) = 0 then begin
+        //meshes\ to meshes\lod
+        Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
+    end
+    else if slTopLevelModPatternPaths.IndexOf(parts[1]) = -1 then begin
         //meshes\path\to\model.nif to meshes\lod\path\to\model.nif
         Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
-    end else begin
+    end
+    else begin
         //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
         Result := StringReplace(f, parts[1], parts[1] + '\lod', [rfIgnoreCase]);
     end;
