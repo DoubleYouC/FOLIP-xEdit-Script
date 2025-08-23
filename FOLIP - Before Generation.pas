@@ -2726,11 +2726,7 @@ var
     r: IInterface;
     g: IwbElement;
     f: IwbFile;
-    slStats, slActiFurnMstt: TStringList;
 begin
-    slStats := TStringList.Create;
-    slActiFurnMstt := TStringList.Create;
-
     //Iterate over all files.
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
@@ -2738,6 +2734,7 @@ begin
             g := GroupBySignature(f, 'TXST');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if ReferencedByCount(r) = 0 then continue;
                 tlTxst.Add(r);
             end;
         end;
@@ -2745,55 +2742,45 @@ begin
         //STAT
         g := GroupBySignature(f, 'STAT');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slStats.IndexOf(recordId);
-            if idx > -1 then continue
-            slStats.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
             tlStats.Add(r);
         end;
 
         //MSTT
         g := GroupBySignature(f, 'MSTT');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
             tlActiFurnMstt.Add(r);
         end;
 
         //FURN
         g := GroupBySignature(f, 'FURN');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
             tlActiFurnMstt.Add(r);
         end;
 
         //ACTI
         g := GroupBySignature(f, 'ACTI');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
             tlActiFurnMstt.Add(r);
         end;
 
         //DOOR
         g := GroupBySignature(f, 'DOOR');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
             tlActiFurnMstt.Add(r);
         end;
 
@@ -2801,11 +2788,8 @@ begin
         //CONT
         g := GroupBySignature(f, 'CONT');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
             tlActiFurnMstt.Add(r);
         end;
 
@@ -2813,32 +2797,21 @@ begin
         //FLOR
         g := GroupBySignature(f, 'FLOR');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
             tlActiFurnMstt.Add(r);
         end;
 
         //MISC
         g := GroupBySignature(f, 'MISC');
         for j := 0 to Pred(ElementCount(g)) do begin
-            r := WinningOverride(ElementByIndex(g, j));
-            recordId := RecordFormIdFileId(r);
-            idx := slActiFurnMstt.IndexOf(recordId);
-            if idx > -1 then continue
-            slActiFurnMstt.Add(recordId);
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
             tlActiFurnMstt.Add(r);
         end;
         }
 
-
     end;
-
-    slStats.Free;
-    slActiFurnMstt.Free;
-
     AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
     AddMessage('Found ' + IntToStr(tlActiFurnMstt.Count) + ' ACTI, DOOR, FURN, and MSTT records.');
 end;
@@ -2936,7 +2909,6 @@ begin
                 AddMessage('Processed ' + IntToStr(i) + ' of ' + IntToStr(total) + ' files.');
             end;
         end;
-    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         slVanilla.Free;
         slModded.Free;
@@ -3108,7 +3080,6 @@ begin
                 bgsmLod.free;
             end;
         end;
-    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsmModded.free;
         bgsmVanilla.free;
@@ -3144,7 +3115,6 @@ begin
             Result := True;
             Exit;
         end;
-    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         bgsm.free;
     end;
@@ -3170,7 +3140,6 @@ begin
                 key := sub.Names[c];
                 joRules.O[key].Assign(sub.O[key]);
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -3186,7 +3155,6 @@ begin
                 key := sub.Names[c];
                 for a := 0 to Pred(sub.A[key].Count) do joMswpMap.A[key].Add(sub.A[key].S[a]);
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -3201,7 +3169,6 @@ begin
                 key := sub.Names[c];
                 joMultiRefLOD.O[key].Assign(sub.O[key]);
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
         end;
@@ -3221,7 +3188,6 @@ begin
                 else
                     sEnableParentFormidExclusions := sEnableParentFormidExclusions + ',' + sub.A[key].S[a];
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
             AddMessage('Ignored Enable Parents: ' + sEnableParentFormidExclusions);
@@ -3242,7 +3208,6 @@ begin
                 else
                     sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
             AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
@@ -3311,7 +3276,7 @@ begin
     end
     else begin
         slTopPaths := TStringList.Create;
-        for i := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
+        for i := Pred(slTopLevelModPatternPaths.Count) downto 0 do begin
             if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
         end;
         lod4 := LODModelForLevel(s, model, colorRemap, '0', olod4, slTopPaths);
@@ -3361,7 +3326,6 @@ begin
             ProcessLODModel(model, lod8, colorRemap, slMaterialsFromFullModel);
             ProcessLODModel(model, lod16, colorRemap, slMaterialsFromFullModel);
             ProcessLODModel(model, lod32, colorRemap, slMaterialsFromFullModel);
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             slMaterialsFromFullModel.Free;
         end;
@@ -3412,7 +3376,6 @@ begin
                             if ContainsText(material, 'materials\' + slTopLevelModPatternPaths[tp]) then slTopPaths.Add(slTopLevelModPatternPaths[tp]);
                         end;
                         LODMaterial(material, colorRemap, slTopPaths, slExistingSubstitutions, slPossibleLODPaths);
-                    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
                     finally
                         slTopPaths.Free;
                         slExistingSubstitutions.Free;
@@ -3428,7 +3391,6 @@ begin
                 end;
             end;
         end;
-    except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
     finally
         slMaterialsFromLODModel.Free;
         slPossibleLODPaths.Free;
@@ -3471,8 +3433,6 @@ begin
                 else slMaterialsFromModel.Add(LowerCase(mat));
             end;
         end;
-    except on E: Exception do
-        AddMessage(#9 + 'Error reading NIF: ' + E.Message + ' ' + model);
     finally
         nif.Free;
     end;
@@ -3558,8 +3518,6 @@ begin
             //     bModified := True;
             // end;
         end;
-    except on E: Exception do
-        AddMessage(#9 + 'Error reading NIF: ' + E.Message + ' ' + f);
     finally
         if bModified then begin
             EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(f));
@@ -3727,7 +3685,6 @@ begin
         EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(lodModelWithRemap));
         lodModelNoRemapNif.SaveToFile(wbScriptsPath + 'FOLIP\output\' + lodModelWithRemap);
         Result := True;
-    except on E: Exception do AddMessage(#9 + 'Error creating color remapped LOD model: ' + E.Message);
     finally
         lodModelNoRemapNif.Free;
     end;
@@ -3766,7 +3723,6 @@ begin
         materialBGSM.SaveToFile(wbScriptsPath + 'FOLIP\output\' + renamedMaterial);
         slMatFiles.Add(renamedMaterial); // Add the newly created color remapped material to the list of materials.
         Result := renamedMaterial;
-    except on E: Exception do AddMessage(#9 + 'Error creating color remapped BGSM: ' + E.Message);
     finally
         material.Free;
     end;
