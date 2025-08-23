@@ -2888,21 +2888,23 @@ begin
         total := slArchivedFiles.Count;
         for i := 0 to Pred(total) do begin
             f := LowerCase(slArchivedFiles[i]);
+            try
+                //materials or meshes
+                if IsInLODDir(f, 'materials') then begin
+                    slMatFiles.Add(f);
 
-            //materials or meshes
-            if IsInLODDir(f, 'materials') then begin
-                slMatFiles.Add(f);
+                    fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
+                    if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
+                        if ((not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
+                    end;
 
-                fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
-                if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
-                    if ((not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
+                    if not bReportNonLODMaterials then continue;
+                    if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
+                end
+                else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
+                    slNifFiles.Add(f);
                 end;
-
-                if not bReportNonLODMaterials then continue;
-                if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
-            end
-            else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
-                slNifFiles.Add(f);
+            except on E: Exception do AddMessage(#9 + 'Error processing file ' + f + #9 + E.Message);
             end;
 
             if i mod 10000 = 0 then begin
