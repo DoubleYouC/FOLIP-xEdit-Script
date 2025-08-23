@@ -2927,6 +2927,7 @@ var
     slCurrentContainers, slVanillaContainers: TStringList;
     currentContainer: string;
 begin
+    Result := '';
     slCurrentContainers := TStringList.Create;
     slVanillaContainers := TStringList.Create;
     try
@@ -3730,7 +3731,7 @@ begin
         slMatFiles.Add(renamedMaterial); // Add the newly created color remapped material to the list of materials.
         Result := renamedMaterial;
     finally
-        material.Free;
+        materialBGSM.Free;
     end;
 end;
 
