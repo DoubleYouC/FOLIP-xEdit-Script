@@ -155,11 +155,9 @@ var
     f, p: IwbFile;
     g: IwbGroupRecord;
     n, r: IwbElement;
-    recordId, editorid, loadOrderFormId: string;
-    slStats: TStringList;
+    editorid, loadOrderFormId: string;
     tlStats, tlStatsWithVWD: TList;
 begin
-    slStats := TStringList.Create;
     tlStats := TList.Create;
     tlStatsWithVWD := TList.Create;
     try
@@ -168,11 +166,8 @@ begin
             //STAT
             g := GroupBySignature(f, 'STAT');
             for j := 0 to Pred(ElementCount(g)) do begin
-                r := WinningOverride(ElementByIndex(g, j));
-                recordId := RecordFormIdFileId(r);
-                idx := slStats.IndexOf(recordId);
-                if idx > -1 then continue;
-                slStats.Add(recordId);
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
                 if GetElementEditValues(r, 'Record Header\Record Flags\Has Distant LOD') <> '1' then begin
                     if bRemoveVWD then SetVisibleWhenDistantFromReferencedBase(r, False);
                     continue;
@@ -226,7 +221,6 @@ begin
             end;
         end;
     finally
-        slStats.Free;
         tlStats.Free;
         tlStatsWithVWD.Free;
     end;
