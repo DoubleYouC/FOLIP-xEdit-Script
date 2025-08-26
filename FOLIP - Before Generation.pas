@@ -1890,9 +1890,6 @@ begin
                 originalMat := GetElementEditValues(sub, 'BNAM - Original Material');
                 if originalMat = '' then continue;
                 originalMat := LowerCase(wbNormalizeResourceName(originalMat, resMaterial));
-                if ContainsText(originalMat, '*') then begin
-                    AddMessage(Name(m) + #9 + 'Warning: This Material Swap Substitution original material has an asterisk. This may need manual adjustment for LOD to swap correctly.' + #9 + originalMat + #9 + replacementMat);
-                end;
 
                 slTopPaths := TStringList.Create;
                 for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
@@ -1910,8 +1907,8 @@ begin
                 replacementMat := GetElementEditValues(sub, 'SNAM - Replacement Material');
                 if replacementMat = '' then continue;
                 replacementMat := LowerCase(wbNormalizeResourceName(replacementMat, resMaterial));
-                if ContainsText(replacementMat, '*') then begin
-                    AddMessage(Name(m) + #9 + 'Warning: This Material Swap Substitution replacement material has an asterisk. This may need manual adjustment for LOD to swap correctly.' + #9 + originalMat + #9 + replacementMat);
+                if (ContainsText(replacementMat, '*') or ContainsText(originalMat, '*')) then begin
+                    AddMessage(Name(m) + #9 + 'Warning: This Material Swap Substitution uses an asterisk. This may need manual adjustment for LOD to swap correctly.' + #9 + originalMat + #9 + replacementMat);
                 end;
 
                 colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
