@@ -1887,9 +1887,9 @@ begin
                 sub := ElementByIndex(substitutions, si);
                 if not ElementExists(sub, 'BNAM - Original Material') then continue;
                 if not ElementExists(sub, 'SNAM - Replacement Material') then continue;
-                originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+                originalMat := GetElementEditValues(sub, 'BNAM - Original Material');
                 if originalMat = '' then continue;
-                if LeftStr(originalMat, 10) <> 'materials\' then originalMat := 'materials\' + originalMat;
+                originalMat := LowerCase(wbNormalizeResourceName(originalMat, resMaterial));
 
                 slTopPaths := TStringList.Create;
                 for tp := 0 to Pred(slTopLevelModPatternPaths.Count) do begin
@@ -1904,9 +1904,13 @@ begin
                 if not hasLODOriginalMaterial then continue;
                 //ListStringsInStringList(slLODOriginals);
 
-                replacementMat := LowerCase(GetElementEditValues(sub, 'SNAM - Replacement Material'));
+                replacementMat := GetElementEditValues(sub, 'SNAM - Replacement Material');
                 if replacementMat = '' then continue;
-                if LeftStr(replacementMat, 10) <> 'materials\' then replacementMat := 'materials\' + replacementMat;
+                replacementMat := LowerCase(wbNormalizeResourceName(replacementMat, resMaterial));
+                if ContainsText(replacementMat, '*') then begin
+                    AddMessage(Name(m) + #9 + 'Ignoring this Material Swap Substitution due to the Replacement Material using an asterisk. If LOD needs to be affected, it will need to be handled manually.' + #9 + originalMat + #9 + replacementMat);
+                    continue;
+                end;
 
                 colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(sub, 'CNAM - Color Remapping Index'),'9'));
                 if ((originalMat = replacementMat) and (colorRemap = '9')) then begin
@@ -3313,7 +3317,7 @@ begin
         else if lod8 <> '' then hasDistantLOD := 1
         else if lod16 <> '' then hasDistantLOD := 1
         else if lod32 <> '' then hasDistantLOD := 1;
-        if hasDistantLOD = 1 then hasChanged := True;
+        // if hasDistantLOD = 1 then hasChanged := True;
     end;
 
     //ruleOverride means that the record should not have distant LOD.
@@ -3945,6 +3949,10 @@ function ChangeFullToLodDirectory(f: string): string;
 var
     parts: TStringDynArray;
 begin
+    if not ContainsText(f, '\') then begin
+        Result := 'lod\' + f;
+        Exit;
+    end;
     parts := SplitString(f, '\');
     if Length(parts) = 0 then begin
         //meshes\ to meshes\lod
