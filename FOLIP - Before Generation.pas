@@ -1509,7 +1509,7 @@ var
 begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
-    model := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
+    model := LowerCase(GetElementEditValues(s, 'Model\MODL'));
     if joRules.Contains(editorid) then begin
         bIsFullLOD := StrToBool(joRules.O[editorid].S['bisfulllod']);
     end
@@ -2700,10 +2700,17 @@ begin
     if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
     else SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
     Add(n, 'MNAM', True);
-    SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
-    SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
-    SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
-    SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
+    if ElementExists(n, 'MNAM\Level 0') then begin
+        SetElementNativeValues(n, 'MNAM\Level 0', joLOD.S['level0']);
+        SetElementNativeValues(n, 'MNAM\Level 1', joLOD.S['level1']);
+        SetElementNativeValues(n, 'MNAM\Level 2', joLOD.S['level2']);
+        SetElementNativeValues(n, 'MNAM\Level 3', joLOD.S['level3']);
+    end else begin
+        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
+        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
+        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
+        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
+    end;
 
     // if Equals(GetFile(s), GetFile(n)) then Exit;
     // if GetElementEditValues(s, 'MNAM\LOD #0 (Level 0)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh') then Exit;
@@ -3245,19 +3252,26 @@ begin
     olod32 := '';
     hasDistantLOD := 0;
 
-    omodel := LowerCase(GetElementEditValues(s, 'Model\MODL - Model FileName'));
+    omodel := LowerCase(GetElementEditValues(s, 'Model\MODL'));
 
     if LeftStr(omodel, 7) <> 'meshes\' then model := 'meshes\' + omodel else model := omodel;
 
-    colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC - Color Remapping Index'),'9'));
+    colorRemap := FloatToStr(StrToFloatDef(GetElementEditValues(s, 'Model\MODC'),'9'));
     if colorRemap = '9' then colorRemap := '' else colorRemap := '_' + colorRemap;
 
     //Only STAT records have these. We use this function on other signatures that don't have these fields.
     if Signature(s) = 'STAT' then begin
-        olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
-        olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
-        olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
-        olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+        if ElementExists(s, 'MNAM\Level 0') then begin
+            olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 0'));
+            olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 1'));
+            olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 2'));
+            olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 3'));
+        end else begin
+            olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
+            olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
+            olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
+            olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+        end;
         hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
     end;
 
@@ -4122,7 +4136,7 @@ function RecordFormIdFileId(e: IwbElement): string;
     Returns the record ID of an element.
 }
 begin
-    Result := TrimRightChars(IntToHex(FixedFormID(e), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+    Result := TrimRightChars(IntToHex(FixedFormID(MasterOrSelf(e)), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
 end;
 
 function GetRecordFromFormIdFileId(recordId: string): IwbElement;
