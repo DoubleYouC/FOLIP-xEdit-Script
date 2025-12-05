@@ -2897,22 +2897,22 @@ begin
 
         total := slArchivedFiles.Count;
         for i := 0 to Pred(total) do begin
-            f := LowerCase(slArchivedFiles[i]);
+            f := slArchivedFiles[i];
             try
                 //materials or meshes
                 if IsInLODDir(f, 'materials') then begin
-                    slMatFiles.Add(f);
+                    slMatFiles.Add(LowerCase(f));
 
                     fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
-                    if (slVanilla.IndexOf(fNoLod) > -1) and (slModded.IndexOf(fNoLod) > -1) then begin
-                        if ((not ContainsText(fNoLod,'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
+                    if (slVanilla.IndexOf(LowerCase(fNoLod)) > -1) and (slModded.IndexOf(LowerCase(fNoLod)) > -1) then begin
+                        if ((not ContainsText(LowerCase(fNoLod),'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
                     end;
 
                     if not bReportNonLODMaterials then continue;
                     if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
                 end
                 else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
-                    slNifFiles.Add(f);
+                    slNifFiles.Add(LowerCase(f));
                 end;
             except on E: Exception do AddMessage(#9 + 'Error processing file ' + f + #9 + E.Message);
             end;
@@ -3933,11 +3933,11 @@ var
     between: string;
 begin
     Result := False;
-    if LeftStr(f, Length(m)) <> m then Exit;
+    if LowerCase(LeftStr(f, Length(m))) <> LowerCase(m) then Exit;
     parts := SplitString(f, '\');
     for i := 1 to 2 do begin
         try
-            if parts[i] = 'lod' then begin
+            if LowerCase(parts[i]) = 'lod' then begin
                 Result := True;
                 if i = 2 then begin
                     between := parts[1] + '\';
