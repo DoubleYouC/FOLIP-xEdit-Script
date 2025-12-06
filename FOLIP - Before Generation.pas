@@ -2898,7 +2898,6 @@ begin
         total := slArchivedFiles.Count;
         for i := 0 to Pred(total) do begin
             f := slArchivedFiles[i];
-            AddMessage(f);
             try
                 //materials or meshes
                 if IsInLODDir(f, 'materials') then begin
