@@ -2685,6 +2685,7 @@ begin
                 n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
                 AddLinkedReference(n, '00195411', '00187BF3'); // Add the MultiRefLOD keyword with the correct formid
+                AddRefToMyFormlist(n, flMultiRefLOD);
             end else begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
                 iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
