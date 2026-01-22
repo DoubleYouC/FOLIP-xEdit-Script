@@ -1122,7 +1122,7 @@ begin
                 if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue;
                 if bHasPersistentReplacer then continue;
                 if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
-                bHasOppositeEnableParent := StrToBool(GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent'));
+                if GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> '0' then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
                 if not bHasOppositeEnableParent then continue;
                 bIsPersistent := GetIsPersistent(r);
                 if bHasSuitableReplacer and not bIsPersistent then continue;
@@ -1132,7 +1132,7 @@ begin
                 bHasPersistentReplacer := True;
                 continue;
             end;
-            bHasOppositeEnableParent := StrToBool(GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent'));
+            if GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> '0' then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
             if not bHasOppositeEnableParent then begin
                 tlEnableRefs.Add(r);
                 continue;
@@ -1194,12 +1194,12 @@ begin
 
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
                 // Skip if in interior cell
-                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 // Check for ignored worldspace
                 if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
                 // Check if WRLD inherits LOD from another worldspace
-                if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+                if GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> '0' then continue;
 
                 AddMessage(#9 + Name(r));
 
@@ -1224,7 +1224,9 @@ begin
                         wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                     end;
                 end;
-                n := CopyElementToFileWithVC(r, iCurrentPlugin);
+                //need to check if r is in iCurrentPlugin already
+                if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
+                else n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
 
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
@@ -1257,12 +1259,12 @@ begin
                     AddMessage(#9 + Name(r));
                     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
                     // Skip if in interior cell
-                    if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+                    if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
                     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                     // Check for ignored worldspace
                     if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
                     // Check if WRLD inherits LOD from another worldspace
-                    if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+                    if GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> '0' then continue;
                     bPluginTemp := False;
                     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
                     iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
@@ -1285,7 +1287,9 @@ begin
                         end;
                     end;
 
-                    n := CopyElementToFileWithVC(r, iCurrentPlugin);
+                    //need to check if r is in iCurrentPlugin already
+                    if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
+                    else n := CopyElementToFileWithVC(r, iCurrentPlugin);
                     if not bCanBeRespected then begin
                         SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
                         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
@@ -1447,7 +1451,7 @@ begin
             if not Equals(m, r) then continue;
             if not GetIsPersistent(r) then continue;
             rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
             if ReferencedByCount(r) <> 0 then continue;
             if ElementExists(r, 'VMAD') then continue;
             if ElementExists(r, 'XMPO') then continue;
@@ -1525,7 +1529,7 @@ begin
         if GetIsDeleted(r) then continue;
         if GetIsCleanDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
@@ -1533,12 +1537,12 @@ begin
         if bXESP then begin
             xesp := ElementByPath(r, 'XESP');
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
-            bRespect := GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State');
+            if GetElementEditValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> '0' then bRespect := True else bRespect := False;
         end;
         if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLODFlagged := true else bIsFullLODFlagged := false;
         if bIsFullLODFlagged then begin
             if not bXESP then continue;
-            if GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') then continue;
+            if GetElementEditValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> '0' then continue;
             if bRespect then continue;
         end;
 
@@ -1768,7 +1772,7 @@ begin
     xespDup := Add(n, 'XESP', True);
     if bParent then begin
         parent := GetElementEditValues(r, 'XESP\Reference');
-        bHasOppositeParent := GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent');
+        if GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> '0' then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
         SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', bHasOppositeParent);
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end
@@ -2591,12 +2595,12 @@ begin
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
         // Check if WRLD inherits LOD from another worldspace
-        if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+        if GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> '0' then continue;
 
         //This reference should get lod if it passes these checks.
         cnt := cnt + 1;
@@ -3290,7 +3294,7 @@ begin
             olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
             olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
         end;
-        hasDistantLOD := GetElementNativeValues(s,'Record Header\Record Flags\Has Distant LOD');
+        if GetElementEditValues(s, 'Record Header\Record Flags\Has Distant LOD') <> '0' then hasDistantLOD := 1 else hasDistantLOD := 0;
     end;
 
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
@@ -4006,7 +4010,7 @@ function GetIsCleanDeleted(r: IInterface): Boolean;
 begin
     Result := False;
     if not ElementExists(r, 'XESP') then Exit;
-    if not GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') = '1' then Exit;
+    if GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') = '0' then Exit;
     if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
     Result := True;
 end;
