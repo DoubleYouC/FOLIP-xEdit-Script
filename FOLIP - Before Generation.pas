@@ -2541,6 +2541,7 @@ begin
 
             //List relevant material swaps
             if HasLOD then begin
+                slHasLOD.Add(RecordFormIdFileId(s));
                 cnt := ProcessReferences(s, bHasEnableParent, bHasSCOLNeedingLOD);
 
                 //check for base material swap
@@ -2548,9 +2549,7 @@ begin
                     ms := LinksTo(ElementByPath(s, 'Model\MODS'));
                     if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
                 end;
-
                 if ((cnt > 0) and (joLOD.Count > 0)) then begin
-                    slHasLOD.Add(RecordFormIdFileId(s));
                     AssignLODToStat(s, joLOD, false);
                     // Stripping this idea, since it more than doubles the amount of time required to do this, defeating the purpose of this idea.
                     // if bHasEnableParent and (not bHasSCOLNeedingLOD) then begin
