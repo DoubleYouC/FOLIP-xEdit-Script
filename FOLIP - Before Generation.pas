@@ -1588,12 +1588,12 @@ begin
                 if GetIsDeleted(r) then continue;
                 if GetIsCleanDeleted(r) then continue;
                 rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+                if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
                 // Check if WRLD inherits LOD from another worldspace
-                if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+                if GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> '0' then continue;
 
                 //This reference should get lod if it passes these checks.
                 cnt := cnt + 1;
@@ -2632,7 +2632,7 @@ begin
         // Check if cell is in an interior cell
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         try
-            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') <> '0' then continue;
         except
             AddMessage('Skipped problem record: '+ GetFileName(rCell) + #9 + Name(rCell));
             continue;
@@ -2643,7 +2643,7 @@ begin
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
         // Check if WRLD inherits LOD from another worldspace
-        if StrToBool(GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data')) then continue;
+        if GetElementEditValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> '0' then continue;
 
         // Increment count if you made it this far.
         cnt := cnt + 1;
@@ -2666,15 +2666,33 @@ begin
         base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
 
         if ((Signature(base) <> 'SCOL') and (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0')) then begin
-            iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
-            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-            iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-            wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-            n := CopyElementToFileWithVC(r, iCurrentPlugin);
-            AddRefToMyFormlist(n, flRemoveIsFullLOD);
-            SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
-            SetIsVisibleWhenDistant(n, GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
+            if ElementExists(r, 'XATR') then begin
+                //When a STAT has a XATR, it means that STAT is going to move according to the object it is attached to.
+                //Is Full LOD is able to do this. Object LOD is not. We need to prevent the object from having object LOD,
+                //and preserve the Is FullLOD Flag.
+                //
+                //Setting it to be MultiRefLOD of this ref, that always has Object LOD, effectively removes it from Object LOD.
+                //[REFR:00187BF3] (Places CapitolDome01 [STAT:00187CB7] in VaultTecOfficeExt02 [CELL:0000E07A] (in Commonwealth "Commonwealth" [WRLD:0000003C] at 3,-3) in Precombined\0000E07A_0D73777F_OC.nif)
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                n := CopyElementToFileWithVC(r, iCurrentPlugin);
+                RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
+                AddLinkedReference(n, '00195411', '00187BF3'); // Add the MultiRefLOD keyword with the correct formid
+            end else begin
+                //Remove Is Full LOD flag from objects that will have Object LOD added.
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
+                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                n := CopyElementToFileWithVC(r, iCurrentPlugin);
+                AddRefToMyFormlist(n, flRemoveIsFullLOD);
+                SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
+                SetIsVisibleWhenDistant(n, GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
+            end;
         end;
     end;
     if (Signature(s) = 'SCOL') and (cnt > 0) then begin
@@ -3303,11 +3321,11 @@ begin
         for i := Pred(slTopLevelModPatternPaths.Count) downto 0 do begin
             if ContainsText(model, 'meshes\' + slTopLevelModPatternPaths[i]) then slTopPaths.Add(slTopLevelModPatternPaths[i]);
         end;
-        lod4 := LODModelForLevel(s, model, colorRemap, '0', olod4, slTopPaths);
-        lod8 := LODModelForLevel(s, model, colorRemap, '1', olod8, slTopPaths);
+        lod4 := LowerCase(LODModelForLevel(s, model, colorRemap, '0', olod4, slTopPaths));
+        lod8 := LowerCase(LODModelForLevel(s, model, colorRemap, '1', olod8, slTopPaths));
         if bForceLOD8 and (lod8 = '') and (lod4 <> '') then lod8 := lod4;
-        lod16 := LODModelForLevel(s, model, colorRemap, '2', olod16, slTopPaths);
-        lod32 := LODModelForLevel(s, model, colorRemap, '3', olod32, slTopPaths);
+        lod16 := LowerCase(LODModelForLevel(s, model, colorRemap, '2', olod16, slTopPaths));
+        lod32 := LowerCase(LODModelForLevel(s, model, colorRemap, '3', olod32, slTopPaths));
         slTopPaths.Free;
 
         //If no lod4 model has been specified, report a list of models that would possibly benefit from having lod.
