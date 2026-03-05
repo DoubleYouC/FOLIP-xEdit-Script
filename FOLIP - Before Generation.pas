@@ -136,6 +136,7 @@ var
     bSkip: Boolean;
     sFolipPluginFileNameSanitized, cmdline: string;
     fs: TFileStream;
+    diamondCityWrld, goodneighborWrld: IwbElement;
 begin
     bSkip := False;
     //Create FOLIP plugins
@@ -187,6 +188,18 @@ begin
     AddMessage('=======================================================================================');
 
     MultiRefLOD;
+
+    diamondCityWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00000F94, False));
+    if not SameText(GetFileName(GetFile(diamondCityWrld)), GetFileName(iFolipPluginFile)) then begin
+        diamondCityWrld := wbCopyElementToFile(diamondCityWrld, iFolipPluginFile, False, True);
+    end;
+    SetElementEditValues(diamondCityWrld, 'NAMA', '0.25');
+
+    goodneighborWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00054BD5, False));
+    if not SameText(GetFileName(GetFile(goodneighborWrld)), GetFileName(iFolipPluginFile)) then begin
+        goodneighborWrld := wbCopyElementToFile(goodneighborWrld, iFolipPluginFile, False, True);
+    end;
+    SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
     DeleteDirectory(FOLIPTempPath);
 
@@ -2303,6 +2316,10 @@ begin
     Result := False;
     slTextureList := TStringList.Create;
     lodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
+    //In case the diffuse texture doesn't follow proper naming convention of ending in _d.dds
+    if RightStr(LowerCase(lodDiffuse), 6) <> '_d.dds' then begin
+        lodDiffuse := TrimLeftChars(lodDiffuse, 4) + '_d.dds';
+    end;
     try
         slTextureList.Add(omDiffuseNormalized);
         AddMessage(#9 + 'Checking TexGen file for texture: ' + omDiffuseNormalized);
