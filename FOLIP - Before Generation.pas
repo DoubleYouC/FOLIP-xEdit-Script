@@ -3,10 +3,8 @@
 
     TODO:
     * Check if object is in a settlement and scrappable. Test to see if LOD Respects Enable State flag works on scrapped items like they do for Enable Markers. It may require persistence, and only would work in Fallout4.esm
-    * Handle existing Enable Parents that are Opposite the Enable Marker as regards LOD Respects Enable State Flag, as the game isn't able to interpret the opposite method for lod.
-    * Automatic handling of missing LOD materials
-        * Create Missing Material
-        * Create TexGen Rule
+    * Increase speed.
+    * Attempt to match lod models to models by their base name.
 }
 unit FOLIP;
 
@@ -48,85 +46,236 @@ function Initialize:integer;
 var
     bLoadDefaults: Boolean;
 begin
-    CreateObjects;
-    bLoadDefaults := True;
-    bPreviousBeforeGenerationPresent := False;
-    if ResourceExists(sUserSettingsFileName) then begin
-        AddMessage('Loading user settings from ' + sUserSettingsFileName);
-        joUserSettings.LoadFromResource(sUserSettingsFileName);
-        try
-            bFakeStatics := StrToBool(Fallback(joUserSettings.S['FakeStatics'], 'True'));
-            bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
-            bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
-            bMakeMissingMaterials := StrToBool(Fallback(joUserSettings.S['MakeMissingMaterials'], 'True'));
-            bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
-            bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
-            bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
-            bRespectEnableMarkers := StrToBool(Fallback(joUserSettings.S['RespectEnableMarkers'], 'True'));
-            sFolipPluginFileName := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Before Generation');
+    try
+        //TLists
+        tlStats := TList.Create;
+        tlActiFurnMstt := TList.Create;
+        tlMswp := TList.Create;
+        tlMasterCells := TList.Create;
+        tlPluginCells := TList.Create;
+        tlEnableParents := TList.Create;
+        tlStolenForms := TList.Create;
+        tlTxst := TList.Create;
 
-            sFolipAfterGenerationPluginFileName := Fallback(joUserSettings.S['AfterGenerationPluginName'], 'FOLIP - After Generation');
-            bLightPlugin := StrToBool(Fallback(joUserSettings.S['LightPlugin'], 'True'));
-            bRemoveVWD := StrToBool(Fallback(joUserSettings.S['RemoveVWD'], 'True'));
-            bLimitedHasDistantLODRemoval := StrToBool(joUserSettings.S['LimitedHasDistantLODRemoval']);
-            bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
-            bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'True'));
-            bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
-            bLoadDefaults := False;
-        except
-            AddMessage('User settings are incomplete. Loading defaults.');
+
+        //TStringLists
+        slPluginFiles := TStringList.Create;
+
+        slMatFiles := TStringList.Create;
+        slMatFiles.Sorted := True;
+        slMatFiles.Duplicates := dupIgnore;
+
+        slNifFiles := TStringList.Create;
+        slNifFiles.Sorted := True;
+        slNifFiles.Duplicates := dupIgnore;
+
+        slUsedLODNifFiles := TStringList.Create;
+        slUsedLODNifFiles.Sorted := True;
+        slUsedLODNifFiles.Duplicates := dupIgnore;
+
+        slMeshCheckMissingMaterials := TStringList.Create;
+        slMeshCheckMissingMaterials.Sorted := True;
+        slMeshCheckMissingMaterials.Duplicates := dupIgnore;
+
+        slMeshCheckNonLODMaterials := TStringList.Create;
+        slMeshCheckNonLODMaterials.Sorted := True;
+        slMeshCheckNonLODMaterials.Duplicates := dupIgnore;
+
+        slMeshCheckNoMaterialSpecified := TStringList.Create;
+        slMeshCheckNoMaterialSpecified.Sorted := True;
+        slMeshCheckNoMaterialSpecified.Duplicates := dupIgnore;
+
+        slMismatchedFullModelToLODMaterials  := TStringList.Create;
+        slMismatchedFullModelToLODMaterials.Sorted := True;
+        slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
+
+        slCheckedModels := TStringList.Create;
+        slHasLOD := TStringList.Create;
+
+        slTopLevelModPatternPaths := TStringList.Create;
+        slMessages := TStringList.Create;
+        slMessages.Sorted := True;
+        slMissingLODMessages := TStringList.Create;
+        slMissingLODMessages.Sorted := True;
+
+        slOutsideUVRange := TStringList.Create;
+        slOutsideUVRange.Sorted := True;
+        slOutsideUVRange.Duplicates := dupIgnore;
+
+        slFullLODMessages := TStringList.Create;
+        slFullLODMessages.Sorted := True;
+
+        slMissingColorRemaps := TStringList.Create;
+        slMissingColorRemaps.Sorted := True;
+
+        slFOLIPTexgen_noalpha := TStringList.Create;
+        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then begin
+            slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
+            AddMessage('Loaded TexGen noalpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
         end;
+        slFOLIPTexgen_copy := TStringList.Create;
+        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then begin
+            slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+            AddMessage('Loaded TexGen copy rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
+        end;
+        slFOLIPTexgen_alpha := TStringList.Create;
+        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then begin
+            slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+            AddMessage('Loaded TexGen alpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
+        end;
+        slTexgen_copy := TStringList.Create;
+        slTexgen_alpha := TStringList.Create;
+        slTexgen_noalpha := TStringList.Create;
+
+        //TJsonObjects
+        joRules := TJsonObject.Create;
+        joMswpMap := TJsonObject.Create;
+        joMultiRefLOD := TJsonObject.Create;
+        joUserSettings := TJsonObject.Create;
+
+        bLoadDefaults := True;
+        bPreviousBeforeGenerationPresent := False;
+        if ResourceExists(sUserSettingsFileName) then begin
+            AddMessage('Loading user settings from ' + sUserSettingsFileName);
+            joUserSettings.LoadFromResource(sUserSettingsFileName);
+            try
+                bFakeStatics := StrToBool(Fallback(joUserSettings.S['FakeStatics'], 'True'));
+                bForceLOD8 := StrToBool(joUserSettings.S['ForceLOD8']);
+                bIgnoreNoLOD := StrToBool(joUserSettings.S['IgnoreNoLOD']);
+                bMakeMissingMaterials := StrToBool(Fallback(joUserSettings.S['MakeMissingMaterials'], 'True'));
+                bReportNonLODMaterials := StrToBool(joUserSettings.S['ReportNonLODMaterials']);
+                bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
+                bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
+                bRespectEnableMarkers := StrToBool(Fallback(joUserSettings.S['RespectEnableMarkers'], 'True'));
+                sFolipPluginFileName := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Before Generation');
+
+                sFolipAfterGenerationPluginFileName := Fallback(joUserSettings.S['AfterGenerationPluginName'], 'FOLIP - After Generation');
+                bLightPlugin := StrToBool(Fallback(joUserSettings.S['LightPlugin'], 'True'));
+                bRemoveVWD := StrToBool(Fallback(joUserSettings.S['RemoveVWD'], 'True'));
+                bLimitedHasDistantLODRemoval := StrToBool(joUserSettings.S['LimitedHasDistantLODRemoval']);
+                bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
+                bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'True'));
+                bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
+                bLoadDefaults := False;
+            except
+                AddMessage('User settings are incomplete. Loading defaults.');
+            end;
+        end;
+        if bLoadDefaults then begin
+            //Set default options.
+            bFakeStatics := True;
+            bForceLOD8 := False;
+            bIgnoreNoLOD := False;
+
+            bMakeMissingMaterials := True;
+
+            // This is used to report if a LOD material appears to be using a non-LOD texture.
+            bReportNonLODMaterials := False;
+            // This is used to report if a LOD mesh appears to have UVs outside of range.
+            bReportUVs := False;
+            // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
+            bReportMissingLOD := False;
+            // This is used to ensure enable parented objects use LOD Respects Enable State
+            bRespectEnableMarkers := True;
+
+            //Default plugin name.
+            sFolipPluginFileName := 'FOLIP - Before Generation';
+            sFolipAfterGenerationPluginFileName := 'FOLIP - After Generation';
+
+            bLightPlugin := True;
+            bRemoveVWD := True;
+            bSkipPrecombined := True;
+            bRemoveBeforeGeneration := False;
+        end;
+
+        //Used to tell the Rule Editor whether or not to save changes.
+        bSaveUserRules := False;
+        bUserRulesChanged := False;
+
+        //Get scaling
+        uiScale := Screen.PixelsPerInch * 100 / 96;
+        AddMessage('UI scale: ' + IntToStr(uiScale));
+
+        sIgnoredWorldspaces := '';
+        sEnableParentFormidExclusions := '';
+
+
+        FetchRules;
+        slTopLevelModPatternPaths.Add('');
+
+        if wbSimpleRecords then begin
+            MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
+            Result := 1;
+            Exit;
+        end;
+
+        //Display the main menu. If the user presses the cancel button, exit.
+        if MainMenuForm then BeforeGeneration;
+    finally
+        tlStats.Free;
+        tlActiFurnMstt.Free;
+        tlMswp.Free;
+        tlMasterCells.Free;
+        tlPluginCells.Free;
+        tlEnableParents.Free;
+        tlStolenForms.Free;
+        tlTxst.Free;
+
+        slPluginFiles.Free;
+        slNifFiles.Free;
+        slUsedLODNifFiles.Free;
+        slMatFiles.Free;
+        slTopLevelModPatternPaths.Free;
+        slMessages.Free;
+        slMissingLODMessages.Free;
+        slFullLODMessages.Free;
+        slMissingColorRemaps.Free;
+        slMeshCheckMissingMaterials.Free;
+        slMeshCheckNonLODMaterials.Free;
+        slMeshCheckNoMaterialSpecified.Free;
+        slCheckedModels.Free;
+        slMismatchedFullModelToLODMaterials.Free;
+        slHasLOD.Free;
+        slFOLIPTexgen_noalpha.Free;
+        slFOLIPTexgen_copy.Free;
+        slFOLIPTexgen_alpha.Free;
+        slTexgen_copy.Free;
+        slTexgen_noalpha.Free;
+        slTexgen_alpha.Free;
+        slOutsideUVRange.Free;
+
+        joRules.Free;
+        joMswpMap.Free;
+
+        //Save user rules
+        if bSaveUserRules and bUserRulesChanged then begin
+            AddMessage('Saving ' + IntToStr(joUserRules.Count) + ' user rule(s) to ' + wbDataPath + 'FOLIP\UserRules.json');
+            joUserRules.SaveToFile(wbDataPath + 'FOLIP\UserRules.json', False, TEncoding.UTF8, True);
+        end;
+        joUserRules.Free;
+
+        //Save user settings
+        AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
+        joUserSettings.S['FakeStatics'] := BoolToStr(bFakeStatics);
+        joUserSettings.S['ForceLOD8'] := BoolToStr(bForceLOD8);
+        joUserSettings.S['IgnoreNoLOD'] := BoolToStr(bIgnoreNoLOD);
+        joUserSettings.S['ReportNonLODMaterials'] := BoolToStr(bReportNonLODMaterials);
+        joUserSettings.S['ReportUVs'] := BoolToStr(bReportUVs);
+        joUserSettings.S['ReportMissingLOD'] := BoolToStr(bReportMissingLOD);
+        joUserSettings.S['RespectEnableMarkers'] := BoolToStr(bRespectEnableMarkers);
+        joUserSettings.S['BeforeGenerationPluginName'] := sFolipPluginFileName;
+        joUserSettings.S['AfterGenerationPluginName'] := sFolipAfterGenerationPluginFileName;
+        joUserSettings.S['LightPlugin'] := BoolToStr(bLightPlugin);
+        joUserSettings.S['RemoveVWD'] := BoolToStr(bRemoveVWD);
+        joUserSettings.S['LimitedHasDistantLODRemoval'] := BoolToStr(bLimitedHasDistantLODRemoval);
+        joUserSettings.S['AddVWD'] := BoolToStr(bAddVWD);
+        joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
+        joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
+        joUserSettings.S['MakeMissingMaterials'] := BoolToStr(bMakeMissingMaterials);
+
+        joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
+        joUserSettings.Free;
     end;
-    if bLoadDefaults then begin
-        //Set default options.
-        bFakeStatics := True;
-        bForceLOD8 := False;
-        bIgnoreNoLOD := False;
-
-        bMakeMissingMaterials := True;
-
-        // This is used to report if a LOD material appears to be using a non-LOD texture.
-        bReportNonLODMaterials := False;
-        // This is used to report if a LOD mesh appears to have UVs outside of range.
-        bReportUVs := False;
-        // This is used to inform a LOD author of models that are missing LOD that are of a certain object bounds size or more.
-        bReportMissingLOD := False;
-        // This is used to ensure enable parented objects use LOD Respects Enable State
-        bRespectEnableMarkers := True;
-
-        //Default plugin name.
-        sFolipPluginFileName := 'FOLIP - Before Generation';
-        sFolipAfterGenerationPluginFileName := 'FOLIP - After Generation';
-
-        bLightPlugin := True;
-        bRemoveVWD := True;
-        bSkipPrecombined := True;
-        bRemoveBeforeGeneration := False;
-    end;
-
-    //Used to tell the Rule Editor whether or not to save changes.
-    bSaveUserRules := False;
-    bUserRulesChanged := False;
-
-    //Get scaling
-    uiScale := Screen.PixelsPerInch * 100 / 96;
-    AddMessage('UI scale: ' + IntToStr(uiScale));
-
-    sIgnoredWorldspaces := '';
-    sEnableParentFormidExclusions := '';
-
-
-    FetchRules;
-    slTopLevelModPatternPaths.Add('');
-
-    if wbSimpleRecords then begin
-        MessageDlg('Simple records must be unchecked in xEdit options', mtInformation, [mbOk], 0);
-        Result := 1;
-        Exit;
-    end;
-
-    //Display the main menu. If the user presses the cancel button, exit.
-    if MainMenuForm then BeforeGeneration;
 
     Result := 0;
 end;
@@ -233,170 +382,6 @@ begin
     ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
 
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
-end;
-
-function Finalize: integer;
-{
-    This function is called at the end.
-}
-begin
-    tlStats.Free;
-    tlActiFurnMstt.Free;
-    tlMswp.Free;
-    tlMasterCells.Free;
-    tlPluginCells.Free;
-    tlEnableParents.Free;
-    tlStolenForms.Free;
-    tlTxst.Free;
-
-    slPluginFiles.Free;
-    slNifFiles.Free;
-    slUsedLODNifFiles.Free;
-    slMatFiles.Free;
-    slTopLevelModPatternPaths.Free;
-    slMessages.Free;
-    slMissingLODMessages.Free;
-    slFullLODMessages.Free;
-    slMissingColorRemaps.Free;
-    slMeshCheckMissingMaterials.Free;
-    slMeshCheckNonLODMaterials.Free;
-    slMeshCheckNoMaterialSpecified.Free;
-    slCheckedModels.Free;
-    slMismatchedFullModelToLODMaterials.Free;
-    slHasLOD.Free;
-    slFOLIPTexgen_noalpha.Free;
-    slFOLIPTexgen_copy.Free;
-    slFOLIPTexgen_alpha.Free;
-    slTexgen_copy.Free;
-    slTexgen_noalpha.Free;
-    slTexgen_alpha.Free;
-    slOutsideUVRange.Free;
-
-    joRules.Free;
-    joMswpMap.Free;
-
-    //Save user rules
-    if bSaveUserRules and bUserRulesChanged then begin
-        AddMessage('Saving ' + IntToStr(joUserRules.Count) + ' user rule(s) to ' + wbDataPath + 'FOLIP\UserRules.json');
-        joUserRules.SaveToFile(wbDataPath + 'FOLIP\UserRules.json', False, TEncoding.UTF8, True);
-    end;
-    joUserRules.Free;
-
-    //Save user settings
-    AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
-    joUserSettings.S['FakeStatics'] := BoolToStr(bFakeStatics);
-    joUserSettings.S['ForceLOD8'] := BoolToStr(bForceLOD8);
-    joUserSettings.S['IgnoreNoLOD'] := BoolToStr(bIgnoreNoLOD);
-    joUserSettings.S['ReportNonLODMaterials'] := BoolToStr(bReportNonLODMaterials);
-    joUserSettings.S['ReportUVs'] := BoolToStr(bReportUVs);
-    joUserSettings.S['ReportMissingLOD'] := BoolToStr(bReportMissingLOD);
-    joUserSettings.S['RespectEnableMarkers'] := BoolToStr(bRespectEnableMarkers);
-    joUserSettings.S['BeforeGenerationPluginName'] := sFolipPluginFileName;
-    joUserSettings.S['AfterGenerationPluginName'] := sFolipAfterGenerationPluginFileName;
-    joUserSettings.S['LightPlugin'] := BoolToStr(bLightPlugin);
-    joUserSettings.S['RemoveVWD'] := BoolToStr(bRemoveVWD);
-    joUserSettings.S['LimitedHasDistantLODRemoval'] := BoolToStr(bLimitedHasDistantLODRemoval);
-    joUserSettings.S['AddVWD'] := BoolToStr(bAddVWD);
-    joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
-    joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
-    joUserSettings.S['MakeMissingMaterials'] := BoolToStr(bMakeMissingMaterials);
-
-    joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
-    joUserSettings.Free;
-
-    Result := 0;
-end;
-
-procedure CreateObjects;
-{
-    Create objects.
-}
-begin
-    //TLists
-    tlStats := TList.Create;
-    tlActiFurnMstt := TList.Create;
-    tlMswp := TList.Create;
-    tlMasterCells := TList.Create;
-    tlPluginCells := TList.Create;
-    tlEnableParents := TList.Create;
-    tlStolenForms := TList.Create;
-    tlTxst := TList.Create;
-
-
-    //TStringLists
-    slPluginFiles := TStringList.Create;
-
-    slMatFiles := TStringList.Create;
-    slMatFiles.Sorted := True;
-    slMatFiles.Duplicates := dupIgnore;
-
-    slNifFiles := TStringList.Create;
-    slNifFiles.Sorted := True;
-    slNifFiles.Duplicates := dupIgnore;
-
-    slUsedLODNifFiles := TStringList.Create;
-    slUsedLODNifFiles.Sorted := True;
-    slUsedLODNifFiles.Duplicates := dupIgnore;
-
-    slMeshCheckMissingMaterials := TStringList.Create;
-    slMeshCheckMissingMaterials.Sorted := True;
-    slMeshCheckMissingMaterials.Duplicates := dupIgnore;
-
-    slMeshCheckNonLODMaterials := TStringList.Create;
-    slMeshCheckNonLODMaterials.Sorted := True;
-    slMeshCheckNonLODMaterials.Duplicates := dupIgnore;
-
-    slMeshCheckNoMaterialSpecified := TStringList.Create;
-    slMeshCheckNoMaterialSpecified.Sorted := True;
-    slMeshCheckNoMaterialSpecified.Duplicates := dupIgnore;
-
-    slMismatchedFullModelToLODMaterials  := TStringList.Create;
-    slMismatchedFullModelToLODMaterials.Sorted := True;
-    slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
-
-    slCheckedModels := TStringList.Create;
-    slHasLOD := TStringList.Create;
-
-    slTopLevelModPatternPaths := TStringList.Create;
-    slMessages := TStringList.Create;
-    slMessages.Sorted := True;
-    slMissingLODMessages := TStringList.Create;
-    slMissingLODMessages.Sorted := True;
-
-    slOutsideUVRange := TStringList.Create;
-    slOutsideUVRange.Sorted := True;
-    slOutsideUVRange.Duplicates := dupIgnore;
-
-    slFullLODMessages := TStringList.Create;
-    slFullLODMessages.Sorted := True;
-
-    slMissingColorRemaps := TStringList.Create;
-    slMissingColorRemaps.Sorted := True;
-
-    slFOLIPTexgen_noalpha := TStringList.Create;
-    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then begin
-        slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
-        AddMessage('Loaded TexGen noalpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
-    end;
-    slFOLIPTexgen_copy := TStringList.Create;
-    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then begin
-        slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
-        AddMessage('Loaded TexGen copy rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
-    end;
-    slFOLIPTexgen_alpha := TStringList.Create;
-    if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then begin
-        slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
-        AddMessage('Loaded TexGen alpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
-    end;
-    slTexgen_copy := TStringList.Create;
-    slTexgen_alpha := TStringList.Create;
-    slTexgen_noalpha := TStringList.Create;
-
-    //TJsonObjects
-    joRules := TJsonObject.Create;
-    joMswpMap := TJsonObject.Create;
-    joMultiRefLOD := TJsonObject.Create;
-    joUserSettings := TJsonObject.Create;
 end;
 
 // ----------------------------------------------------
@@ -4063,6 +4048,7 @@ end;
 function TrimRightChars(s: string; chars: integer): string;
 {
     Returns right string - chars
+    TrimRightChars('Example', 2) -> 'ample'
 }
 begin
     Result := RightStr(s, Length(s) - chars);
@@ -4071,6 +4057,7 @@ end;
 function TrimLeftChars(s: string; chars: integer): string;
 {
     Returns left string - chars
+    TrimLeftChars('Example', 3) -> 'Exam'
 }
 begin
     Result := LeftStr(s, Length(s) - chars);
