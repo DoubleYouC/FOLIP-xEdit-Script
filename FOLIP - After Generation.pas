@@ -26,6 +26,7 @@ var
     filename, j, key: string;
     sub: TJsonObject;
     bLoadDefaults: Boolean;
+    diamondCityWrld, goodneighborWrld: IwbElement;
 begin
     slStatsWithOverrides := TStringList.Create;
     slOverrides := TStringList.Create;
@@ -141,6 +142,18 @@ begin
 
     SpecificRecordEdits;
     RemoveHasDistantLOD;
+
+    diamondCityWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00000F94, False));
+    if not SameText(GetFileName(GetFile(diamondCityWrld)), GetFileName(iPluginFile)) then begin
+        diamondCityWrld := wbCopyElementToFile(diamondCityWrld, iPluginFile, False, True);
+    end;
+    SetElementEditValues(diamondCityWrld, 'NAMA', '0.25');
+
+    goodneighborWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00054BD5, False));
+    if not SameText(GetFileName(GetFile(goodneighborWrld)), GetFileName(iPluginFile)) then begin
+        goodneighborWrld := wbCopyElementToFile(goodneighborWrld, iPluginFile, False, True);
+    end;
+    SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
     MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Do not forget to save the plugin.', mtInformation, [mbOk], 0);
     Result := 0;
