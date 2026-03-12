@@ -16,15 +16,15 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
-    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers: TStringList;
+    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels: TStringList;
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
     uiScale: integer;
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, FOLIPTempPath: string;
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
-    bPreviousBeforeGenerationPresent: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings: TJsonObject;
+    bPreviousBeforeGenerationPresent, bDeepScan: Boolean;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -60,6 +60,9 @@ begin
 
         //TStringLists
         slPluginFiles := TStringList.Create;
+        slVerifyLODModels := TStringList.Create;
+        slVerifyLODModels.Sorted := True;
+        slVerifyLODModels.Duplicates := dupIgnore;
 
         slMatFiles := TStringList.Create;
         slMatFiles.Sorted := True;
@@ -132,8 +135,10 @@ begin
         joMswpMap := TJsonObject.Create;
         joMultiRefLOD := TJsonObject.Create;
         joUserSettings := TJsonObject.Create;
+        joModelMatch := TJsonObject.Create;
 
         bLoadDefaults := True;
+        bDeepScan := False;
         bPreviousBeforeGenerationPresent := False;
         if ResourceExists(sUserSettingsFileName) then begin
             AddMessage('Loading user settings from ' + sUserSettingsFileName);
@@ -243,9 +248,11 @@ begin
         slTexgen_noalpha.Free;
         slTexgen_alpha.Free;
         slOutsideUVRange.Free;
+        slVerifyLODModels.Free;
 
         joRules.Free;
         joMswpMap.Free;
+        joModelMatch.Free;
 
         //Save user rules
         if bSaveUserRules and bUserRulesChanged then begin
@@ -327,6 +334,10 @@ begin
     ListStringsInStringList(slMissingLODMessages);
     ListStringsInStringList(slFullLODMessages);
     ListStringsInStringList(slMissingColorRemaps);
+    if bDeepScan then begin
+        AddMessage('Verify these model matches are correct');
+        ListStringsInStringList(slVerifyLODModels);
+    end;
 
     //Apply lod material swaps.
     AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
@@ -400,7 +411,8 @@ var
     picFolip: TPicture;
     fImage: TImage;
     gbOptions: TGroupBox;
-    chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkMakeMissingMaterials, chkReportMissingLOD, chkRespectEnableMarkers: TCheckBox;
+    chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkMakeMissingMaterials,
+    chkReportMissingLOD, chkRespectEnableMarkers, chkDeepScan: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -431,7 +443,7 @@ begin
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
         gbOptions.Caption := 'FOLIP - Before Generation';
-        gbOptions.Height := 134;
+        gbOptions.Height := 164;
 
         btnRuleEditor := TButton.Create(frm);
         btnRuleEditor.Parent := frm;
@@ -539,6 +551,16 @@ begin
             + #13#10 + 'purposes only and has no visual benefit.';
         chkReportMissingLOD.ShowHint := True;
 
+        chkDeepScan := TCheckBox.Create(gbOptions);
+        chkDeepScan.Parent := gbOptions;
+        chkDeepScan.Left := chkReportNonLODMaterials.Left;
+        chkDeepScan.Top := chkMakeMissingMaterials.Top + 30;
+        chkDeepScan.Width := 150;
+        chkDeepScan.Caption := 'Deep Scan';
+        chkDeepScan.Hint := 'Attempts to find more LOD models'
+            + #13#10 + 'based on file name or nif block.';
+        chkDeepScan.ShowHint := True;
+
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
         btnStart.Caption := 'Start';
@@ -575,6 +597,7 @@ begin
         chkReportMissingLOD.Checked := bReportMissingLOD;
         chkRespectEnableMarkers.Checked := bRespectEnableMarkers;
         chkMakeMissingMaterials.Checked := bMakeMissingMaterials;
+        chkDeepScan.Checked := bDeepScan;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -591,6 +614,7 @@ begin
         bReportMissingLOD := chkReportMissingLOD.Checked;
         bRespectEnableMarkers := chkRespectEnableMarkers.Checked;
         bMakeMissingMaterials := chkMakeMissingMaterials.Checked;
+        bDeepScan := chkDeepScan.Checked;
 
     finally
         frm.Free;
@@ -2857,7 +2881,7 @@ procedure FilesInContainers(containers: TStringList);
 var
     slArchivedFiles, slVanilla, slModded: TStringList;
     i, total: integer;
-    f, fNoLod, archive, tp: string;
+    f, fNoLod, archive, tp, fileNameHere, fileNameStripped: string;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
@@ -2937,6 +2961,19 @@ begin
                 end
                 else if IsInLODDir(f, 'meshes') and IsLODResourceModel(f) then begin
                     slNifFiles.Add(LowerCase(f));
+                    if bDeepScan then begin
+                        //need to strip mesh to be base file name. strip the lod suffix from it. then map that to the path
+                        fileNameHere := ExtractFileName(f);
+                        fileNameStripped := StripLODSuffix(fileNameHere);
+                        if ContainsText(fileNameHere, '_lod_0.nif') then
+                            joModelMatch.O[fileNameStripped].S['lod0'] := TrimRightChars(LowerCase(f), 7)
+                        else if ContainsText(fileNameHere, '_lod_1.nif') then
+                            joModelMatch.O[fileNameStripped].S['lod1'] := TrimRightChars(LowerCase(f), 7)
+                        else if ContainsText(fileNameHere, '_lod_2.nif') then
+                            joModelMatch.O[fileNameStripped].S['lod2'] := TrimRightChars(LowerCase(f), 7)
+                        else if ContainsText(fileNameHere, '_lod_3.nif') then
+                            joModelMatch.O[fileNameStripped].S['lod3'] := TrimRightChars(LowerCase(f), 7)
+                    end;
                 end;
             except on E: Exception do AddMessage(#9 + 'Error processing file ' + f + #9 + E.Message);
             end;
@@ -2951,6 +2988,20 @@ begin
         slArchivedFiles.Free;
     end;
 end;
+
+function StripLODSuffix(fileName: string): string;
+{
+    Strips the LOD suffix from a file name. For example, if the file name is "example_lod_0.nif", it will return "example.nif".
+}
+begin
+    Result := fileName;
+    Result := StringReplace(Result, '_lod_0.nif', '.nif', [rfReplaceAll, rfIgnoreCase]);
+    Result := StringReplace(Result, '_lod_1.nif', '.nif', [rfReplaceAll, rfIgnoreCase]);
+    Result := StringReplace(Result, '_lod_2.nif', '.nif', [rfReplaceAll, rfIgnoreCase]);
+    Result := StringReplace(Result, '_lod_3.nif', '.nif', [rfReplaceAll, rfIgnoreCase]);
+    Result := StringReplace(Result, '_lod.nif', '.nif', [rfReplaceAll, rfIgnoreCase]);
+end;
+
 
 function FetchVanillaContainer(f: string): string;
 {
@@ -3631,11 +3682,14 @@ function LODModelForLevel(e: IwbElement; model, colorRemap, level, original: str
     Given a model and level, checks to see if an LOD model exists and returns it.
 }
 var
-    searchModel, p1, p2, p3: string;
-    i: integer;
-    bColorRemap: Boolean;
+    searchModel, p1, p2, p3, fileNameStripped, splitNameHere: string;
+    i, c: integer;
+    bColorRemap, bVerifyLodModel, bSkipVerification: Boolean;
+    splitNames: TStringDynArray;
+    slModelNames, slLodModelNames: TStringList;
 begin
-
+    bVerifyLodModel := False;
+    bSkipVerification := False;
     for i := 0 to Pred(slTopPaths.Count) do begin
         // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
@@ -3683,8 +3737,110 @@ begin
             Exit;
         end;
     end;
+    //No exact lod model matches were found using the expected paths and naming conventions, so now check joModelMatch to see if there is a match based on the file name.
+    //This is less accurate, but may help in cases where the mod author moved the file to alternate path.
+    if bDeepScan then begin
+        slModelNames := TStringList.Create;
+        slLodModelNames := TStringList.Create;
+        try
+            fileNameStripped := LowerCase(ExtractFileName(model));
+
+            if (joModelMatch.O[fileNameStripped].S['lod' + level] <> '') then begin
+                Result := joModelMatch.O[fileNameStripped].S['lod' + level];
+                bVerifyLodModel := True;
+                bSkipVerification := True;
+                //GetBaseNameFromModel(model, slModelNames);
+            end else begin
+                if ContainsText(fileNameStripped, '_') then begin
+                    splitNames := SplitString(fileNameStripped, '_');
+                    for i := 0 to Pred(Length(splitNames)) do begin
+                        splitNameHere := splitNames[i];
+                        if (joModelMatch.O[splitNameHere].S['lod' + level] <> '') then begin
+                            Result := joModelMatch.O[splitNameHere].S['lod' + level];
+                            bVerifyLodModel := True;
+                            GetBaseNameFromModel(model, slModelNames);
+                            break;
+                        end;
+                    end;
+                end;
+                if not bVerifyLodModel then begin
+                    //open the nif file and change fileNameStripped to be what the base NiNode name is. See if that improves results.
+                    fileNameStripped := GetBaseNameFromModel(model, slModelNames);
+                    if not ContainsText(fileNameStripped, '.nif') then fileNameStripped := fileNameStripped + '.nif';
+                    if (joModelMatch.O[fileNameStripped].S['lod' + level] <> '') then begin
+                        Result := joModelMatch.O[fileNameStripped].S['lod' + level];
+                        bVerifyLodModel := True;
+                    end else begin
+                        if ContainsText(fileNameStripped, '_') then begin
+                            splitNames := SplitString(fileNameStripped, '_');
+                            for i := 0 to Pred(Length(splitNames)) do begin
+                                splitNameHere := splitNames[i];
+                                if (joModelMatch.O[splitNameHere].S['lod' + level] <> '') then begin
+                                    Result := joModelMatch.O[splitNameHere].S['lod' + level];
+                                    bVerifyLodModel := True;
+                                    break;
+                                end;
+                            end;
+                        end;
+                    end;
+                end;
+            end;
+
+            if bVerifyLodModel then begin
+                if not bSkipVerification then begin
+                    GetBaseNameFromModel('meshes\' + Result, slLodModelNames);
+                    c := 0;
+                    for i := 0 to Pred(slLodModelNames.Count) do begin
+                        if slModelNames.IndexOf(slLodModelNames[i]) = -1 then continue;
+                        Inc(c);
+                    end;
+                    if c = 0 then begin
+                        Result := original;
+                        Exit;
+                    end;
+                end;
+                slVerifyLODModels.add(ShortName(e) + #9 + model + #9 + Result);
+                joUserRules.O[TrimRightChars(model, 7)].S['hasdistantlod'] := 'true';
+                joUserRules.O[TrimRightChars(model, 7)].S['level' + level] := Result;
+
+                bUserRulesChanged := true;
+                bSaveUserRules := true;
+                Exit;
+            end;
+        finally
+            slModelNames.Free;
+            slLodModelNames.Free;
+        end;
+    end;
+
     //If you made it this far, no lod models were found using the expected paths, so return the original specified lod model in the record, if any.
     Result := original;
+end;
+
+function GetBaseNameFromModel(model: string; var slModelNames: TStringList): string;
+{
+    Gets the base block name from a nif.
+}
+var
+    nifFile: TwbNifFile;
+    block: TwbNifBlock;
+    i: integer;
+begin
+    Result := model;
+    if not ResourceExists(model) then Exit;
+    nifFile := TwbNifFile.Create;
+    try
+        nifFile.LoadFromResource(model);
+        block := nifFile.Blocks[0];
+        Result := LowerCase(block.EditValues['Name']);
+        for i := 1 to Pred(nifFile.BlocksCount) do begin
+            block := nifFile.Blocks[i];
+            if not ContainsText(block.BlockType, 'trishape') then continue;
+            slModelNames.add(LowerCase(block.EditValues['Name']));
+        end;
+    finally
+        nifFile.Free;
+    end;
 end;
 
 function AttemptCreateColorRemapLODModel(lodModelNoRemap, lodModelWithRemap, colorRemap: string): Boolean;
