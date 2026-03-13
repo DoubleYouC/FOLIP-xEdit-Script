@@ -3690,6 +3690,7 @@ var
 begin
     bVerifyLodModel := False;
     bSkipVerification := False;
+    fileNameStripped := LowerCase(ExtractFileName(model));
     for i := 0 to Pred(slTopPaths.Count) do begin
         // meshes\dlc01\test.nif  to  meshes\dlc01\lod\test.nif
         searchModel := StringReplace(model, 'meshes\' + slTopPaths[i], 'meshes\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
@@ -3734,17 +3735,17 @@ begin
         p2 := searchModel + '_lod.nif';
         if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
             Result := TrimRightChars(p2, 7);
+            joModelMatch.O[fileNameStripped].S['lod' + level] := Result;
             Exit;
         end;
     end;
     //No exact lod model matches were found using the expected paths and naming conventions, so now check joModelMatch to see if there is a match based on the file name.
     //This is less accurate, but may help in cases where the mod author moved the file to alternate path.
+
     if bDeepScan then begin
         slModelNames := TStringList.Create;
         slLodModelNames := TStringList.Create;
         try
-            fileNameStripped := LowerCase(ExtractFileName(model));
-
             if (joModelMatch.O[fileNameStripped].S['lod' + level] <> '') then begin
                 Result := joModelMatch.O[fileNameStripped].S['lod' + level];
                 bVerifyLodModel := True;
@@ -3815,6 +3816,8 @@ begin
 
     //If you made it this far, no lod models were found using the expected paths, so return the original specified lod model in the record, if any.
     Result := original;
+    if ContainsText(original, '.nif') then
+        joModelMatch.O[fileNameStripped].S['lod' + level] := original;
 end;
 
 function GetBaseNameFromModel(model: string; var slModelNames: TStringList): string;
