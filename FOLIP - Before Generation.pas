@@ -25,7 +25,7 @@ var
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
     bPreviousBeforeGenerationPresent, bDeepScan: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements, joWinningCells: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -148,6 +148,7 @@ begin
         joUserSettings := TJsonObject.Create;
         joModelMatch := TJsonObject.Create;
         joElements := TJsonObject.Create;
+        joWinningCells := TJsonObject.Create;
 
         bLoadDefaults := True;
         bDeepScan := False;
@@ -269,6 +270,7 @@ begin
         joMswpMap.Free;
         joModelMatch.Free;
         joElements.Free;
+        joWinningCells.Free;
 
         //Save user rules
         if bSaveUserRules and bUserRulesChanged then begin
@@ -2819,7 +2821,7 @@ end;
 procedure AssignLODToStat(s: IwbElement; joLOD: TJsonObject; bAddHasDistantLOD: Boolean;);
 var
     n: IwbElement;
-    recordId := string;
+    recordId: string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
@@ -2868,11 +2870,11 @@ procedure CollectRecords;
     since it only will process the specified record groups.
 }
 var
-    i, j, idx: integer;
-    recordId: string;
-    r: IInterface;
-    g: IwbElement;
+    i, j, idx, blockidx, subblockidx, cellidx: integer;
+    recordId, wrldEdid, cellX, cellY: string;
+    r, block, subblock, rCell, rWrld: IwbElement;
     f: IwbFile;
+    g, wrldgroup: IwbGroupRecord;
 begin
     //Iterate over all files.
     for i := 0 to Pred(FileCount) do begin
@@ -2958,6 +2960,38 @@ begin
         end;
         }
 
+        g := GroupBySignature(f, 'WRLD');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            rWrld := ElementByIndex(g, j);
+            recordId := RecordFormIdFileId(rWrld);
+
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
+            joWinningCells.O[wrldEdid].S['RecordID'] := RecordFormIdFileId(rWrld);
+            wrldgroup := ChildGroup(rWrld);
+
+            for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
+                block := ElementByIndex(wrldgroup, blockidx);
+                if Signature(block) = 'CELL' then begin
+                    //Found persistent worldspace cell
+                    rCell := block;
+                    if not IsWinningOverride(rCell) then continue;
+                    joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'] := RecordFormIdFileId(rCell);
+                    continue;
+                end;
+                for subblockidx := 0 to Pred(ElementCount(block)) do begin
+                    subblock := ElementByIndex(block, subblockidx);
+                    for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                        rCell := ElementByIndex(subblock, cellidx);
+                        if (Signature(rCell) <> 'CELL') then continue;
+                        if not IsWinningOverride(rCell) then continue;
+                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
+                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+
+                        joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'] := RecordFormIdFileId(rCell);
+                    end;
+                end;
+            end;
+        end;
     end;
     AddMessage('Found ' + IntToStr(tlStats.Count) + ' STAT records.');
     AddMessage('Found ' + IntToStr(tlActiFurnMstt.Count) + ' ACTI, DOOR, FURN, and MSTT records.');
