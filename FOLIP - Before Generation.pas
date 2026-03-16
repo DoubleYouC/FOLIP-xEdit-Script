@@ -16,7 +16,8 @@ var
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
-    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels: TStringList;
+    slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
+    slMainMasters: TStringList;
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
     uiScale: integer;
@@ -24,7 +25,7 @@ var
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
     bPreviousBeforeGenerationPresent, bDeepScan: Boolean;
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements: TJsonObject;
 
     lvRules: TListView;
     btnRuleOk, btnRuleCancel: TButton;
@@ -92,6 +93,16 @@ begin
         slMismatchedFullModelToLODMaterials.Sorted := True;
         slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
 
+        slPatchMasters := TStringList.Create;
+        slPatchMasters.Sorted := True;
+        slPatchMasters.Duplicates := dupIgnore;
+
+        slMainMasters := TStringList.Create;
+        slMainMasters.Sorted := True;
+        slMainMasters.Duplicates := dupIgnore;
+
+        slMasterableMasters := TStringList.Create;
+
         slCheckedModels := TStringList.Create;
         slHasLOD := TStringList.Create;
 
@@ -136,6 +147,7 @@ begin
         joMultiRefLOD := TJsonObject.Create;
         joUserSettings := TJsonObject.Create;
         joModelMatch := TJsonObject.Create;
+        joElements := TJsonObject.Create;
 
         bLoadDefaults := True;
         bDeepScan := False;
@@ -249,10 +261,14 @@ begin
         slTexgen_alpha.Free;
         slOutsideUVRange.Free;
         slVerifyLODModels.Free;
+        slMasterableMasters.Free;
+        slPatchMasters.Free;
+        slMainMasters.Free;
 
         joRules.Free;
         joMswpMap.Free;
         joModelMatch.Free;
+        joElements.Free;
 
         //Save user rules
         if bSaveUserRules and bUserRulesChanged then begin
@@ -1082,7 +1098,7 @@ procedure ProcessEnableParents;
 var
     i, pi, oi: integer;
     p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer, xesp: IwbElement;
-    parentFormid: string;
+    parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid: string;
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin, bPluginHere, bPluginTemp, bIsFullLOD: boolean;
     tlOppositeEnableRefs, tlEnableRefs: TList;
 begin
@@ -1103,7 +1119,10 @@ begin
         if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p))) then bCanBeRespected := True;
         if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
+            cellX := GetElementEditValues(rCell, 'XCLC\X');
+            cellY := GetElementEditValues(rCell, 'XCLC\Y');
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
             if not bPlugin and (tlMasterCells.IndexOf(rCell) = -1) then begin
@@ -1115,9 +1134,13 @@ begin
                 wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
             end;
             if bPluginHere <> bPlugin then RefMastersDeterminePlugin(p, bPlugin);
+
             m := CopyElementToFileWithVC(p, iCurrentPlugin);
             SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
             if not GetIsPersistent(p) then SetIsPersistent(m, True);
+            recordId := RecordFormIdFileId(p);
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := True;
         end;
 
         {
@@ -1177,7 +1200,11 @@ begin
 
             // Ensure cell is added to prevent failure to copy reference.
             rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
+            cellX := GetElementEditValues(rCell, 'XCLC\X');
+            cellY := GetElementEditValues(rCell, 'XCLC\Y');
+
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
@@ -1201,15 +1228,28 @@ begin
                 end;
             end;
             oreplacer := CopyElementToFileWithVC(oppositeEnableParentReplacer, iCurrentPlugin);
+            recordId := RecordFormIdFileId(oppositeEnableParentReplacer);
+
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := 1;
+
             if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
             SetElementEditValues(oreplacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
+
             if not bHasSuitableReplacer then begin
                 Add(oreplacer,'XESP',True);
+
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 1;
+
                 SetElementEditValues(oreplacer, 'NAME', '000e4610'); //Enable Marker
                 SetElementEditValues(oreplacer, 'XESP\Reference', parentFormid);
                 SetElementNativeValues(oreplacer, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
             end;
             AddRefToMyFormlist(oreplacer, flParents);
+            oreplacerFormid := IntToHex(GetLoadOrderFormID(oreplacer), 8);
 
             for oi := Pred(tlOppositeEnableRefs.Count) downto 0 do begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
@@ -1222,6 +1262,10 @@ begin
                 if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
                 // Check if WRLD inherits LOD from another worldspace
                 if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+
+                cellX := GetElementEditValues(rCell, 'XCLC\X');
+                cellY := GetElementEditValues(rCell, 'XCLC\Y');
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
                 AddMessage(#9 + Name(r));
 
@@ -1246,9 +1290,17 @@ begin
                         wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                     end;
                 end;
+
+                recordId := RecordFormIdFileId(r);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := oreplacerFormid;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := False;
+
                 //need to check if r is in iCurrentPlugin already
                 if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
                 else n := CopyElementToFileWithVC(r, iCurrentPlugin);
+
                 SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
 
                 SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
@@ -1264,7 +1316,21 @@ begin
         if tlEnableRefs.Count > 0 then begin
             if not bCanBeRespected then begin
                 enableParentReplacer := GetSuitableReplacement;
+
+                recordId := RecordFormIdFileId(enableParentReplacer);
+                rCell := WinningOverride(LinksTo(ElementByIndex(enableParentReplacer, 0)));
+                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                cellX := GetElementEditValues(rCell, 'XCLC\X');
+                cellY := GetElementEditValues(rCell, 'XCLC\Y');
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+
                 iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, bPlugin);
+
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['NAME'] := '000e4610'; //enable marker
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+
                 ereplacer := CopyElementToFileWithVC(enableParentReplacer, iCurrentPlugin);
                 xesp := Add(ereplacer, 'XESP', True);
                 ElementAssign(xesp, 0, nil, False);
@@ -1272,6 +1338,8 @@ begin
                 SetElementEditValues(ereplacer, 'NAME', '000e4610');
                 SetElementNativeValues(ereplacer, 'Record Header\Record Flags\LOD Respects Enable State', 1);
                 AddRefToMyFormlist(ereplacer, flParents);
+
+                ereplacerFormid := IntToHex(GetLoadOrderFormID(ereplacer), 8);
             end;
             for oi := Pred(tlEnableRefs.Count) downto 0 do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
@@ -1287,6 +1355,12 @@ begin
                     if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
                     // Check if WRLD inherits LOD from another worldspace
                     if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+
+                    cellX := GetElementEditValues(rCell, 'XCLC\X');
+                    cellY := GetElementEditValues(rCell, 'XCLC\Y');
+                    wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                    recordId := RecordFormIdFileId(r);
+
                     bPluginTemp := False;
                     iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
                     iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
@@ -1308,6 +1382,11 @@ begin
                             wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
                         end;
                     end;
+
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := ereplacerFormid;
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := False;
 
                     //need to check if r is in iCurrentPlugin already
                     if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
@@ -2740,9 +2819,19 @@ end;
 procedure AssignLODToStat(s: IwbElement; joLOD: TJsonObject; bAddHasDistantLOD: Boolean;);
 var
     n: IwbElement;
+    recordId := string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
+    recordId := RecordFormIdFileId(s);
+
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['plugin'] := GetFileName(iCurrentPlugin);
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0'] := joLOD.S['level0'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1'] := joLOD.S['level1'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2'] := joLOD.S['level2'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3'] := joLOD.S['level3'];
+
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
 
     if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
@@ -4000,6 +4089,40 @@ begin
     end;}
 end;
 
+// function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
+// {
+//     Determines the plugin to use based on the reference's required masters.
+// }
+// var
+//     slMasters: TStringList;
+//     i: integer;
+// begin
+//     Result := inputFile;
+//     slMasters := TStringList.Create;
+//     try
+//         ReportRequiredMasters(e, slMasters, False, True);
+
+//         for i := 0 to Pred(slMasters.Count) do begin
+//             if SameText(sFolipMasterFileName, slMasters[i]) then continue;
+//             if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
+//                 Result := iFolipPluginFile;
+//                 break;
+//             end;
+//         end;
+//         for i := 0 to Pred(slMasters.Count) do begin
+//             if SameText(GetFileName(Result), sFolipMasterFileName) then begin
+//                 if SameText(slMasters[i], sFolipMasterFileName) then continue;
+//                 slMainMasters.Add(slMasters[i]);
+//             end else begin
+//                 if SameText(slMasters[i], sFolipPluginFileName) then continue;
+//                 slPatchMasters.Add(slMasters[i]);
+//             end;
+//         end;
+//     finally
+//         slMasters.Free;
+//     end;
+// end;
+
 procedure FetchRules;
 {
     Loads the Rule JSON files.
@@ -4316,12 +4439,21 @@ begin
     Result := n;
 end;
 
+// function RecordFormIdFileId(e: IwbElement): string;
+// {
+//     Returns the record ID of an element.
+// }
+// begin
+//     Result := TrimRightChars(IntToHex(FixedFormID(MasterOrSelf(e)), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+// end;
+
 function RecordFormIdFileId(e: IwbElement): string;
 {
     Returns the record ID of an element.
 }
 begin
-    Result := TrimRightChars(IntToHex(FixedFormID(MasterOrSelf(e)), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+    e := MasterOrSelf(e);
+    Result := IntToHex(FormID(e), 8) + ':' + GetFileName(GetFile(e));
 end;
 
 function GetRecordFromFormIdFileId(recordId: string): IwbElement;
@@ -4329,17 +4461,31 @@ function GetRecordFromFormIdFileId(recordId: string): IwbElement;
     Returns the record from the given formid:filename.
 }
 var
-    colonPos, recordFormId, c: integer;
+    colonPos, recordFormId: integer;
     f: IwbFile;
-    fileMasterIndex: string;
 begin
     colonPos := Pos(':', recordId);
-    f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
-    c := MasterCount(f);
-    if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
-    recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
+    recordFormId := StrToInt('$' + Copy(recordId, 1, Pred(colonPos)));
+    f := FileByName(Copy(recordId, Succ(colonPos), Length(recordId)));
     Result := RecordByFormID(f, recordFormId, False);
 end;
+
+// function GetRecordFromFormIdFileId(recordId: string): IwbElement;
+// {
+//     Returns the record from the given formid:filename.
+// }
+// var
+//     colonPos, recordFormId, c: integer;
+//     f: IwbFile;
+//     fileMasterIndex: string;
+// begin
+//     colonPos := Pos(':', recordId);
+//     f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
+//     c := MasterCount(f);
+//     if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
+//     recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
+//     Result := RecordByFormID(f, recordFormId, False);
+// end;
 
 function DeleteDirectory(dir: string): boolean;
 {
