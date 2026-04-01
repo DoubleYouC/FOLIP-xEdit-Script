@@ -316,6 +316,7 @@ begin
         if not IsWinningOverride(r) then continue;
         if (GetIsVisibleWhenDistant(r) = value) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if not SameText(Signature(rCell), 'CELL') then continue;
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
