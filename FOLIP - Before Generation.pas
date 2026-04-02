@@ -1297,7 +1297,7 @@ begin
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := oreplacerFormid;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
-                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := False;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
 
                 //need to check if r is in iCurrentPlugin already
                 if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
@@ -1388,7 +1388,7 @@ begin
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := ereplacerFormid;
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
-                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := False;
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
 
                     //need to check if r is in iCurrentPlugin already
                     if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
@@ -1609,7 +1609,7 @@ end;
 
 function IsFullLOD(s: IInterface): Boolean;
 var
-    model, editorid: string;
+    model, editorid, recordId: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
     r, n, rCell, rWrld, parentRef, xesp: IInterface;
@@ -1657,9 +1657,19 @@ begin
 
         iCurrentPlugin := RefMastersDeterminePlugin(r, True);
         n := CopyElementToFileWithVC(r, iCurrentPlugin);
+        wrldEdid := GetElementEditValues(rWrld, 'EDID');
+        cellX := GetElementNativeValues(rCell, 'XCLC\X');
+        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+        recordId := RecordFormIdFileId(r);
+
+        joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 1;
+        joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := True;
         SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', 1);
         SetIsPersistent(n, True);
-        if bXESP and not bRespect then SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+        if bXESP and not bRespect then begin
+            SetElementEditValues(n, 'Record Header\Record Flags\LOD Respects Enable State', 1);
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+        end;
 
         AddRefToMyFormlist(n, flNeverfades);
         slFullLODMessages.Add('IsFullLOD Reference:' + Name(n));
@@ -1710,7 +1720,7 @@ begin
                     fakeStatic := AddFakeStatic(s);
 
                     //Add LOD models
-                    AssignLODToStat(fakeStatic, joLOD, True);
+                    AssignLODToStat(fakeStatic, joLOD, True, 'New');
 
                     slHasLOD.Add(RecordFormIdFileId(fakeStatic));
 
@@ -1915,7 +1925,7 @@ var
     ms, fakeStatic: IwbElement;
     patchStatGroup: IwbGroupRecord;
     HasMS: Boolean;
-    fakeStaticEditorId: string;
+    fakeStaticEditorId, recordId, msFormid: string;
 begin
     HasMS := ElementExists(s, 'Model\MODS - Material Swap');
     if HasMS then begin
@@ -1931,20 +1941,30 @@ begin
     end;
 
     //Add Fake STAT
+
     fakeStatic := Add(patchStatGroup, 'STAT', True);
-    fakeStaticEditorId := SetEditorID(fakeStatic, 'FOLIP_' + EditorID(s) + '_FakeStatic');
+    fakeStaticEditorId := 'FOLIP_' + EditorID(s) + '_FakeStatic';
+    SetEditorID(fakeStatic, fakeStaticEditorId);
+
+    recordId := RecordFormIdFileId(s);
+    joElements.O['STAT'].O['New'].O[recordId].S['EDID'] := fakeStaticEditorId;
+    joElements.O['STAT'].O['New'].O[recordId].S['Copy Object Bounds'] := True;
 
     //Set Object Bounds
     CopyObjectBounds(s, fakeStatic);
 
     //Add base material swap
     if HasMS then begin
+        msFormid := IntToHex(GetLoadOrderFormID(ms), 8);
+        joElements.O['STAT'].O['New'].O[recordId].S['MODS'] := msFormid;
+
         Add(Add(fakeStatic, 'Model', True), 'MODS', True);
-        SetElementEditValues(fakeStatic, 'Model\MODS', IntToHex(GetLoadOrderFormID(ms), 8));
+        SetElementEditValues(fakeStatic, 'Model\MODS', msFormid);
     end;
 
     //Add Is Marker Flag
     SetElementNativeValues(fakeStatic, 'Record Header\Record Flags\Is Marker', 1);
+    joElements.O['STAT'].O['New'].O[recordId].S['Is Marker'] := 1;
 
     Result := fakeStatic;
 end;
@@ -2644,7 +2664,7 @@ begin
             HasLOD := AssignLODModels(s, joLOD, sMissingLodMessage);
 
             //Add lod change if we are removing lod from it.
-            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD, False);
+            if ((joLOD.Count > 0) and (joLOD['hasdistantlod'] = 0)) then AssignLODToStat(s, joLOD, False, 'Overrides');
 
             //List relevant material swaps
             if HasLOD then begin
@@ -2657,7 +2677,7 @@ begin
                     if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
                 end;
                 if ((cnt > 0) and (joLOD.Count > 0)) then begin
-                    AssignLODToStat(s, joLOD, false);
+                    AssignLODToStat(s, joLOD, false, 'Overrides');
                     // Stripping this idea, since it more than doubles the amount of time required to do this, defeating the purpose of this idea.
                     // if bHasEnableParent and (not bHasSCOLNeedingLOD) then begin
                     //     tlActiFurnMstt.Add(s);
@@ -2818,7 +2838,7 @@ begin
     Result := cnt;
 end;
 
-procedure AssignLODToStat(s: IwbElement; joLOD: TJsonObject; bAddHasDistantLOD: Boolean;);
+procedure AssignLODToStat(s: IwbElement; joLOD: TJsonObject; bAddHasDistantLOD: Boolean; OverOrNew: string);
 var
     n: IwbElement;
     recordId: string;
@@ -2827,12 +2847,12 @@ begin
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     recordId := RecordFormIdFileId(s);
 
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['plugin'] := GetFileName(iCurrentPlugin);
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0'] := joLOD.S['level0'];
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1'] := joLOD.S['level1'];
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2'] := joLOD.S['level2'];
-    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3'] := joLOD.S['level3'];
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['plugin'] := GetFileName(iCurrentPlugin);
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 0'] := joLOD.S['level0'];
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 1'] := joLOD.S['level1'];
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 2'] := joLOD.S['level2'];
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 3'] := joLOD.S['level3'];
 
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
 
@@ -2964,9 +2984,10 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             rWrld := ElementByIndex(g, j);
             recordId := RecordFormIdFileId(rWrld);
+            if Pos(recordId, sIgnoredWorldspaces) <> 0 then continue;
 
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
-            joWinningCells.O[wrldEdid].S['RecordID'] := RecordFormIdFileId(rWrld);
+            joWinningCells.O[wrldEdid].S['RecordID'] := recordId;
             wrldgroup := ChildGroup(rWrld);
 
             for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
