@@ -317,7 +317,12 @@ begin
         if (GetIsVisibleWhenDistant(r) = value) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if not SameText(Signature(rCell), 'CELL') then continue;
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        try
+            if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+        except
+            AddMessage('Skipped problem record: '+ GetFileName(rCell) + #9 + Name(rCell));
+            continue;
+        end;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
         if IsRefPrecombined(r) then continue;
