@@ -1055,18 +1055,18 @@ begin
     end;
 
     //Purge FOLIP - Master.esm
-    {if HasGroup(iFolipMasterFile, 'STAT') then begin
+    if HasGroup(iFolipMasterFile, 'STAT') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'STAT'));
     end;
     if HasGroup(iFolipMasterFile, 'MSWP') then begin
-        RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'MSWP'));
     end;
     if HasGroup(iFolipMasterFile, 'CELL') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'CELL'));
     end;
     if HasGroup(iFolipMasterFile, 'WRLD') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
-    end;}
+    end;
 
 
     flstGroup := Add(iFolipPluginFile, 'FLST', True);
@@ -2739,7 +2739,7 @@ function ProcessReferences(s: IwbElement; var bHasEnableParent: Boolean; var bHa
 var
     si, cnt: integer;
     ms, r, rCell, rWrld, xesp, parentRef, n, base: IwbElement;
-    parent: string;
+    parent, wrldEdid, cellX, cellY, recordId: string;
 begin
     cnt := 0;
     for si := Pred(ReferencedByCount(s)) downto 0 do begin
@@ -2775,6 +2775,11 @@ begin
         // Check if WRLD inherits LOD from another worldspace
         if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
 
+        wrldEdid := GetElementEditValues(rWrld, 'EDID');
+        cellX := GetElementEditValues(rCell, 'XCLC\X');
+        cellY := GetElementEditValues(rCell, 'XCLC\Y');
+        recordId := RecordFormIdFileId(r);
+
         // Increment count if you made it this far.
         cnt := cnt + 1;
 
@@ -2803,7 +2808,11 @@ begin
                 //
                 //Setting it to be MultiRefLOD of this ref, that always has Object LOD, effectively removes it from Object LOD.
                 //[REFR:00187BF3] (Places CapitolDome01 [STAT:00187CB7] in VaultTecOfficeExt02 [CELL:0000E07A] (in Commonwealth "Commonwealth" [WRLD:0000003C] at 3,-3) in Precombined\0000E07A_0D73777F_OC.nif)
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|00187BF3:Fallout4.esm';
+
+                {iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, True);
                 wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
@@ -2811,10 +2820,12 @@ begin
                 n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
                 AddLinkedReference(n, '00195411', '00187BF3'); // Add the MultiRefLOD keyword with the correct formid
-                AddRefToMyFormlist(n, flMultiRefLOD);
+                AddRefToMyFormlist(n, flMultiRefLOD);}
             end else begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := '0';
+
+                {iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, True);
                 wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
@@ -2822,7 +2833,7 @@ begin
                 n := CopyElementToFileWithVC(r, iCurrentPlugin);
                 AddRefToMyFormlist(n, flRemoveIsFullLOD);
                 SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
-                SetIsVisibleWhenDistant(n, GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
+                SetIsVisibleWhenDistant(n, GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));}
             end;
         end;
     end;
@@ -2854,6 +2865,7 @@ begin
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 2'] := joLOD.S['level2'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 3'] := joLOD.S['level3'];
 
+    {
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
 
     if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
@@ -2869,7 +2881,7 @@ begin
         SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
         SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
         SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
-    end;
+    end;}
 
     // if Equals(GetFile(s), GetFile(n)) then Exit;
     // if GetElementEditValues(s, 'MNAM\LOD #0 (Level 0)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh') then Exit;
@@ -4115,68 +4127,68 @@ begin
     end;
 end;
 
-function RefMastersDeterminePlugin(r: IInterface; var bPlugin: Boolean;): IInterface;
-{
-    Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
-}
-begin
-    AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-  	SortMasters(iFolipPluginFile);
-    Result := iFolipPluginFile
-    {if bPlugin then begin
-        AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-        SortMasters(iFolipPluginFile);
-        Result := iFolipPluginFile;
-        bPlugin := True;
-        Exit;
-    end;
-    try
-        AddRequiredElementMasters(r, iFolipMasterFile, False, True);
-        SortMasters(iFolipMasterFile);
-        Result := iFolipMasterFile;
-    except
-        on E : Exception do begin
-            AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-            SortMasters(iFolipPluginFile);
-            Result := iFolipPluginFile;
-            bPlugin := True;
-        end;
-    end;}
-end;
-
-// function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
+// function RefMastersDeterminePlugin(r: IInterface; var bPlugin: Boolean;): IInterface;
 // {
-//     Determines the plugin to use based on the reference's required masters.
+//     Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
 // }
-// var
-//     slMasters: TStringList;
-//     i: integer;
 // begin
-//     Result := inputFile;
-//     slMasters := TStringList.Create;
-//     try
-//         ReportRequiredMasters(e, slMasters, False, True);
-
-//         for i := 0 to Pred(slMasters.Count) do begin
-//             if SameText(sFolipMasterFileName, slMasters[i]) then continue;
-//             if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
-//                 Result := iFolipPluginFile;
-//                 break;
-//             end;
-//         end;
-//         for i := 0 to Pred(slMasters.Count) do begin
-//             if SameText(GetFileName(Result), sFolipMasterFileName) then begin
-//                 if SameText(slMasters[i], sFolipMasterFileName) then continue;
-//                 slMainMasters.Add(slMasters[i]);
-//             end else begin
-//                 if SameText(slMasters[i], sFolipPluginFileName) then continue;
-//                 slPatchMasters.Add(slMasters[i]);
-//             end;
-//         end;
-//     finally
-//         slMasters.Free;
+//     AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+//   	SortMasters(iFolipPluginFile);
+//     Result := iFolipPluginFile
+//     {if bPlugin then begin
+//         AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+//         SortMasters(iFolipPluginFile);
+//         Result := iFolipPluginFile;
+//         bPlugin := True;
+//         Exit;
 //     end;
+//     try
+//         AddRequiredElementMasters(r, iFolipMasterFile, False, True);
+//         SortMasters(iFolipMasterFile);
+//         Result := iFolipMasterFile;
+//     except
+//         on E : Exception do begin
+//             AddRequiredElementMasters(r, iFolipPluginFile, False, True);
+//             SortMasters(iFolipPluginFile);
+//             Result := iFolipPluginFile;
+//             bPlugin := True;
+//         end;
+//     end;}
 // end;
+
+function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
+{
+    Determines the plugin to use based on the reference's required masters.
+}
+var
+    slMasters: TStringList;
+    i: integer;
+begin
+    Result := inputFile;
+    slMasters := TStringList.Create;
+    try
+        ReportRequiredMasters(e, slMasters, False, True);
+
+        for i := 0 to Pred(slMasters.Count) do begin
+            if SameText(sFolipMasterFileName, slMasters[i]) then continue;
+            if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
+                Result := iFolipPluginFile;
+                break;
+            end;
+        end;
+        for i := 0 to Pred(slMasters.Count) do begin
+            if SameText(GetFileName(Result), sFolipMasterFileName) then begin
+                if SameText(slMasters[i], sFolipMasterFileName) then continue;
+                slMainMasters.Add(slMasters[i]);
+            end else begin
+                if SameText(slMasters[i], sFolipPluginFileName) then continue;
+                slPatchMasters.Add(slMasters[i]);
+            end;
+        end;
+    finally
+        slMasters.Free;
+    end;
+end;
 
 procedure FetchRules;
 {
@@ -4245,11 +4257,15 @@ begin
         MessageDlg(sFolipMasterFileName + ' not found! Please install if from https://www.nexusmods.com/fallout4/mods/61884 before continuing.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
-    end;}
+    end;
     if Assigned(iFolipMasterFile) then begin
         MessageDlg(sFolipMasterFileName + ' found! This file is now deprecated and should no longer be used. Please remove.', mtError, [mbOk], 0);
         Result := 0;
         Exit;
+    end;}
+    if not Assigned(iFolipMasterFile) then begin
+        iFolipMasterFile := AddNewFileName(sFolipMasterFileName, False);
+        AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
     end;
     if not Assigned(iFolipPluginFile) then begin
         iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
