@@ -3965,35 +3965,6 @@ begin
     end;
 end;
 
-// function RefMastersDeterminePlugin(r: IInterface; var bPlugin: Boolean;): IInterface;
-// {
-//     Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
-// }
-// begin
-//     AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-//   	SortMasters(iFolipPluginFile);
-//     Result := iFolipPluginFile
-//     {if bPlugin then begin
-//         AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-//         SortMasters(iFolipPluginFile);
-//         Result := iFolipPluginFile;
-//         bPlugin := True;
-//         Exit;
-//     end;
-//     try
-//         AddRequiredElementMasters(r, iFolipMasterFile, False, True);
-//         SortMasters(iFolipMasterFile);
-//         Result := iFolipMasterFile;
-//     except
-//         on E : Exception do begin
-//             AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-//             SortMasters(iFolipPluginFile);
-//             Result := iFolipPluginFile;
-//             bPlugin := True;
-//         end;
-//     end;}
-// end;
-
 function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
 {
     Determines the plugin to use based on the reference's required masters.
@@ -4091,16 +4062,6 @@ begin
         Result := 0;
         Exit;
     end;
-    {if not Assigned(iFolipMasterFile) then begin
-        MessageDlg(sFolipMasterFileName + ' not found! Please install if from https://www.nexusmods.com/fallout4/mods/61884 before continuing.', mtError, [mbOk], 0);
-        Result := 0;
-        Exit;
-    end;
-    if Assigned(iFolipMasterFile) then begin
-        MessageDlg(sFolipMasterFileName + ' found! This file is now deprecated and should no longer be used. Please remove.', mtError, [mbOk], 0);
-        Result := 0;
-        Exit;
-    end;}
     if not Assigned(iFolipMasterFile) then begin
         iFolipMasterFile := AddNewFileName(sFolipMasterFileName, False);
         AddMasterIfMissing(iFolipMasterFile, 'Fallout4.esm');
@@ -4378,23 +4339,6 @@ begin
     f := FileByName(Copy(recordId, Succ(colonPos), Length(recordId)));
     Result := RecordByFormID(f, recordFormId, False);
 end;
-
-// function GetRecordFromFormIdFileId(recordId: string): IwbElement;
-// {
-//     Returns the record from the given formid:filename.
-// }
-// var
-//     colonPos, recordFormId, c: integer;
-//     f: IwbFile;
-//     fileMasterIndex: string;
-// begin
-//     colonPos := Pos(':', recordId);
-//     f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
-//     c := MasterCount(f);
-//     if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
-//     recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
-//     Result := RecordByFormID(f, recordFormId, False);
-// end;
 
 function DeleteDirectory(dir: string): boolean;
 {
