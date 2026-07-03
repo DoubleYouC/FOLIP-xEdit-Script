@@ -1504,6 +1504,7 @@ end;
 procedure AddRefToMyFormlist(r, frmlst: IwbElement);
 var
     formids, lnam: IwbElement;
+    rFormid: string;
 begin
     if not ElementExists(frmlst, 'FormIDs') then begin
         formids := Add(frmlst, 'FormIDs', True);
@@ -1513,12 +1514,8 @@ begin
         formids := ElementByName(frmlst, 'FormIDs');
         lnam := ElementAssign(formids, HighInteger, nil, False);
     end;
-    try
-        SetEditValue(lnam, ShortName(r));
-    except
-        AddRequiredElementMasters(r, iFolipPluginFile, False, True);
-        SetEditValue(lnam, ShortName(r));
-    end;
+    rFormid := IntToHex(GetLoadOrderFormID(r), 8);
+    SetEditValue(lnam, rFormid);
 end;
 
 function IsFullLOD(s: IInterface): Boolean;
