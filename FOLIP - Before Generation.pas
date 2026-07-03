@@ -1819,7 +1819,7 @@ procedure AssignLODMaterialsList;
 var
     i, si, tp, sc, cnt, n, oms: integer;
     m, mn, substitutions, sub: IInterface;
-    colorRemap, originalMat, originalLODMat, replacementMat, om, rm: string;
+    colorRemap, originalMat, originalLODMat, replacementMat, om, rm, recordId: string;
     slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy, slMismatchedMaterials: TStringList;
     hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
 begin
@@ -1947,11 +1947,13 @@ begin
             end;
 
             //Changes required, so add material swap to patch
-            iCurrentPlugin := RefMastersDeterminePlugin(m, True);
-            mn := wbCopyElementToFile(m, iCurrentPlugin, False, True);
+            iCurrentPlugin := RefMastersDeterminePlugin(m, iFolipMasterFile);
+            recordId := RecordFormIdFileId(m);
+            joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
             for n := 0 to Pred(cnt) do begin
                 //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
-                AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
+                joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + | + slLODSubReplacement[n]);
+                //AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
             end;
             slLODSubOriginal.Free;
             slLODSubReplacement.Free;
@@ -2381,12 +2383,12 @@ begin
     end;
 end;
 
-procedure AddMaterialSwap(e: IInterface; om, rm: String);
+procedure AddMaterialSwap(e: IwbMainRecord; om, rm: String);
 {
     Given a material swap record e, add a new swap with om as the original material and rm as the replacement material.
 }
 var
-    substitutions, ms: IInterface;
+    substitutions, ms: IwbElement;
 begin
     substitutions := ElementByPath(e, 'Material Substitutions');
     ms := ElementAssign(substitutions, HighInteger, nil, False);
@@ -2707,7 +2709,7 @@ begin
     iCurrentPlugin := RefMastersDeterminePlugin(s, True);
     recordId := RecordFormIdFileId(s);
 
-    joElements.O['STAT'].O[OverOrNew].O[recordId].S['plugin'] := GetFileName(iCurrentPlugin);
+    joElements.O['STAT'].O[OverOrNew].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 0'] := joLOD.S['level0'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 1'] := joLOD.S['level1'];
