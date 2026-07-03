@@ -18,16 +18,23 @@ var
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
     slMainMasters: TStringList;
-    flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IInterface;
+
+    flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IwbElement;
+
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
+
     uiScale: integer;
+
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, FOLIPTempPath: string;
+
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
     bPreviousBeforeGenerationPresent, bDeepScan: Boolean;
+
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements, joWinningCells: TJsonObject;
 
     lvRules: TListView;
+
     btnRuleOk, btnRuleCancel: TButton;
 
 const
@@ -1448,7 +1455,7 @@ end;
 
 function GetSuitableReplacement: IwbElement;
 var
-    stolen, r, m, rCell, n: IwbElement;
+    stolen, r, m, rCell: IwbElement;
     i, j: integer;
 begin
     Result := nil;
@@ -1487,11 +1494,8 @@ begin
             if ElementExists(r, 'XRDO') then continue;
             if ElementExists(r, 'XBSD') then continue;
             if ElementExists(r, 'XESP') then continue;
-            Result := r;
             tlStolenForms.Add(r);
-            iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-            n := wbCopyElementToFile(r, iCurrentPlugin, True, True);
-            AddRefToMyFormlist(n, flDecals);
+            Result := r;
             Exit;
         end;
     end;
