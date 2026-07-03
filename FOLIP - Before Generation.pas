@@ -1455,7 +1455,7 @@ end;
 
 function RemoveLinkedReferenceByKeyword(e: IwbElement; keyword: String): Integer;
 {
-  Remove a linked reference by keyword.
+  Remove a linked reference by keyword. Returns 1 if a reference was removed, 0 if not.
 }
 var
     linkedrefs, lref: IInterface;
@@ -1571,23 +1571,19 @@ begin
         if bXESP then begin
             xesp := ElementByPath(r, 'XESP');
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
-            if (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then bRespect := True else bRespect := False;
+            bRespect := (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0);
         end;
-        if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLODFlagged := true else bIsFullLODFlagged := false;
+        bIsFullLODFlagged := (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0');
         if bIsFullLODFlagged then begin
             if not bXESP then continue;
             if (GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then continue;
             if bRespect then continue;
         end;
 
+        iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+        iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+        iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
-        iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
-        iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-        // wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-        // wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-
-        iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-        n := CopyElementToFileWithVC(r, iCurrentPlugin);
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementNativeValues(rCell, 'XCLC\X');
         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
