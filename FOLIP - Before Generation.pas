@@ -172,7 +172,7 @@ begin
                 bReportUVs := StrToBool(joUserSettings.S['ReportUVs']);
                 bReportMissingLOD := StrToBool(joUserSettings.S['ReportMissingLOD']);
                 bRespectEnableMarkers := StrToBool(Fallback(joUserSettings.S['RespectEnableMarkers'], 'True'));
-                sFolipPluginFileName := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Before Generation');
+                sFolipPluginFileName := Fallback(joUserSettings.S['BeforeGenerationPluginName'], 'FOLIP - Patch');
 
                 sFolipAfterGenerationPluginFileName := Fallback(joUserSettings.S['AfterGenerationPluginName'], 'FOLIP - After Generation');
                 bLightPlugin := StrToBool(Fallback(joUserSettings.S['LightPlugin'], 'True'));
@@ -204,7 +204,7 @@ begin
             bRespectEnableMarkers := True;
 
             //Default plugin name.
-            sFolipPluginFileName := 'FOLIP - Before Generation';
+            sFolipPluginFileName := 'FOLIP - Patch';
             sFolipAfterGenerationPluginFileName := 'FOLIP - After Generation';
 
             bLightPlugin := True;
@@ -373,8 +373,7 @@ begin
 
     MultiRefLOD;
     AddMastersForRecords;
-
-    //Add processing code here to add changes in joElements
+    ProcessElements;
 
     diamondCityWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00000F94, False));
     if not SameText(GetFileName(GetFile(diamondCityWrld)), GetFileName(iFolipPluginFile)) then begin
@@ -391,7 +390,7 @@ begin
     DeleteDirectory(FOLIPTempPath);
 
     EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
-    joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\', False, TEncoding.UTF8, True);
+    joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'joElements.json', False, TEncoding.UTF8, True);
 
     //Save the plugin.
     fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipMasterFileName, fmCreate);
@@ -1128,6 +1127,70 @@ begin
     SortMasters(iFolipPluginFile);
 end;
 
+procedure ProcessElements;
+{
+    Process joElements.
+}
+begin
+    AddMessage('Processing elements...');
+    {
+    joElements is a json object that contains all the record edit information that will be applied to the output plugins. The structure of joElements is as follows:
+
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flDecals));
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|' + MultiRefLODReference;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 1;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := True;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
+    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
+
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flFakeStatics));
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['fakeStatic'] := fakeStatic;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Initially Disabled'] := True;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XMSP - Material Swap'] := RecordFormIdFileId(ms);
+    joElements.O['references'].O['New'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+
+    joElements.O['STAT'].O['New'].O[fakeStatic].S['Copy Object Bounds'] := True;
+    joElements.O['STAT'].O['New'].O[fakeStatic].S['EDID'] := fakeStaticEditorId;
+    joElements.O['STAT'].O['New'].O[fakeStatic].S['File'] := GetFileName(iCurrentPlugin);
+    joElements.O['STAT'].O['New'].O[fakeStatic].S['Is Marker'] := 1;
+    joElements.O['STAT'].O['New'].O[fakeStatic].S['MODS'] := msFormid;
+    joElements.O['STAT'].O['New'].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
+    joElements.O['STAT'].O['New'].O[recordId].S['Level 0'] := joLOD.S['level0'];
+    joElements.O['STAT'].O['New'].O[recordId].S['Level 1'] := joLOD.S['level1'];
+    joElements.O['STAT'].O['New'].O[recordId].S['Level 2'] := joLOD.S['level2'];
+    joElements.O['STAT'].O['New'].O[recordId].S['Level 3'] := joLOD.S['level3'];
+
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0'] := joLOD.S['level0'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1'] := joLOD.S['level1'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2'] := joLOD.S['level2'];
+    joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3'] := joLOD.S['level3'];
+
+    joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+    joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);
+    }
+    //AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
+
+end;
+
 procedure ProcessEnableParents;
 {
     Apply LOD Respects Enable State flag to XESP - Enable Parent references.
@@ -1587,7 +1650,7 @@ end;
 
 function IsFullLOD(s: IInterface): Boolean;
 var
-    model, editorid, recordId, wrldEdid: string;
+    model, editorid, recordId, wrldEdid, cellX, cellY: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
     r, n, rCell, rWrld, parentRef, xesp: IInterface;
@@ -2698,7 +2761,7 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := '0';
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flRemoveIsFullLOD));
             end;
@@ -4098,7 +4161,7 @@ begin
     if not Assigned(iFolipPluginFile) then begin
         iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
         AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
-        AddMasterIfMissing(iFolipPluginFile, sFolipMasterFileName);
+        // AddMasterIfMissing(iFolipPluginFile, sFolipMasterFileName);
     end;
 
     Result := 1;
