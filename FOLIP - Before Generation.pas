@@ -2654,37 +2654,24 @@ begin
                 //Setting it to be MultiRefLOD of this ref, that always has Object LOD, effectively removes it from Object LOD.
                 //[REFR:00187BF3] (Places CapitolDome01 [STAT:00187CB7] in VaultTecOfficeExt02 [CELL:0000E07A] (in Commonwealth "Commonwealth" [WRLD:0000003C] at 3,-3) in Precombined\0000E07A_0D73777F_OC.nif)
 
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|00187BF3:Fallout4.esm';
 
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flMultiRefLOD));
-
-
-                {iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                n := CopyElementToFileWithVC(r, iCurrentPlugin);
-                RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
-                AddLinkedReference(n, '00195411', '00187BF3'); // Add the MultiRefLOD keyword with the correct formid
-                AddRefToMyFormlist(n, flMultiRefLOD);}
             end else begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := '0';
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flRemoveIsFullLOD));
-
-                {iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                n := CopyElementToFileWithVC(r, iCurrentPlugin);
-                AddRefToMyFormlist(n, flRemoveIsFullLOD);
-                SetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD', '0');
-                SetIsVisibleWhenDistant(n, GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));}
             end;
         end;
     end;
@@ -2706,7 +2693,7 @@ var
     recordId: string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
-    iCurrentPlugin := RefMastersDeterminePlugin(s, True);
+    iCurrentPlugin := RefMastersDeterminePlugin(s, iFolipMasterFile);
     recordId := RecordFormIdFileId(s);
 
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
