@@ -1688,49 +1688,12 @@ begin
     end;
 end;
 
-function GetCellFromWorldspace(Worldspace: IInterface; GridX, GridY: integer): IInterface;
-var
-    blockidx, subblockidx, cellidx: integer;
-    wrldgrup, block, subblock, cell: IInterface;
-    Grid, GridBlock, GridSubBlock: TwbGridCell;
-    LabelBlock, LabelSubBlock: Cardinal;
-begin
-    Grid := wbGridCell(GridX, GridY);
-    GridSubBlock := wbSubBlockFromGridCell(Grid);
-    LabelSubBlock := wbGridCellToGroupLabel(GridSubBlock);
-    GridBlock := wbBlockFromSubBlock(GridSubBlock);
-    LabelBlock := wbGridCellToGroupLabel(GridBlock);
-
-    wrldgrup := ChildGroup(Worldspace);
-    // iterate over Exterior Blocks
-    for blockidx := 0 to Pred(ElementCount(wrldgrup)) do begin
-        block := ElementByIndex(wrldgrup, blockidx);
-        if GroupLabel(block) <> LabelBlock then Continue;
-        // iterate over SubBlocks
-        for subblockidx := 0 to Pred(ElementCount(block)) do begin
-            subblock := ElementByIndex(block, subblockidx);
-            if GroupLabel(subblock) <> LabelSubBlock then Continue;
-            // iterate over Cells
-            for cellidx := 0 to Pred(ElementCount(subblock)) do begin
-                cell := ElementByIndex(subblock, cellidx);
-                if (Signature(cell) <> 'CELL') or GetIsPersistent(cell) then Continue;
-                if (GetElementNativeValues(cell, 'XCLC\X') = Grid.x) and (GetElementNativeValues(cell, 'XCLC\Y') = Grid.y) then begin
-                    Result := cell;
-                    Exit;
-                end;
-            end;
-            Break;
-        end;
-        Break;
-    end;
-end;
-
 procedure DuplicateRef(r: IwbElement; fakeStatic: string);
 {
     Duplicates a placed reference, but used the fakeStatic base.
 }
 var
-    n, rCell, rWrld, wCell, nCell, ms, xesp, xespDup, parentRef: IInterface;
+    n, rCell, rWrld, wCell, nCell, ms, xesp, xespDup, parentRef: IwbElement;
     bHasOppositeParent: Boolean;
     c: TwbGridCell;
     parentFormid, cellX, cellY, wrldEdid, recordId: string;
@@ -1744,12 +1707,12 @@ begin
     //Handle persistent worldspace cell because these will never be persistent
     if GetIsPersistent(rCell) then begin
         c := wbPositionToGridCell(GetPosition(r));
-        wCell := WinningOverride(GetCellFromWorldspace(rWrld, c.X, c.Y));
-        if Assigned(wCell) then rCell := wCell;
+        cellX := IntToStr(c.x);
+        cellY := IntToStr(c.y);
+    end else begin
+        cellX := GetElementEditValues(rCell, 'XCLC\X');
+        cellY := GetElementEditValues(rCell, 'XCLC\Y');
     end;
-
-    cellX := GetElementEditValues(rCell, 'XCLC\X');
-    cellY := GetElementEditValues(rCell, 'XCLC\Y');
 
     if ElementExists(r, 'XESP - Enable Parent') then begin
         xesp := ElementByPath(r, 'XESP');
