@@ -1326,7 +1326,7 @@ procedure MultiRefLOD;
 }
 var
     c, a, i: integer;
-    MultiRefLODReference, ref, MultiRefLODFormidStr, editorid: string;
+    MultiRefLODReference, ref, MultiRefLODFormidStr, editorid, cellX, cellY, wrldEdid, recordId: string;
     r, MultiRefLODElement, n, rCell, rWrld: IwbElement;
     linkedrefs, lref: IInterface;
     bNeedsModified, bHadMultiRefLODCorrect: Boolean;
@@ -1382,18 +1382,22 @@ begin
 
             if bNeedsModified then begin
                 AddMessage(#9 + Name(r));
-                //AddRefToMyFormlist(r, flMultiRefLOD);
-                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+
+                rCell := LinksTo(ElementByIndex(r, 0));
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, True);
-                iCurrentPlugin := RefMastersDeterminePlugin(r, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                n := CopyElementToFileWithVC(r, iCurrentPlugin);
-                RemoveLinkedReferenceByKeyword(n, '00195411'); // Remove any existing MultiRefLOD keyword linked references
-                AddLinkedReference(n, '00195411', MultiRefLODFormidStr); // Add the MultiRefLOD keyword with the correct formid
+                cellX := GetElementEditValues(rCell, 'XCLC\X');
+                cellY := GetElementEditValues(rCell, 'XCLC\Y');
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                recordId := RecordFormIdFileId(r);
+
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
+
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|' + MultiRefLODReference;
             end;
         end;
     end;
