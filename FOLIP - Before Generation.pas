@@ -1101,48 +1101,41 @@ var
     i, pi, oi: integer;
     p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer, xesp: IwbElement;
     parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid: string;
-    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bBaseHasLOD, bPlugin, bPluginHere, bPluginTemp, bIsFullLOD: boolean;
+    bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent, bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD: boolean;
     tlOppositeEnableRefs, tlEnableRefs: TList;
 begin
     for i := Pred(tlEnableParents.Count) downto 0 do begin
         // This iterates over the actual Parents
-        bPlugin := False;
         p := ObjectToElement(tlEnableParents[i]);
         bCanBeRespected := False;
         bHasSuitableReplacer := False;
         bHasPersistentReplacer := False;
         bHasOppositeEnableRefs := False;
+
         parentFormid := IntToHex(GetLoadOrderFormID(p), 8);
-        if parentFormid = '00000014' then continue;
-        if Pos(RecordFormIdFileId(p), sEnableParentFormidExclusions) <> 0 then continue;
-        iCurrentPlugin := RefMastersDeterminePlugin(p, bPlugin);
-        bPluginHere := bPlugin;
+        if parentFormid = '00000014' then continue; //skip player
+        if Pos(RecordFormIdFileId(p), sEnableParentFormidExclusions) <> 0 then continue; //skip excluded parents
+
         AddMessage('Respect Enable Parents: Processing ' + Name(p));
+
+        //Parents can only be reliably respected if they are from the first master file (Fallout4.esm) and are not initially disabled (not always a problem but sometimes is).
         if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p))) then bCanBeRespected := True;
-        if bCanBeRespected and (GetElementEditValues(p,'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
-            rCell := WinningOverride(LinksTo(ElementByIndex(p, 0)));
+
+        if bCanBeRespected and (GetElementEditValues(p, 'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
+            //If the parent can be respected but is not respected, set the LOD Respects Enable State flag on the parenet.
+            rCell := LinksTo(ElementByIndex(p, 0));
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
-            iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
-            if not bPlugin and (tlMasterCells.IndexOf(rCell) = -1) then begin
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-            end;
-            if bPlugin and (tlPluginCells.IndexOf(rCell) = -1) then begin
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-            end;
-            if bPluginHere <> bPlugin then RefMastersDeterminePlugin(p, bPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
 
-            m := CopyElementToFileWithVC(p, iCurrentPlugin);
-            SetElementNativeValues(m, 'Record Header\Record Flags\LOD Respects Enable State', 1);
-            if not GetIsPersistent(p) then SetIsPersistent(m, True);
             recordId := RecordFormIdFileId(p);
             joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
             joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := True;
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
         end;
 
         {
@@ -1166,97 +1159,78 @@ begin
 
             //Split between refs with LOD and not having LOD
             if not bBaseHasLOD then begin
-                if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue;
-                if bHasPersistentReplacer then continue;
-                if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
-                if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0) then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
-                if not bHasOppositeEnableParent then continue;
+                // If the base does not have LOD, we will consider it for a suitable opposite enable parent replacer.
+                if bHasPersistentReplacer then continue; //Already have a persistent replacer, no need to look for more.
+                if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue; //Only consider static, activator, and texture set for opposite enable parent replacer.
+                if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue; //Only consider references from the first master file (Fallout4.esm) for opposite enable parent replacer.
+                bHasOppositeEnableParent := (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0);
+                if not bHasOppositeEnableParent then continue; //Only consider references that are opposite enable state relative to the parent.
                 bIsPersistent := GetIsPersistent(r);
-                if bHasSuitableReplacer and not bIsPersistent then continue;
-                oppositeEnableParentReplacer := r;
+                if bHasSuitableReplacer and not bIsPersistent then continue; //If we already have a suitable replacer and this one is not persistent, skip it.
+                oppositeEnableParentReplacer := r; //if we made it this far, this is a suitable opposite enable parent replacer.
                 bHasSuitableReplacer := True;
                 if not bIsPersistent then continue;
-                bHasPersistentReplacer := True;
+                bHasPersistentReplacer := True; //if we made it this far, this is a suitable opposite enable parent replacer and it is persistent, so it is a perfect candidate, and we won't look for another.
                 continue;
             end;
-            if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0) then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
+
+            bHasOppositeEnableParent := (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0);
             if not bHasOppositeEnableParent then begin
                 tlEnableRefs.Add(r);
+                bHasEnableRefs := True;
                 continue;
             end;
             tlOppositeEnableRefs.Add(r);
             bHasOppositeEnableRefs := True;
 
-            if bHasPersistentReplacer then continue;
-            if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue;
+            // Check to see if we need to find a suitable opposite enable parent replacer.
+            if bHasPersistentReplacer then continue; //Already have a persistent replacer, no need to look for more.
+            if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue; //Only consider references from the first master file (Fallout4.esm) for opposite enable parent replacer.
             bIsPersistent := GetIsPersistent(r);
-            if bHasSuitableReplacer and not bIsPersistent then continue;
-            oppositeEnableParentReplacer := r;
+            if bHasSuitableReplacer and not bIsPersistent then continue; //If we already have a suitable replacer and this one is not persistent, skip it.
+            oppositeEnableParentReplacer := r; //if we made it this far, this is a suitable opposite enable parent replacer.
             bHasSuitableReplacer := True;
             if not bIsPersistent then continue;
-            bHasPersistentReplacer := True;
+            bHasPersistentReplacer := True; //if we made it this far, this is a suitable opposite enable parent replacer and it is persistent, so it is a perfect candidate, and we won't look for another.
         end;
 
-        if bHasOppositeEnableRefs then begin
-            if not bHasSuitableReplacer then oppositeEnableParentReplacer := GetSuitableReplacement;
+        //OK, we have iterated over all references to the parent. Now we will process the opposite enable parent references and plain enable parent references separately.
 
-            // Ensure cell is added to prevent failure to copy reference.
-            rCell := WinningOverride(LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0)));
+        if bHasOppositeEnableRefs then begin
+            if not bHasSuitableReplacer then oppositeEnableParentReplacer := GetSuitableReplacement; //If we have not found a suitable opposite enable parent replacer, we will rob one.
+
+            // Create opposite enable parent replacer
+            rCell := LinksTo(ElementByIndex(oppositeEnableParentReplacer, 0));
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
 
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-            iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPlugin);
-            bPluginHere := bPlugin;
-            if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-            end;
-            if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
-                wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-            end;
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
-            // Create replacer
-            iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, bPlugin);
-            if bPlugin <> bPluginHere then begin
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPlugin);
-                if tlPluginCells.IndexOf(rCell) = -1 then begin
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                end;
-            end;
-            oreplacer := CopyElementToFileWithVC(oppositeEnableParentReplacer, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             recordId := RecordFormIdFileId(oppositeEnableParentReplacer);
 
             joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
             joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Set Is Persistent'] := 1;
-
-            if not bHasPersistentReplacer then SetIsPersistent(oreplacer, True);
-            SetElementEditValues(oreplacer, 'Record Header\Record Flags\LOD Respects Enable State', '1');
+            joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
 
             if not bHasSuitableReplacer then begin
-                Add(oreplacer,'XESP',True);
-
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 1;
-
-                SetElementEditValues(oreplacer, 'NAME', '000e4610'); //Enable Marker
-                SetElementEditValues(oreplacer, 'XESP\Reference', parentFormid);
-                SetElementNativeValues(oreplacer, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
             end;
-            AddRefToMyFormlist(oreplacer, flParents);
-            oreplacerFormid := IntToHex(GetLoadOrderFormID(oreplacer), 8);
+            // AddRefToMyFormlist(oreplacer, flParents);
+            oreplacerFormid := IntToHex(GetLoadOrderFormID(oppositeEnableParentReplacer), 8);
 
             for oi := Pred(tlOppositeEnableRefs.Count) downto 0 do begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
 
-                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                rCell := LinksTo(ElementByIndex(r, 0));
                 // Skip if in interior cell
                 if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
@@ -1271,85 +1245,50 @@ begin
 
                 AddMessage(#9 + Name(r));
 
-                bPluginTemp := False;
-                iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
-                bPluginHere := bPluginTemp;
-                if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                end;
-                if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
-                    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                end;
-                iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
-                if bPluginTemp <> bPluginHere then begin
-                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
-                    if tlPluginCells.IndexOf(rCell) = -1 then begin
-                        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                    end;
-                end;
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
                 recordId := RecordFormIdFileId(r);
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := oreplacerFormid;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
-
-                //need to check if r is in iCurrentPlugin already
-                if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
-                else n := CopyElementToFileWithVC(r, iCurrentPlugin);
-
-                SetElementEditValues(n, 'XESP\Reference', ShortName(oreplacer));
-
-                SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
-                SetIsVisibleWhenDistant(n, True);
-                if GetElementEditValues(n, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLOD := true else bIsFullLOD := false;
-                if bIsFullLOD then begin
-                    SetElementNativeValues(n, 'Record Header\Record Flags\Is Full LOD', 0);
-                    AddRefToMyFormlist(n, flRemoveIsFullLOD);
-                end;
-                AddRefToMyFormlist(n, flOverrides);
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
             end;
         end;
-        if tlEnableRefs.Count > 0 then begin
+        if bHasEnableRefs then begin
             if not bCanBeRespected then begin
-                enableParentReplacer := GetSuitableReplacement;
+                enableParentReplacer := GetSuitableReplacement; //We will rob a suitable replacer if the parent cannot be respected.
 
                 recordId := RecordFormIdFileId(enableParentReplacer);
-                rCell := WinningOverride(LinksTo(ElementByIndex(enableParentReplacer, 0)));
+                rCell := LinksTo(ElementByIndex(enableParentReplacer, 0));
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                 cellX := GetElementEditValues(rCell, 'XCLC\X');
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-                iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, bPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
 
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := parentFormid;
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['NAME'] := '000e4610'; //enable marker
                 joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['LOD Respects Enable State'] := 1;
+                joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
 
-                ereplacer := CopyElementToFileWithVC(enableParentReplacer, iCurrentPlugin);
-                xesp := Add(ereplacer, 'XESP', True);
-                ElementAssign(xesp, 0, nil, False);
-                SetElementEditValues(ereplacer, 'XESP\Reference', parentFormid);
-                SetElementEditValues(ereplacer, 'NAME', '000e4610');
-                SetElementNativeValues(ereplacer, 'Record Header\Record Flags\LOD Respects Enable State', 1);
-                AddRefToMyFormlist(ereplacer, flParents);
-
-                ereplacerFormid := IntToHex(GetLoadOrderFormID(ereplacer), 8);
+                ereplacerFormid := IntToHex(GetLoadOrderFormID(enableParentReplacer), 8);
             end;
+
             for oi := Pred(tlEnableRefs.Count) downto 0 do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
-                if (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0) then bIsFullLOD := true else bIsFullLOD := false;
+                bIsFullLOD := (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0);
 
                 if (not bCanBeRespected) or (not GetIsVisibleWhenDistant(r)) or bIsFullLOD then begin
                     AddMessage(#9 + Name(r));
-                    rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+                    rCell := LinksTo(ElementByIndex(r, 0));
                     // Skip if in interior cell
                     if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
                     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
@@ -1363,48 +1302,15 @@ begin
                     wrldEdid := GetElementEditValues(rWrld, 'EDID');
                     recordId := RecordFormIdFileId(r);
 
-                    bPluginTemp := False;
-                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
-                    bPluginHere := bPluginTemp;
-                    if not bPluginHere and (tlMasterCells.IndexOf(rCell) = -1) then begin
-                        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                    end;
-                    if bPluginHere and (tlPluginCells.IndexOf(rCell) = -1) then begin
-                        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                    end;
-                    iCurrentPlugin := RefMastersDeterminePlugin(r, bPluginTemp);
-                    if bPluginTemp <> bPluginHere then begin
-                        iCurrentPlugin := RefMastersDeterminePlugin(rCell, bPluginTemp);
-                        iCurrentPlugin := RefMastersDeterminePlugin(rWrld, bPluginTemp);
-                        if tlPluginCells.IndexOf(rCell) = -1 then begin
-                            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                            wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
-                        end;
-                    end;
+                    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
+                    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                    iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['XESP Reference'] := ereplacerFormid;
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Opposite Enable Parent'] := 0;
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Visible When Distant'] := True;
                     joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['Is Full LOD'] := 0;
-
-                    //need to check if r is in iCurrentPlugin already
-                    if (GetFileName(GetFile(r)) = GetFileName(iCurrentPlugin)) then n := r
-                    else n := CopyElementToFileWithVC(r, iCurrentPlugin);
-                    if not bCanBeRespected then begin
-                        SetElementEditValues(n, 'XESP\Reference', ShortName(ereplacer));
-                        SetElementNativeValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 0);
-                    end;
-
-                    if bIsFullLOD then begin
-                        SetElementNativeValues(n, 'Record Header\Record Flags\Is Full LOD', 0);
-                        AddRefToMyFormlist(n, flRemoveIsFullLOD);
-                    end;
-
-                    SetIsVisibleWhenDistant(n, True);
-                    AddRefToMyFormlist(n, flOverrides);
+                    joElements.O['references'].O['Overrides'].O[wrldEdid].O[cellX].O[cellY].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
                 end;
             end;
         end;
@@ -1652,8 +1558,8 @@ begin
 
         iCurrentPlugin := RefMastersDeterminePlugin(rCell, True);
         iCurrentPlugin := RefMastersDeterminePlugin(rWrld, True);
-        wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+        // wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+        // wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
 
         iCurrentPlugin := RefMastersDeterminePlugin(r, True);
         n := CopyElementToFileWithVC(r, iCurrentPlugin);
@@ -4609,6 +4515,38 @@ begin
     newf := wbNormalizeResourceName(newf, resType);
     newf := StringReplace(newf, 'THERE-WAS-AN-ASTERISK-HERE', '*', [rfReplaceAll, rfIgnoreCase]);
     Result := newf;
+end;
+
+function GetHighestPossibleOverrideForFile(r: IwbElement; inputFile: IwbFile): IwbElement;
+{
+    Gets the highest possible override desired for the given reference and plugin.
+}
+var
+    i, iNumOverrides: integer;
+    PluginHereFileName, overrideFileName: string;
+    o, masterRecord: IwbElement;
+    f: IwbFile;
+begin
+    PluginHereFileName := GetFileName(inputFile);
+    if SameText(PluginHereFileName, sFolipPluginFileName) then begin
+        Result := WinningOverride(r);
+        Exit;
+    end;
+    masterRecord := MasterOrSelf(r);
+    iNumOverrides := OverrideCount(masterRecord);
+    if iNumOverrides > 0 then begin
+        for i := Pred(iNumOverrides) downto 0 do begin
+            o := OverrideByIndex(masterRecord, i);
+            f := GetFile(o);
+            overrideFileName := GetFileName(f);
+            if (slMasterableMasters.IndexOf(overrideFileName) <> -1) then begin
+                Result := o;
+                Exit;
+            end;
+        end;
+        //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
+    end;
+    Result := WinningOverride(r);
 end;
 
 end.
