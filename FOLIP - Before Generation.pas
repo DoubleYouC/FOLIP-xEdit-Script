@@ -372,6 +372,9 @@ begin
     AddMessage('=======================================================================================');
 
     MultiRefLOD;
+    AddMastersForRecords;
+
+    //Add processing code here to add changes in joElements
 
     diamondCityWrld := WinningOverride(RecordByFormID(FileByIndex(0), $00000F94, False));
     if not SameText(GetFileName(GetFile(diamondCityWrld)), GetFileName(iFolipPluginFile)) then begin
@@ -387,8 +390,17 @@ begin
 
     DeleteDirectory(FOLIPTempPath);
 
-    //Save the plugin.
     EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
+    joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\', False, TEncoding.UTF8, True);
+
+    //Save the plugin.
+    fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipMasterFileName, fmCreate);
+    try
+        FileWriteToStream(iFolipMasterfile, fs, 0);
+    finally
+        fs.Free;
+    end;
+
     fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipPluginFileName + '.esp', fmCreate);
     try
         FileWriteToStream(iFolipPluginFile, fs, 0);
@@ -1099,6 +1111,23 @@ begin
     SetEditorID(flRemoveIsFullLOD, 'FOLIP_RemoveIsFullLOD');
 end;
 
+procedure AddMastersForRecords;
+{
+    Adds required masters.
+}
+var
+    i: integer;
+begin
+    for i := 0 to Pred(slMainMasters.Count) do begin
+        AddMasterIfMissing(iFolipMasterFile, slMainMasters[i]);
+    end;
+    for i := 0 to Pred(slPatchMasters.Count) do begin
+        AddMasterIfMissing(iFolipPluginFile, slPatchMasters[i]);
+    end;
+    SortMasters(iFolipMasterFile);
+    SortMasters(iFolipPluginFile);
+end;
+
 procedure ProcessEnableParents;
 {
     Apply LOD Respects Enable State flag to XESP - Enable Parent references.
@@ -1558,7 +1587,7 @@ end;
 
 function IsFullLOD(s: IInterface): Boolean;
 var
-    model, editorid, recordId: string;
+    model, editorid, recordId, wrldEdid: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
     r, n, rCell, rWrld, parentRef, xesp: IInterface;
@@ -1952,7 +1981,7 @@ begin
             joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
             for n := 0 to Pred(cnt) do begin
                 //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
-                joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + | + slLODSubReplacement[n]);
+                joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);
                 //AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
             end;
             slLODSubOriginal.Free;
@@ -4069,7 +4098,7 @@ begin
     if not Assigned(iFolipPluginFile) then begin
         iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
         AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
-        AddMasterIfMissing(iFolipPluginFile, 'sFolipMasterFileName');
+        AddMasterIfMissing(iFolipPluginFile, sFolipMasterFileName);
     end;
 
     Result := 1;
