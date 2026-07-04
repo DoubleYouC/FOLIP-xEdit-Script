@@ -1536,6 +1536,8 @@ var
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent,
     bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD: boolean;
 
+    c: TwbGridCell;
+
     tlOppositeEnableRefs, tlEnableRefs: TList;
 begin
     for i := Pred(tlEnableParents.Count) downto 0 do begin
@@ -1685,6 +1687,12 @@ begin
 
                 cellX := GetElementEditValues(rCell, 'XCLC\X');
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
+                if (SameText(OverOrNew, 'New') and GetIsPersistent(rCell)) then begin
+                    //If New, then it isn't persistent (fake statics), so we need to send it to the correct cell
+                    c := wbPositionToGridCell(GetPosition(r));
+                    cellX := IntToStr(c.x);
+                    cellY := IntToStr(c.y);
+                end;
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
                 AddMessage(#9 + Name(r));
@@ -1758,6 +1766,14 @@ begin
 
                     cellX := GetElementEditValues(rCell, 'XCLC\X');
                     cellY := GetElementEditValues(rCell, 'XCLC\Y');
+
+                    if (SameText(OverOrNew, 'New') and GetIsPersistent(rCell)) then begin
+                        //If New, then it isn't persistent (fake statics), so we need to send it to the correct cell
+                        c := wbPositionToGridCell(GetPosition(r));
+                        cellX := IntToStr(c.x);
+                        cellY := IntToStr(c.y);
+                    end;
+
                     wrldEdid := GetElementEditValues(rWrld, 'EDID');
                     recordId := RecordFormIdFileId(r);
 
