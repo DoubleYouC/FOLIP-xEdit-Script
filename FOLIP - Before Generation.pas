@@ -1170,12 +1170,12 @@ begin
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['fakeStatic'] := fakeStatic;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := True;
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Opposite Enable Parent'] := 0;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP Reference'] := parentFormid;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP'] := 1;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := RecordFormIdFileId(ms);
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
 
     joElements.O['STAT'].O['New'].O[fakeStatic].S['Copy Object Bounds'] := True;
@@ -1234,11 +1234,11 @@ begin
                 end;
 
                 //Process New References
-                // for r := Pred(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
-                //     AddMessage('Processing new placed reference in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
-                //     AddMessage(#9 + joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].S[r]);
-                //     ProcessNewPlacedReference(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].S[r], wrldEdid, cellX, cellY);
-                // end;
+                for r := Pred(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
+                    ref := joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].Names[r];
+                    AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                    ProcessNewReference(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], ref, wrldEdid, cellX, cellY);
+                end;
             end;
         end;
     end;
@@ -1348,7 +1348,7 @@ begin
         SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
         SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
     end;
-    joElements.O['STAT'].O['New'].O[recordId].S['RecordId'] := RecordFormIdFileId(n);
+    joElements.O['STAT'].O['New'].O[recordId].S['fakeStaticFormId'] := IntToHex(GetLoadOrderFormID(n), 8);
 end;
 
 procedure ProcessOverrideReference(placedReferenceOverride: TJsonObject; ref, wrldEdid, cellX, cellY: string);
@@ -1431,6 +1431,94 @@ begin
     end;
 end;
 
+procedure ProcessNewReference(placedReference: TJsonObject; ref, wrldEdid, cellX, cellY: string);
+{
+    Add a placed reference.
+}
+var
+    cellRecordId, wrldRecordId, fakeStatic, fakeStaticFormId, scale, ms: string;
+    bPersistent, bXesp: boolean;
+    i: integer;
+    rWrld, rCell, nCell, r: IwbMainRecord;
+    xesp: IwbElement;
+begin
+    {
+    placedReference.S['File'] := GetFileName(iCurrentPlugin);
+    placedReference.S['Visible When Distant'] := 1;
+    placedReference.S['Initially Disabled'] := 1;
+
+    placedReference.S['fakeStatic'] := fakeStatic;
+
+    placedReference.S['XESP'] := 1;
+    placedReference.S['XESP Reference'] := parentFormid;
+    placedReference.S['Opposite Enable Parent'] := 1;
+
+    placedReference.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
+
+    placedReference.O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
+    placedReference.O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
+    placedReference.O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
+    placedReference.O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
+    placedReference.O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
+    placedReference.O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+    placedReference.S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+
+    placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
+
+    }
+
+    iCurrentPlugin := FileByName(placedReference.S['File']);
+    cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
+    wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
+    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
+    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+
+    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+    nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+    r := Add(nCell, 'REFR', True);
+    SetIsVisibleWhenDistant(r, (placedReference.S['Visible When Distant'] = '1'));
+    SetIsInitiallyDisabled(r, (placedReference.S['Initially Disabled'] = '1'));
+
+    fakeStatic := placedReference.S['fakeStatic'];
+    if fakeStatic <> '' then begin
+        fakeStaticFormId := joElements.O['STAT'].O['New'].O[fakeStatic].S['fakeStaticFormId'];
+        SetElementEditValues(r, 'NAME', fakeStaticFormId);
+    end;
+
+    bXesp := (placedReference.S['XESP'] = '1');
+    if bXesp then begin
+        xesp := ElementByPath(r, 'XESP');
+        if not Assigned(xesp) then begin
+            xesp := Add(r, 'XESP', True);
+            ElementAssign(xesp, 0, nil, False);
+        end;
+        SetElementEditValues(xesp, 'Reference', placedReference.S['XESP Reference']);
+        SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReference.S['Opposite Enable Parent'] = '1'));
+    end;
+
+    for i := 0 to Pred(placedReference.A['AddRefToMyFormlist'].Count) do begin
+        AddRefToMyFormlist(r, ObjectToElement(tlFlst[placedReference.A['AddRefToMyFormlist'].S[i]]));
+    end;
+
+    SetElementNativeValues(r, 'DATA\Position\X', placedReference.O['pos'].S['x']);
+    SetElementNativeValues(r, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
+    SetElementNativeValues(r, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
+    SetElementNativeValues(r, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
+    SetElementNativeValues(r, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
+    SetElementNativeValues(r, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
+    scale := placedReference.S['XSCL - Scale'];
+    if scale <> '' then begin
+        Add(r, 'XSCL', True);
+        SetElementNativeValues(r, 'XSCL - Scale');
+    end;
+
+    ms := placedReference.S['XMSP - Material Swap'];
+    if ms <> '' then begin
+        Add(r, 'XMSP', True);
+        SetElementEditValues(r, 'XMSP - Material Swap', ms);
+    end;
+end;
+
 procedure ProcessEnableParents;
 {
     Apply LOD Respects Enable State flag to XESP - Enable Parent references.
@@ -1471,6 +1559,7 @@ begin
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
+
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
@@ -1601,6 +1690,7 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
                 recordId := RecordFormIdFileId(r);
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := oreplacerFormid;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
@@ -1674,6 +1764,7 @@ begin
                     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
                     iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
+                    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP'] := 1
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := ereplacerFormid;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
@@ -1925,7 +2016,7 @@ begin
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
             bRespect := (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0);
         end;
-        bIsFullLODFlagged := (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0');
+        bIsFullLODFlagged := (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0);
         if bIsFullLODFlagged then begin
             if not bXESP then continue;
             if (GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then continue;
@@ -2071,7 +2162,7 @@ begin
     if ElementExists(r, 'XMSP - Material Swap') then begin
         ms := WinningOverride(LinksTo(ElementByPath(r, 'XMSP - Material Swap')));
         iCurrentPlugin := RefMastersDeterminePlugin(ms, iCurrentPlugin);
-        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := RecordFormIdFileId(ms);
+        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
     end;
     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
@@ -2079,7 +2170,7 @@ begin
     //Add new ref to cell
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['fakeStatic'] := fakeStatic;
-    if GetIsInitiallyDisabled(r) then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := True;
+    if GetIsInitiallyDisabled(r) then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := 1;
 
     //  Set scale
