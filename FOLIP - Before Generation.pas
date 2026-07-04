@@ -1393,8 +1393,8 @@ begin
 
     if cellRecordId = '' then cellRecordId := placedReferenceOverride.S['cellRecordId'];
     wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
-    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
-    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rWrld := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(wrldRecordId), iCurrentPlugin);
+    rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin);
     rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
     wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
     wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
@@ -1474,8 +1474,8 @@ begin
     iCurrentPlugin := FileByName(fileHere);
     cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
     wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
-    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
-    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rWrld := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(wrldRecordId), iCurrentPlugin);
+    rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin);
 
     wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
     nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
@@ -1995,6 +1995,7 @@ var
     formids, lnam: IwbElement;
     rFormid: string;
 begin
+    Exit; //I need to make formlists for both plugins if I use this.
     if not ElementExists(frmlst, 'FormIDs') then begin
         formids := Add(frmlst, 'FormIDs', True);
         lnam := ElementByIndex(formids, 0);
@@ -2156,6 +2157,7 @@ var
 begin
     bMswp := False;
     iCurrentPlugin := FileByName(joElements.O['STAT'].O['New'].O[fakeStatic].S['File']);
+    iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
     wrldEdid := GetElementEditValues(rWrld, 'EDID');
