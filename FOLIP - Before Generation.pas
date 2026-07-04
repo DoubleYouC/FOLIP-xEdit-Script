@@ -1126,14 +1126,18 @@ procedure AddMastersForRecords;
 var
     i: integer;
 begin
+    if slPatchMasters.IndexOf(sFolipMasterFileName) = -1 then
+        slPatchMasters.Add(sFolipMasterFileName);
+    SortByMasterList(slPluginFiles, slMainMasters);
+    ListStringsInStringList(slPatchMasters);
+    SortByMasterList(slPluginFiles, slPatchMasters);
+    ListStringsInStringList(slPatchMasters);
     for i := 0 to Pred(slMainMasters.Count) do begin
         AddMasterIfMissing(iFolipMasterFile, slMainMasters[i]);
     end;
     for i := 0 to Pred(slPatchMasters.Count) do begin
         AddMasterIfMissing(iFolipPluginFile, slPatchMasters[i]);
     end;
-    SortMasters(iFolipMasterFile);
-    SortMasters(iFolipPluginFile);
 end;
 
 procedure ProcessElements;
@@ -1509,7 +1513,7 @@ begin
     scale := placedReference.S['XSCL - Scale'];
     if scale <> '' then begin
         Add(r, 'XSCL', True);
-        SetElementNativeValues(r, 'XSCL - Scale');
+        SetElementNativeValues(r, 'XSCL - Scale', scale);
     end;
 
     ms := placedReference.S['XMSP - Material Swap'];
@@ -1765,6 +1769,7 @@ begin
                     iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP'] := 1;
+                    if bCanBeRespected then ereplacerFormid := parentFormid;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := ereplacerFormid;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
@@ -2016,7 +2021,7 @@ begin
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
             bRespect := (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0);
         end;
-        bIsFullLODFlagged := (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0);
+        if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLODFlagged := true else bIsFullLODFlagged := false;
         if bIsFullLODFlagged then begin
             if not bXESP then continue;
             if (GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then continue;
@@ -4438,7 +4443,6 @@ var
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
-        slPluginFiles.Add(f);
         LoadRules(f);
     end;
     j := 'FOLIP\UserRules.json';
@@ -4461,7 +4465,7 @@ function CreatePlugins: Boolean;
     Creates the plugin files we need.
 }
 var
-    bFO4LODGen, bFolip, bMainFileFound: Boolean;
+    bFO4LODGen, bFolip, bMainFileFound, bMasterFile: Boolean;
     i: integer;
     fileName: string;
     f: IwbFile;
@@ -4484,7 +4488,12 @@ begin
             bFO4LODGen := True
         else if SameText(fileName, sFolipFileName) then
             bFolip := True;
-        if ((not bMainFileFound) and GetIsESM(f)) then slMasterableMasters.Add(fileName);
+
+        bMasterFile := GetIsESM(f);
+        if ((not bMainFileFound) and bMasterFile) then slMasterableMasters.Add(fileName);
+        if ((not bMainFileFound) and not bMasterFile) then slPluginFiles.Add(sFolipMasterFileName);
+        slPluginFiles.Add(fileName);
+
     end;
     if not bFO4LODGen then begin
         MessageDlg('Please install FO4LODGen Resources from https://www.nexusmods.com/fallout4/mods/80276 before continuing.', mtError, [mbOk], 0);
@@ -4503,7 +4512,6 @@ begin
     if not Assigned(iFolipPluginFile) then begin
         iFolipPluginFile := AddNewFileName(sFolipPluginFileName + '.esp', False);
         AddMasterIfMissing(iFolipPluginFile, 'Fallout4.esm');
-        // AddMasterIfMissing(iFolipPluginFile, sFolipMasterFileName);
     end;
 
     Result := 1;
@@ -4857,6 +4865,28 @@ begin
         //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
     end;
     Result := WinningOverride(r);
+end;
+
+procedure SortByMasterList(const slMasterList: TStringList; var slListToSort: TStringList;);
+{
+    Sorts the second list in the order of the first list.
+}
+var
+    i: integer;
+    temp: TStringList;
+    pluginFile: string;
+begin
+    temp := TStringList.Create;
+    try
+        for i := 0 to Pred(slMasterList.Count) do begin
+            pluginFile := slMasterList[i];
+            if (slListToSort.IndexOf(pluginFile) <> -1) then temp.Add(pluginFile);
+        end;
+
+        slListToSort.Assign(temp);
+    finally
+        temp.Free;
+    end;
 end;
 
 end.
