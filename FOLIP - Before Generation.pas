@@ -12,7 +12,7 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlEnableParents, tlStolenForms, tlTxst: TList;
+    tlStats, tlActiFurnMstt, tlMswp, tlEnableParents, tlStolenForms, tlTxst, tlFlst: TList;
 
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
@@ -63,6 +63,7 @@ begin
         tlEnableParents := TList.Create;
         tlStolenForms := TList.Create;
         tlTxst := TList.Create;
+        tlFlst := TList.Create;
 
 
         //TStringLists
@@ -243,6 +244,7 @@ begin
         tlEnableParents.Free;
         tlStolenForms.Free;
         tlTxst.Free;
+        tlFlst.Free;
 
         slPluginFiles.Free;
         slNifFiles.Free;
@@ -1090,24 +1092,31 @@ begin
     //Add FOLIP_Overrides formlist
     flOverrides := Add(flstGroup, 'FLST', True);
     SetEditorID(flOverrides, 'FOLIP_Overrides');
+    tlFlst.Add(flOverrides);
 
     flMultiRefLOD := Add(flstGroup, 'FLST', True);
     SetEditorID(flMultiRefLOD, 'FOLIP_MultiRefLOD');
+    tlFlst.Add(flMultiRefLOD);
 
     flParents := Add(flstGroup, 'FLST', True);
     SetEditorID(flParents, 'FOLIP_Parents');
+    tlFlst.Add(flParents);
 
     flNeverfades := Add(flstGroup, 'FLST', True);
     SetEditorID(flNeverfades, 'FOLIP_Neverfades');
+    tlFlst.Add(flNeverfades);
 
     flDecals := Add(flstGroup, 'FLST', True);
     SetEditorID(flDecals, 'FOLIP_Decals');
+    tlFlst.Add(flDecals);
 
     flFakeStatics := Add(flstGroup, 'FLST', True);
     SetEditorID(flFakeStatics, 'FOLIP_FakeStatics');
+    tlFlst.Add(flFakeStatics);
 
     flRemoveIsFullLOD := Add(flstGroup, 'FLST', True);
     SetEditorID(flRemoveIsFullLOD, 'FOLIP_RemoveIsFullLOD');
+    tlFlst.Add(flRemoveIsFullLOD);
 end;
 
 procedure AddMastersForRecords;
@@ -1132,14 +1141,14 @@ procedure ProcessElements;
     Process joElements.
 }
 var
-    i: integer;
-    recordId: string;
+    i, w, x, y, r: integer;
+    recordId, wrldEdid, wrldRecordId, cellRecordId, ref, cellX, cellY: string;
 begin
     AddMessage('Processing elements...');
     {
     joElements is a json object that contains all the record edit information that will be applied to the output plugins. The structure of joElements is as follows:
 
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flDecals));
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|' + MultiRefLODReference;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 0;
@@ -1147,12 +1156,12 @@ begin
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Opposite Enable Parent'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := True;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Visible When Distant'] := True;
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Visible When Distant'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP Reference'] := parentFormid;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP'] := 1;
 
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flFakeStatics));
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flFakeStatics));
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
@@ -1163,7 +1172,7 @@ begin
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := True;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Opposite Enable Parent'] := 0;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := True;
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP Reference'] := parentFormid;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP'] := 1;
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := RecordFormIdFileId(ms);
@@ -1208,6 +1217,30 @@ begin
     for i := 0 to Pred(joElements.O['STAT'].O['New'].Count) do begin
         recordId := joElements.O['STAT'].O['New'].Names[i];
         ProcessNewStat(recordId);
+    end;
+
+    for w := 0 to Pred(joElements.O['references'].Count) do begin
+        wrldEdid := joElements.O['references'].Names[w];
+        for x := 0 to Pred(joElements.O['references'].O[wrldEdid].Count) do begin
+            cellX := joElements.O['references'].O[wrldEdid].Names[x];
+            for y := 0 to Pred(joElements.O['references'].O[wrldEdid].O[cellX].Count) do begin
+                cellY := joElements.O['references'].O[wrldEdid].O[cellX].Names[y];
+
+                //Process Overrides
+                for r := Pred(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Count) downto 0 do begin
+                    ref := joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Names[r];
+                    AddMessage('Processing placed reference override: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                    ProcessOverrideReference(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref], ref, wrldEdid, cellX, cellY);
+                end;
+
+                //Process New References
+                // for r := Pred(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
+                //     AddMessage('Processing new placed reference in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                //     AddMessage(#9 + joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].S[r]);
+                //     ProcessNewPlacedReference(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].S[r], wrldEdid, cellX, cellY);
+                // end;
+            end;
+        end;
     end;
 
 end;
@@ -1315,23 +1348,87 @@ begin
         SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
         SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
     end;
+    joElements.O['STAT'].O['New'].O[recordId].S['RecordId'] := RecordFormIdFileId(n);
 end;
 
-procedure ProcessOverrideReference(recordId: string);
-{}
+procedure ProcessOverrideReference(placedReferenceOverride: TJsonObject; ref, wrldEdid, cellX, cellY: string);
+{
+    Process a placed reference override.
+}
+var
+    cellRecordId, wrldRecordId, baseFormId, linkedRefRemove, linkedRefAdd, keyword, linkedRef: string;
+    bPersistent, bXesp: boolean;
+    i: integer;
+    rWrld, rCell, rOriginal, rOverride: IwbMainRecord;
+    xesp: IwbElement;
+    tsLinkedRef: TStrings;
 begin
-    {joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flDecals));
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|' + MultiRefLODReference;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 0;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Opposite Enable Parent'] := 1;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := True;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Visible When Distant'] := True;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP Reference'] := parentFormid;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP'] := 1;}
+    {
+    placedReferenceOverride.S['File'] := GetFileName(iCurrentPlugin);
+    placedReferenceOverride.S['Set Is Persistent'] := 1;
+    placedReferenceOverride.S['Visible When Distant'] := 1;
+    placedReferenceOverride.S['Is Full LOD'] := 0;
+    placedReferenceOverride.S['LOD Respects Enable State'] := 1;
+    placedReferenceOverride.S['NAME'] := '000e4610'; //Enable Marker
+
+    placedReferenceOverride.S['RemoveLinkedReference'] := '00195411';
+    placedReferenceOverride.S['AddLinkedReference'] := '00195411|' + MultiRefLODFormidStr;
+
+    placedReferenceOverride.S['XESP'] := 1;
+    placedReferenceOverride.S['XESP Reference'] := parentFormid;
+    placedReferenceOverride.S['Opposite Enable Parent'] := 1;
+
+    placedReferenceOverride.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
+    }
+
+    iCurrentPlugin := FileByName(placedReferenceOverride.S['File']);
+    bPersistent := (placedReferenceOverride.S['Set Is Persistent'] = '1');
+    if (bPersistent and (cellX = '0') and (cellY = '0')) then
+        cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID']
+    else
+        cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
+
+    if cellRecordId = '' then cellRecordId := placedReferenceOverride.S['cellRecordId'];
+    wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
+    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
+    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
+    wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+    wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+    rOverride := CopyElementToFileWithVC(rOriginal, iCurrentPlugin);
+    SetIsPersistent(rOverride, bPersistent);
+    SetIsVisibleWhenDistant(rOverride, (placedReferenceOverride.S['Visible When Distant'] = '1'));
+    SetElementNativeValues(rOverride, 'Record Header\Record Flags\Is Full LOD', (placedReferenceOverride.S['Is Full LOD'] = '1'));
+    SetElementNativeValues(rOverride, 'Record Header\Record Flags\LOD Respects Enable State', (placedReferenceOverride.S['LOD Respects Enable State'] = '1'));
+    baseFormId := placedReferenceOverride.S['NAME'];
+    if baseFormId <> '' then begin
+        SetElementEditValues(rOverride, 'NAME', baseFormId);
+    end;
+
+    linkedRefRemove := placedReferenceOverride.S['RemoveLinkedReference'];
+    if linkedRefRemove <> '' then RemoveLinkedReferenceByKeyword(n, linkedRefRemove);
+    linkedRefAdd := placedReferenceOverride.S['AddLinkedReference'];
+    if linkedRefAdd <> '' then begin
+        tsLinkedRef := SplitString(linkedRefAdd, '|');
+        keyword := tsLinkedRef[0];
+        linkedRef := tsLinkedRef[1];
+        AddLinkedReference(n, keyword, linkedRef);
+    end;
+
+    bXesp := (placedReferenceOverride.S['XESP'] = '1');
+    if bXesp then begin
+        xesp := ElementByPath(rOverride, 'XESP');
+        if not Assigned(xesp) then begin
+            xesp := Add(rOverride, 'XESP', True);
+            ElementAssign(xesp, 0, nil, False);
+        end;
+        SetElementEditValues(xesp, 'Reference', placedReferenceOverride.S['XESP Reference']);
+        SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReferenceOverride.S['Opposite Enable Parent'] = '1'));
+    end;
+
+    for i := 0 to Pred(placedReferenceOverride.A['AddRefToMyFormlist'].Count) do begin
+        AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[placedReferenceOverride.A['AddRefToMyFormlist'].S[i]]));
+    end;
 end;
 
 procedure ProcessEnableParents;
@@ -1380,7 +1477,7 @@ begin
 
             recordId := RecordFormIdFileId(p);
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
-            joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := True;
+            joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
         end;
 
@@ -1460,12 +1557,13 @@ begin
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             recordId := RecordFormIdFileId(oppositeEnableParentReplacer);
 
+            joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
 
             RefMastersDeterminePlugin(oppositeEnableParentReplacer, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-            joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flParents));
+            joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flParents));
 
             if not bHasSuitableReplacer then begin
                 // Only for stolen forms
@@ -1473,7 +1571,7 @@ begin
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP Reference'] := parentFormid;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Opposite Enable Parent'] := 1;
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flDecals));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
             end;
             oreplacerFormid := IntToHex(GetLoadOrderFormID(oppositeEnableParentReplacer), 8);
 
@@ -1505,16 +1603,16 @@ begin
                 recordId := RecordFormIdFileId(r);
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := oreplacerFormid;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := True;
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Is Full LOD'] := 0;
                 if OverOrNew = 'Overrides' then begin
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
 
                     //if it was New the plugin file will already have added the masters
                     RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flOverrides));
+                    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
                 end;
-                if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flRemoveIsFullLOD));
+                if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flRemoveIsFullLOD));
 
             end;
         end;
@@ -1534,6 +1632,7 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
 
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP Reference'] := parentFormid;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['NAME'] := '000e4610'; //enable marker
@@ -1541,8 +1640,8 @@ begin
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
 
                 RefMastersDeterminePlugin(enableParentReplacer, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flParents));
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flDecals));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flParents));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
 
                 ereplacerFormid := IntToHex(GetLoadOrderFormID(enableParentReplacer), 8);
             end;
@@ -1577,7 +1676,7 @@ begin
 
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := ereplacerFormid;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
-                    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := True;
+                    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Is Full LOD'] := 0;
 
                     if OverOrNew = 'Overrides' then begin
@@ -1585,9 +1684,9 @@ begin
 
                         //if it was New the plugin file will already have added the masters
                         RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flOverrides));
+                        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
                     end;
-                    if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flRemoveIsFullLOD));
+                    if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flRemoveIsFullLOD));
                 end;
             end;
         end;
@@ -1673,11 +1772,11 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
 
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|' + MultiRefLODReference;
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411';
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411|' + MultiRefLODFormidStr;
 
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flMultiRefLOD));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flMultiRefLOD));
             end;
         end;
     end;
@@ -1774,7 +1873,7 @@ begin
     end;
 end;
 
-procedure AddRefToMyFormlist(r, frmlst: IwbElement);
+procedure AddRefToMyFormlist(r, frmlst: IwbMainRecord);
 var
     formids, lnam: IwbElement;
     rFormid: string;
@@ -1843,10 +1942,10 @@ begin
         recordId := RecordFormIdFileId(r);
 
         joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 1;
-        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := True;
+        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
 
         RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flNeverfades));
+        joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flNeverfades));
 
         if bXESP and not bRespect then begin
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
@@ -1981,7 +2080,7 @@ begin
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['fakeStatic'] := fakeStatic;
     if GetIsInitiallyDisabled(r) then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := True;
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := True;
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := 1;
 
     //  Set scale
     if ElementExists(r, 'XSCL - Scale') then
@@ -1995,7 +2094,7 @@ begin
     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
 
     RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flFakeStatics));
+    joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flFakeStatics));
 end;
 
 procedure CopyObjectBounds(copyFrom, copyTo: IwbElement);
@@ -2182,7 +2281,9 @@ begin
             end;
 
             //Changes required, so add material swap to patch
-            iCurrentPlugin := RefMastersDeterminePlugin(m, iFolipMasterFile);
+            if (slMasterableMasters.IndexOf(GetFileName(GetFile(m))) = -1) then iCurrentPlugin := iFolipPluginFile
+            else iCurrentPlugin := iFolipMasterFile;
+            iCurrentPlugin := RefMastersDeterminePlugin(m, iCurrentPlugin);
             recordId := RecordFormIdFileId(m);
             joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
             for n := 0 to Pred(cnt) do begin
@@ -2893,11 +2994,11 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411:Fallout4.esm';
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411:Fallout4.esm|00187BF3:Fallout4.esm';
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411';
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['AddLinkedReference'] := '00195411|00187BF3';
 
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flMultiRefLOD));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flMultiRefLOD));
             end else begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iFolipMasterFile), iFolipMasterFile);
@@ -2906,7 +3007,7 @@ begin
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 0;
                 RefMastersDeterminePlugin(r, iFolipPluginFile); //Ensure plugin file has the correct masters to add this to the formlist.
-                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(RecordFormIdFileId(flRemoveIsFullLOD));
+                joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flRemoveIsFullLOD));
             end;
         end;
     end;
@@ -2928,7 +3029,9 @@ var
     recordId: string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
-    iCurrentPlugin := RefMastersDeterminePlugin(s, iFolipMasterFile);
+    if (slMasterableMasters.IndexOf(GetFileName(GetFile(s))) = -1) then iCurrentPlugin := iFolipPluginFile
+    else iCurrentPlugin := iFolipMasterFile;
+    iCurrentPlugin := RefMastersDeterminePlugin(s, iCurrentPlugin);
     recordId := RecordFormIdFileId(s);
 
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
@@ -4267,25 +4370,30 @@ function CreatePlugins: Boolean;
     Creates the plugin files we need.
 }
 var
-    bFO4LODGen, bFolip: Boolean;
+    bFO4LODGen, bFolip, bMainFileFound: Boolean;
     i: integer;
-    f: string;
+    fileName: string;
+    f: IwbFile;
 begin
+    bMainFileFound := False;
     bFO4LODGen := False;
     bFolip := False;
     for i := 0 to Pred(FileCount) do begin
-        f := GetFileName(FileByIndex(i));
+        f := FileByIndex(i);
+        fileName := GetFileName(f);
+        if fileName = 'Fallout4.exe' then continue;
 
-        if SameText(f, sFolipMasterFileName) then
-            iFolipMasterFile := FileByIndex(i)
-        else if SameText(f, sFolipPluginFileName + '.esp') then begin
+        if SameText(fileName, sFolipMasterFileName) then begin
+            iFolipMasterFile := FileByIndex(i);
+            bMainFileFound := True;
+        end else if SameText(fileName, sFolipPluginFileName + '.esp') then begin
             iFolipPluginFile := FileByIndex(i);
             bPreviousBeforeGenerationPresent := True;
-        end
-        else if SameText(f, sFO4LODGenFileName) then
+        end else if SameText(fileName, sFO4LODGenFileName) then
             bFO4LODGen := True
-        else if SameText(f, sFolipFileName) then
+        else if SameText(fileName, sFolipFileName) then
             bFolip := True;
+        if ((not bMainFileFound) and GetIsESM(f)) then slMasterableMasters.Add(fileName);
     end;
     if not bFO4LODGen then begin
         MessageDlg('Please install FO4LODGen Resources from https://www.nexusmods.com/fallout4/mods/80276 before continuing.', mtError, [mbOk], 0);
