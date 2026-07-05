@@ -1642,6 +1642,7 @@ begin
                 if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0)
                 then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
                 if not bHasOppositeEnableParent then continue; //Only consider references that are opposite enable state relative to the parent.
+                if GetIsInitiallyDisabled(r) then continue; //skip refs that are initially disabled as sometimes this doesn't seem to work.
                 bIsPersistent := GetIsPersistent(r);
                 if bHasSuitableReplacer and not bIsPersistent then continue; //If we already have a suitable replacer and this one is not persistent, skip it.
                 oppositeEnableParentReplacer := r; //if we made it this far, this is a suitable opposite enable parent replacer.
@@ -1667,6 +1668,7 @@ begin
             if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue; //Only consider references from the first master file (Fallout4.esm) for opposite enable parent replacer.
             bIsPersistent := GetIsPersistent(r);
             if bHasSuitableReplacer and not bIsPersistent then continue; //If we already have a suitable replacer and this one is not persistent, skip it.
+            if GetIsInitiallyDisabled(r) then continue; //skip refs that are initially disabled as sometimes this doesn't seem to work.
             oppositeEnableParentReplacer := r; //if we made it this far, this is a suitable opposite enable parent replacer.
             bHasSuitableReplacer := True;
             if not bIsPersistent then continue;
