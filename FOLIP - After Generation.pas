@@ -253,13 +253,13 @@ begin
     if bHasDistantLOD <> desiredHasDistantLOD then Result := true;
 end;
 
-function WinningOverrideIgnoringThisFile(r: IwbElement; f: string): IwbElement;
+function WinningOverrideIgnoringThisFile(r: IwbMainRecord; f: string): IwbMainRecord;
 {
     Given a record and filename, return the winning override ignoring the given filename if present.
 }
 var
     i: integer;
-    m, previousOverride, ovr: IwbElement;
+    m, previousOverride, ovr: IwbMainRecord;
     filename: string;
 begin
     m := MasterOrSelf(r);
