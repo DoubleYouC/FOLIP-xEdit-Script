@@ -1161,7 +1161,6 @@ var
 begin
     for i := 0 to Pred(slMainMasters.Count) do begin
         AddMasterIfMissing(iFolipMasterFile, slMainMasters[i]);
-        AddMasterIfMissing(iFolipPluginFile, slMainMasters[i]);
     end;
     for i := 0 to Pred(slPatchMasters.Count) do begin
         AddMasterIfMissing(iFolipPluginFile, slPatchMasters[i]);
@@ -1603,7 +1602,8 @@ begin
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-            iCurrentPlugin := RefMastersDeterminePlugin(p, iFolipMasterFile);
+            iCurrentPlugin := CanOverrideDeterminesPlugin(p, iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
@@ -1686,7 +1686,8 @@ begin
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-            iCurrentPlugin := RefMastersDeterminePlugin(p, iFolipMasterFile);
+            iCurrentPlugin := CanOverrideDeterminesPlugin(oppositeEnableParentReplacer, iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
@@ -1738,7 +1739,10 @@ begin
 
                 AddMessage(#9 + Name(r));
 
-                if OverOrNew = 'New' then iCurrentPlugin := FileByName(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['File']);
+                if SameText(OverOrNew, 'New') then
+                    iCurrentPlugin := FileByName(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['File'])
+                else
+                    iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
                 iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
@@ -1753,7 +1757,7 @@ begin
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Visible When Distant'] := 1;
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Is Full LOD'] := 0;
                 if GetIsPersistent(r) then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Set Is Persistent'] := 1;
-                if OverOrNew = 'Overrides' then begin
+                if SameText(OverOrNew, 'Overrides') then begin
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
                 end;
                 if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flRemoveIsFullLOD));
@@ -1771,7 +1775,8 @@ begin
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-                iCurrentPlugin := RefMastersDeterminePlugin(p, iFolipMasterFile);
+                iCurrentPlugin := CanOverrideDeterminesPlugin(enableParentReplacer, iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
@@ -1824,8 +1829,11 @@ begin
                     wrldEdid := GetElementEditValues(rWrld, 'EDID');
                     recordId := RecordFormIdFileId(r);
 
-                    if OverOrNew = 'New' then iCurrentPlugin := FileByName(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['File']);
-                    iCurrentPlugin := RefMastersDeterminePlugin(p, iFolipMasterFile);
+                    if SameText(OverOrNew, 'New') then
+                        iCurrentPlugin := FileByName(joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['File'])
+                    else iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+
+                    iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                     iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
@@ -1839,7 +1847,7 @@ begin
                     joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Is Full LOD'] := 0;
                     if GetIsPersistent(r) then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Set Is Persistent'] := 1;
 
-                    if OverOrNew = 'Overrides' then begin
+                    if SameText(OverOrNew, 'Overrides') then begin
                         joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
                     end;
                     if bIsFullLOD then joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flRemoveIsFullLOD));
@@ -1922,8 +1930,8 @@ begin
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
                 recordId := RecordFormIdFileId(r);
 
-
-                iCurrentPlugin := RefMastersDeterminePlugin(r, iFolipMasterFile);
+                iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
@@ -2095,7 +2103,8 @@ begin
             if bRespect then continue;
         end;
 
-        iCurrentPlugin := RefMastersDeterminePlugin(r, iFolipMasterFile);
+        iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+        iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
         iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
         iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
@@ -2452,8 +2461,7 @@ begin
             end;
 
             //Changes required, so add material swap to patch
-            if (slMasterableMasters.IndexOf(GetFileName(GetFile(m))) = -1) then iCurrentPlugin := iFolipPluginFile
-            else iCurrentPlugin := iFolipMasterFile;
+            iCurrentPlugin := CanOverrideDeterminesPlugin(m, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(m, iCurrentPlugin);
             recordId := RecordFormIdFileId(m);
             joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
@@ -3161,7 +3169,8 @@ begin
                 //Setting it to be MultiRefLOD of this ref, that always has Object LOD, effectively removes it from Object LOD.
                 //[REFR:00187BF3] (Places CapitolDome01 [STAT:00187CB7] in VaultTecOfficeExt02 [CELL:0000E07A] (in Commonwealth "Commonwealth" [WRLD:0000003C] at 3,-3) in Precombined\0000E07A_0D73777F_OC.nif)
 
-                iCurrentPlugin := RefMastersDeterminePlugin(r, iFolipMasterFile);
+                iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
@@ -3173,7 +3182,8 @@ begin
                 joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flMultiRefLOD));
             end else begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
-                iCurrentPlugin := RefMastersDeterminePlugin(r, iFolipMasterFile);
+                iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
@@ -3202,8 +3212,7 @@ var
     recordId: string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
-    if (slMasterableMasters.IndexOf(GetFileName(GetFile(s))) = -1) then iCurrentPlugin := iFolipPluginFile
-    else iCurrentPlugin := iFolipMasterFile;
+    if SameText(OverOrNew, 'Overrides') then iCurrentPlugin := CanOverrideDeterminesPlugin(s, iFolipMasterFile);
     iCurrentPlugin := RefMastersDeterminePlugin(s, iCurrentPlugin);
     recordId := RecordFormIdFileId(s);
 
@@ -4911,14 +4920,14 @@ begin
     Result := newf;
 end;
 
-function GetHighestPossibleOverrideForFile(r: IwbElement; inputFile: IwbFile): IwbElement;
+function GetHighestPossibleOverrideForFile(r: IwbMainRecord; inputFile: IwbFile): IwbElement;
 {
     Gets the highest possible override desired for the given reference and plugin.
 }
 var
     i, iNumOverrides: integer;
     PluginHereFileName, overrideFileName: string;
-    o, masterRecord: IwbElement;
+    o, masterRecord: IwbMainRecord;
     f: IwbFile;
 begin
     PluginHereFileName := GetFileName(inputFile);
@@ -4941,6 +4950,28 @@ begin
         //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
     end;
     Result := WinningOverride(r);
+end;
+
+function CanOverrideInMaster(r: IwbMainRecord): Boolean;
+{
+    Determines if a record can be fully overridden in a master file.
+}
+var
+    fileName: string;
+begin
+    Result := False;
+    fileName := GetFileName(GetFile(WinningOverride(r)));
+    if (slMasterableMasters.IndexOf(fileName) <> -1) then Result := True;
+end;
+
+function CanOverrideDeterminesPlugin(r: IwbMainRecord; inputFile: IwbFile): IwbFile;
+{
+    Returns the
+}
+begin
+    Result := inputFile;
+    if SameText(GetFileName(inputFile), sFolipPluginFileName + '.esp') then Result := iFolipPluginFile;
+    if CanOverrideInMaster(r) then Result := iFolipMasterFile else Result := iFolipPluginFile;
 end;
 
 procedure SortByMasterList(const slMasterList: TStringList; var slListToSort: TStringList;);
