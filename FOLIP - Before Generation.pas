@@ -20,7 +20,8 @@ var
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
     slMainMasters, slFakeStatics: TStringList;
 
-    flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD: IwbElement;
+    flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
+    flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
 
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
 
@@ -1054,7 +1055,7 @@ procedure SpecificRecordEdits;
     Special record modifications to the target plugins
 }
 var
-    flstGroup: IwbGroupRecord;
+    flstGroup, flstGroupMaster: IwbGroupRecord;
 begin
     //Purge FOLIP - Before Generation.esp
     if HasGroup(iFolipPluginFile, 'STAT') then begin
@@ -1117,6 +1118,38 @@ begin
     flRemoveIsFullLOD := Add(flstGroup, 'FLST', True);
     SetEditorID(flRemoveIsFullLOD, 'FOLIP_RemoveIsFullLOD');
     tlFlst.Add(flRemoveIsFullLOD);
+
+    //7
+
+    flstGroupMaster := Add(iFolipMasterFile, 'FLST', True);
+    //Add FOLIP_Overrides formlist
+    flOverridesMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flOverridesMaster, 'FOLIP_Overrides');
+    tlFlst.Add(flOverridesMaster);
+
+    flMultiRefLODMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flMultiRefLODMaster, 'FOLIP_MultiRefLOD');
+    tlFlst.Add(flMultiRefLODMaster);
+
+    flParentsMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flParentsMaster, 'FOLIP_Parents');
+    tlFlst.Add(flParentsMaster);
+
+    flNeverfadesMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flNeverfadesMaster, 'FOLIP_Neverfades');
+    tlFlst.Add(flNeverfadesMaster);
+
+    flDecalsMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flDecalsMaster, 'FOLIP_Decals');
+    tlFlst.Add(flDecalsMaster);
+
+    flFakeStaticsMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flFakeStaticsMaster, 'FOLIP_FakeStatics');
+    tlFlst.Add(flFakeStaticsMaster);
+
+    flRemoveIsFullLODMaster := Add(flstGroup, 'FLST', True);
+    SetEditorID(flRemoveIsFullLODMaster, 'FOLIP_RemoveIsFullLOD');
+    tlFlst.Add(flRemoveIsFullLODMaster);
 end;
 
 procedure AddMastersForRecords;
@@ -1361,7 +1394,7 @@ procedure ProcessOverrideReference(placedReferenceOverride: TJsonObject; ref, wr
 var
     cellRecordId, wrldRecordId, baseFormId, linkedRefRemove, linkedRefAdd, keyword, linkedRef: string;
     bPersistent, bXesp: boolean;
-    i: integer;
+    i, flst: integer;
     rWrld, rCell, rOriginal, rOverride: IwbMainRecord;
     xesp: IwbElement;
     tsLinkedRef: TStrings;
@@ -1430,7 +1463,9 @@ begin
     end;
 
     for i := 0 to Pred(placedReferenceOverride.A['AddRefToMyFormlist'].Count) do begin
-        AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[placedReferenceOverride.A['AddRefToMyFormlist'].S[i]]));
+        flst := StrToInt(placedReferenceOverride.A['AddRefToMyFormlist'].S[i]);
+        if SameText(placedReferenceOverride.S['File'], sFolipMasterFileName) then flst := flst + 7;
+        AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[flst]));
     end;
 end;
 
@@ -1441,7 +1476,7 @@ procedure ProcessNewReference(placedReference: TJsonObject; ref, wrldEdid, cellX
 var
     cellRecordId, wrldRecordId, fakeStatic, fakeStaticFormId, scale, ms, fileHere: string;
     bPersistent, bXesp: boolean;
-    i: integer;
+    i, flst: integer;
     rWrld, rCell, nCell, r: IwbMainRecord;
     xesp: IwbElement;
 begin
@@ -1501,7 +1536,9 @@ begin
     end;
 
     for i := 0 to Pred(placedReference.A['AddRefToMyFormlist'].Count) do begin
-        AddRefToMyFormlist(r, ObjectToElement(tlFlst[placedReference.A['AddRefToMyFormlist'].S[i]]));
+        flst := StrToInt(placedReference.A['AddRefToMyFormlist'].S[i]);
+        if SameText(placedReference.S['File'], sFolipMasterFileName) then flst := flst + 7;
+        AddRefToMyFormlist(r, ObjectToElement(tlFlst[flst]));
     end;
 
     SetElementNativeValues(r, 'DATA\Position\X', placedReference.O['pos'].S['x']);
@@ -1602,7 +1639,8 @@ begin
                 if bHasPersistentReplacer then continue; //Already have a persistent replacer, no need to look for more.
                 if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue; //Only consider static, activator, and texture set for opposite enable parent replacer.
                 if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue; //Only consider references from the first master file (Fallout4.esm) for opposite enable parent replacer.
-                bHasOppositeEnableParent := (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0);
+                if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0)
+                then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
                 if not bHasOppositeEnableParent then continue; //Only consider references that are opposite enable state relative to the parent.
                 bIsPersistent := GetIsPersistent(r);
                 if bHasSuitableReplacer and not bIsPersistent then continue; //If we already have a suitable replacer and this one is not persistent, skip it.
@@ -1613,7 +1651,9 @@ begin
                 continue;
             end;
 
-            bHasOppositeEnableParent := (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0);
+            if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0)
+            then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
+
             if not bHasOppositeEnableParent then begin
                 tlEnableRefs.Add(r);
                 bHasEnableRefs := True;
@@ -1753,7 +1793,8 @@ begin
 
             for oi := Pred(tlEnableRefs.Count) downto 0 do begin
                 r := ObjectToElement(tlEnableRefs[oi]);
-                bIsFullLOD := (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0);
+                if (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0)
+                then bIsFullLOD := true else bIsFullLOD := false;
 
                 OverOrNew := 'Overrides';
                 if (slFakeStatics.IndexOf(RecordFormIdFileId(LinksTo(ElementByPath(r, 'NAME')))) <> -1) then OverOrNew := 'New';
@@ -1995,7 +2036,7 @@ var
     formids, lnam: IwbElement;
     rFormid: string;
 begin
-    Exit; //I need to make formlists for both plugins if I use this.
+    // Exit; //I need to make formlists for both plugins if I use this.
     if not ElementExists(frmlst, 'FormIDs') then begin
         formids := Add(frmlst, 'FormIDs', True);
         lnam := ElementByIndex(formids, 0);
@@ -2045,9 +2086,9 @@ begin
         if bXESP then begin
             xesp := ElementByPath(r, 'XESP');
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
-            bRespect := (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0);
+            if (GetElementNativeValues(parentRef, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then bRespect := True else bRespect := False;
         end;
-        bIsFullLODFlagged := (GetElementNativeValues(r, 'Record Header\Record Flags\Is Full LOD') <> 0);
+        if GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0' then bIsFullLODFlagged := true else bIsFullLODFlagged := false;
         if bIsFullLODFlagged then begin
             if not bXESP then continue;
             if (GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then continue;
@@ -2057,7 +2098,6 @@ begin
         iCurrentPlugin := RefMastersDeterminePlugin(r, iFolipMasterFile);
         iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
         iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
-
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementNativeValues(rCell, 'XCLC\X');
@@ -2186,7 +2226,7 @@ begin
         parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
         parentFormid := IntToHex(GetLoadOrderFormID(parentRef), 8);
         iCurrentPlugin := RefMastersDeterminePlugin(parentRef, iCurrentPlugin);
-        bHasOppositeParent := (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0);
+        if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0) then bHasOppositeParent := True else bHasOppositeParent := False;
         if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
     end else begin
         parentFormid := IntToHex(GetLoadOrderFormID(r), 8);
