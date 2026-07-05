@@ -278,7 +278,6 @@ begin
         joRules.Free;
         joMswpMap.Free;
         joModelMatch.Free;
-        joElements.Free;
         joWinningCells.Free;
 
         //Save user rules
@@ -287,6 +286,10 @@ begin
             joUserRules.SaveToFile(wbDataPath + 'FOLIP\UserRules.json', False, TEncoding.UTF8, True);
         end;
         joUserRules.Free;
+
+        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
+        joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'joElements.json', False, TEncoding.UTF8, True);
+        joElements.Free;
 
         //Save user settings
         AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
@@ -1273,19 +1276,20 @@ begin
                         if bFolipMaster then
                             rWrld := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(wrldRecordId), iCurrentPlugin)
                         else rWrld := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(wrldRecordId), sFolipMasterFileName);
-                        wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
+                        if Assigned(rWrld) then wbCopyElementToFile(rWrld, iCurrentPlugin, False, True);
 
                         //Add cell
                         cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
                         if bFolipMaster then
                             rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                         else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                        nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        if Assigned(rCell) then nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                     end;
 
 
                     //Process Overrides
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Count) downto 0 do begin
+                        bInterior := False;
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Names[r];
 
                         bPersistent := (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref].S['Set Is Persistent'] = '1');
@@ -1298,7 +1302,15 @@ begin
                             bAddedPersistentWorldspaceCell := True;
                         end;
 
-                        if not bInterior then messageHere := 'Processing placed reference override: ' + ref + ' in interior ' + cellRecordId
+                        if bInterior then begin
+                            cellRecordId := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref].S['cellRecordId'];
+                            if bFolipMaster then
+                                rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
+                            else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
+                            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        end;
+
+                        if bInterior then messageHere := 'Processing placed reference override: ' + ref + ' in interior ' + cellRecordId
                         else messageHere := 'Processing placed reference override: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']';
 
                         AddMessage(messageHere);
@@ -1309,7 +1321,11 @@ begin
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Names[r];
                         AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
-                        ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, nCell);
+                        try
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, nCell);
+                        except
+                            AddMessage('Error!!!!!!');
+                        end;
                     end;
                 end;
             end;
@@ -1578,11 +1594,11 @@ procedure ProcessEnableParents;
     Apply LOD Respects Enable State flag to XESP - Enable Parent references.
 }
 var
-    i, pi, oi: integer;
+    i, pi, oi, idx: integer;
 
     p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer, xesp: IwbElement;
 
-    parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid, OverOrNew: string;
+    parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid, OverOrNew, pluginFileNameOriginal: string;
 
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent,
     bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD: boolean;
@@ -1756,8 +1772,13 @@ begin
 
                 if SameText(OverOrNew, 'New') then begin
                     if joElements.O['references'].O[sFolipMasterFileName].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].Contains(recordId)
-                    then iCurrentPlugin := iFolipMasterFile
-                    else iCurrentPlugin := iFolipPluginFile;
+                    then begin
+                        iCurrentPlugin := iFolipMasterFile;
+                        pluginFileNameOriginal := sFolipMasterFileName;
+                    end else begin
+                        iCurrentPlugin := iFolipPluginFile;
+                        pluginFileNameOriginal := sFolipPluginFileName + '.esp';
+                    end;
                 end else iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
 
                 iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
@@ -1765,9 +1786,14 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
-
                 recordId := RecordFormIdFileId(r);
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
+                if ((not SameText(pluginFileNameOriginal, pluginFileNameHere)) and SameText(OverOrNew, 'New')) then begin
+                    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].Assign(
+                        joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId]);
+                    idx := joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].IndexOf(key);
+                    joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].Delete(idx);
+                end;
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP'] := 1;
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := oreplacerFormid;
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['Opposite Enable Parent'] := 0;
@@ -1848,8 +1874,13 @@ begin
 
                     if SameText(OverOrNew, 'New') then begin
                         if joElements.O['references'].O[sFolipMasterFileName].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].Contains(recordId)
-                        then iCurrentPlugin := iFolipMasterFile
-                        else iCurrentPlugin := iFolipPluginFile;
+                        then begin
+                            iCurrentPlugin := iFolipMasterFile;
+                            pluginFileNameOriginal := sFolipMasterFileName;
+                        end else begin
+                            iCurrentPlugin := iFolipPluginFile;
+                            pluginFileNameOriginal := sFolipPluginFileName + '.esp';
+                        end;
                     end else iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
 
                     iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
@@ -1858,6 +1889,12 @@ begin
                     iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
                     pluginFileNameHere := GetFileName(iCurrentPlugin);
+                    if ((not SameText(pluginFileNameOriginal, pluginFileNameHere)) and SameText(OverOrNew, 'New')) then begin
+                        joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].Assign(
+                            joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId]);
+                        idx := joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].IndexOf(key);
+                        joElements.O['references'].O[pluginFileNameOriginal].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].Delete(idx);
+                    end;
                     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP'] := 1;
                     if bCanBeRespected then ereplacerFormid := parentFormid;
                     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].S['XESP Reference'] := ereplacerFormid;
