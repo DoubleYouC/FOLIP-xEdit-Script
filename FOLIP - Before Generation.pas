@@ -2053,12 +2053,12 @@ begin
     end;
 end;
 
-function IsFullLOD(s: IInterface): Boolean;
+function IsFullLOD(s: IwbMainRecord): Boolean;
 var
     model, editorid, recordId, wrldEdid, cellX, cellY: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
-    r, n, rCell, rWrld, parentRef, xesp: IInterface;
+    r, rCell, rWrld, parentRef, xesp: IInterface;
 begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
@@ -2114,7 +2114,7 @@ begin
             joElements.O['references'].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
         end;
 
-        slFullLODMessages.Add('IsFullLOD Reference:' + Name(n));
+        slFullLODMessages.Add('IsFullLOD Reference:' + Name(r));
     end;
 end;
 
