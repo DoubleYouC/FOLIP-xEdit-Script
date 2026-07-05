@@ -1123,32 +1123,32 @@ begin
 
     flstGroupMaster := Add(iFolipMasterFile, 'FLST', True);
     //Add FOLIP_Overrides formlist
-    flOverridesMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flOverridesMaster, 'FOLIP_Overrides');
+    flOverridesMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flOverridesMaster, 'FOLIP_OverridesMaster');
     tlFlst.Add(flOverridesMaster);
 
-    flMultiRefLODMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flMultiRefLODMaster, 'FOLIP_MultiRefLOD');
+    flMultiRefLODMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flMultiRefLODMaster, 'FOLIP_MultiRefLODMaster');
     tlFlst.Add(flMultiRefLODMaster);
 
-    flParentsMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flParentsMaster, 'FOLIP_Parents');
+    flParentsMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flParentsMaster, 'FOLIP_ParentsMaster');
     tlFlst.Add(flParentsMaster);
 
-    flNeverfadesMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flNeverfadesMaster, 'FOLIP_Neverfades');
+    flNeverfadesMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flNeverfadesMaster, 'FOLIP_NeverfadesMaster');
     tlFlst.Add(flNeverfadesMaster);
 
-    flDecalsMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flDecalsMaster, 'FOLIP_Decals');
+    flDecalsMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flDecalsMaster, 'FOLIP_DecalsMaster');
     tlFlst.Add(flDecalsMaster);
 
-    flFakeStaticsMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flFakeStaticsMaster, 'FOLIP_FakeStatics');
+    flFakeStaticsMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flFakeStaticsMaster, 'FOLIP_FakeStaticsMaster');
     tlFlst.Add(flFakeStaticsMaster);
 
-    flRemoveIsFullLODMaster := Add(flstGroup, 'FLST', True);
-    SetEditorID(flRemoveIsFullLODMaster, 'FOLIP_RemoveIsFullLOD');
+    flRemoveIsFullLODMaster := Add(flstGroupMaster, 'FLST', True);
+    SetEditorID(flRemoveIsFullLODMaster, 'FOLIP_RemoveIsFullLODMaster');
     tlFlst.Add(flRemoveIsFullLODMaster);
 end;
 
@@ -2053,7 +2053,7 @@ begin
     end;
 end;
 
-function IsFullLOD(s: IwbMainRecord): Boolean;
+function IsFullLOD(s: IInterface): Boolean;
 var
     model, editorid, recordId, wrldEdid, cellX, cellY: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
