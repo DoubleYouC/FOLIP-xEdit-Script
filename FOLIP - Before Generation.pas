@@ -1499,7 +1499,7 @@ var
     cellRecordId, wrldRecordId, fakeStatic, fakeStaticFormId, scale, ms: string;
     bPersistent, bXesp: boolean;
     i, flst: integer;
-    rWrld, rCell, nCell, r: IwbMainRecord;
+    rWrld, rCell, rNew: IwbMainRecord;
     xesp: IwbElement;
 begin
     {
@@ -1527,49 +1527,49 @@ begin
 
     }
 
-    r := Add(nCell, 'REFR', True);
-    SetIsVisibleWhenDistant(r, (placedReference.S['Visible When Distant'] = '1'));
-    SetIsInitiallyDisabled(r, (placedReference.S['Initially Disabled'] = '1'));
+    rNew := Add(nCell, 'REFR', True);
+    SetIsVisibleWhenDistant(rNew, (placedReference.S['Visible When Distant'] = '1'));
+    SetIsInitiallyDisabled(rNew, (placedReference.S['Initially Disabled'] = '1'));
 
     fakeStatic := placedReference.S['fakeStatic'];
     if fakeStatic <> '' then begin
         fakeStaticFormId := joElements.O['STAT'].O['New'].O[fakeStatic].O[fileHere].S['fakeStaticFormId'];
-        SetElementEditValues(r, 'NAME', fakeStaticFormId);
+        SetElementEditValues(rNew, 'NAME', fakeStaticFormId);
     end;
 
     bXesp := (placedReference.S['XESP'] = '1');
     if bXesp then begin
-        xesp := ElementByPath(r, 'XESP');
+        xesp := ElementByPath(rNew, 'XESP');
         if not Assigned(xesp) then begin
-            xesp := Add(r, 'XESP', True);
+            xesp := Add(rNew, 'XESP', True);
             ElementAssign(xesp, 0, nil, False);
         end;
         SetElementEditValues(xesp, 'Reference', placedReference.S['XESP Reference']);
         SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReference.S['Opposite Enable Parent'] = '1'));
     end;
 
-    SetElementNativeValues(r, 'DATA\Position\X', placedReference.O['pos'].S['x']);
-    SetElementNativeValues(r, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
-    SetElementNativeValues(r, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
-    SetElementNativeValues(r, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
-    SetElementNativeValues(r, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
-    SetElementNativeValues(r, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
+    SetElementNativeValues(rNew, 'DATA\Position\X', placedReference.O['pos'].S['x']);
+    SetElementNativeValues(rNew, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
+    SetElementNativeValues(rNew, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
+    SetElementNativeValues(rNew, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
+    SetElementNativeValues(rNew, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
+    SetElementNativeValues(rNew, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
     scale := placedReference.S['XSCL - Scale'];
     if scale <> '' then begin
-        Add(r, 'XSCL', True);
-        SetElementNativeValues(r, 'XSCL - Scale', scale);
+        Add(rNew, 'XSCL', True);
+        SetElementNativeValues(rNew, 'XSCL - Scale', scale);
     end;
 
     ms := placedReference.S['XMSP - Material Swap'];
     if ms <> '' then begin
-        Add(r, 'XMSP', True);
-        SetElementEditValues(r, 'XMSP - Material Swap', ms);
+        Add(rNew, 'XMSP', True);
+        SetElementEditValues(rNew, 'XMSP - Material Swap', ms);
     end;
 
     for i := 0 to Pred(placedReference.A['AddRefToMyFormlist'].Count) do begin
         flst := StrToInt(placedReference.A['AddRefToMyFormlist'].S[i]);
         if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
-        AddRefToMyFormlist(r, ObjectToElement(tlFlst[flst]));
+        AddRefToMyFormlist(rNew, ObjectToElement(tlFlst[flst]));
     end;
 end;
 
@@ -2058,11 +2058,15 @@ begin
     end;
 end;
 
-procedure AddRefToMyFormlist(const rec, frmlstHere: IwbMainRecord);
+procedure AddRefToMyFormlist(const rec: IwbMainRecord; var frmlstHere: IwbMainRecord);
 var
     formids, lnam: IwbElement;
     rFormid: string;
 begin
+    if not Assigned(rec) then begin
+        AddMessage('Error: Attempted to add a null reference to a formlist.');
+        Exit;
+    end;
     if not ElementExists(frmlstHere, 'FormIDs') then begin
         formids := Add(frmlstHere, 'FormIDs', True);
         lnam := ElementByIndex(formids, 0);
