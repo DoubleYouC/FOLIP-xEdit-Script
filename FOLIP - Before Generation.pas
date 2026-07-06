@@ -1164,6 +1164,7 @@ var
 begin
     for i := 0 to Pred(slMainMasters.Count) do begin
         AddMasterIfMissing(iFolipMasterFile, slMainMasters[i]);
+        AddMasterIfMissing(iFolipPluginFile, slMainMasters[i]);
     end;
     for i := 0 to Pred(slPatchMasters.Count) do begin
         AddMasterIfMissing(iFolipPluginFile, slPatchMasters[i]);
@@ -1321,11 +1322,7 @@ begin
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Names[r];
                         AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
-                        try
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, nCell);
-                        except
-                            AddMessage('Error!!!!!!');
-                        end;
+                        ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, nCell);
                     end;
                 end;
             end;
