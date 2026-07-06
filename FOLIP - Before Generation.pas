@@ -1769,6 +1769,7 @@ begin
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
                 AddMessage(#9 + Name(r));
+                recordId := RecordFormIdFileId(r);
 
                 if SameText(OverOrNew, 'New') then begin
                     if joElements.O['references'].O[sFolipMasterFileName].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].Contains(recordId)
@@ -1786,7 +1787,7 @@ begin
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
-                recordId := RecordFormIdFileId(r);
+
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
                 if ((not SameText(pluginFileNameOriginal, pluginFileNameHere)) and SameText(OverOrNew, 'New')) then begin
                     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O[OverOrNew].O[recordId].Assign(
