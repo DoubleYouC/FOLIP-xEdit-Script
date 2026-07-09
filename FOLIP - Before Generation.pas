@@ -44,6 +44,9 @@ const
     sFolipFileName = 'FOLIP - New LODs.esp';
     sFO4LODGenFileName = 'FO4LODGen.esp';
     sUserSettingsFileName = 'FOLIP\UserSettings.json';
+    sRasterizeGrayScaleToPalette = wbScriptsPath + 'FOLIP\RasterizeGrayScaleToPalette.exe';
+    sOutputDir = wbScriptsPath + 'FOLIP\output';
+    FOLIPTempPath = wbScriptsPath + 'FOLIP\Temp';
 
 // ----------------------------------------------------
 // Main functions and procedures go up immediately below.
@@ -287,8 +290,8 @@ begin
         end;
         joUserRules.Free;
 
-        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
-        joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'joElements.json', False, TEncoding.UTF8, True);
+        EnsureDirectoryExists(sOutputDir +'\');
+        joElements.SaveToFile(sOutputDir + '\joElements.json', False, TEncoding.UTF8, True);
         joElements.Free;
 
         //Save user settings
@@ -332,8 +335,7 @@ begin
     if bSkip then Exit;
 
     //Clear output directory
-    DeleteDirectory(wbScriptsPath + 'FOLIP\output');
-    FOLIPTempPath := wbScriptsPath + 'FOLIP\Temp';
+    DeleteDirectory(sOutputDir);
     DeleteDirectory(FOLIPTempPath);
 
     AddMessage('Collecting assets...');
@@ -395,18 +397,18 @@ begin
 
     DeleteDirectory(FOLIPTempPath);
 
-    EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\');
-    joElements.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'joElements.json', False, TEncoding.UTF8, True);
+    EnsureDirectoryExists(sOutputDir +'\');
+    joElements.SaveToFile(sOutputDir + '\joElements.json', False, TEncoding.UTF8, True);
 
     //Save the plugin.
-    fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipMasterFileName, fmCreate);
+    fs := TFileStream.Create(sOutputDir + '\' + sFolipMasterFileName, fmCreate);
     try
         FileWriteToStream(iFolipMasterfile, fs, 0);
     finally
         fs.Free;
     end;
 
-    fs := TFileStream.Create(wbScriptsPath + 'FOLIP\output\' + sFolipPluginFileName + '.esp', fmCreate);
+    fs := TFileStream.Create(sOutputDir + '\' + sFolipPluginFileName + '.esp', fmCreate);
     try
         FileWriteToStream(iFolipPluginFile, fs, 0);
     finally
@@ -415,17 +417,17 @@ begin
 
     //Save Texgen files
     if bMakeMissingMaterials then begin
-        if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD');
+        if slTexgen_alpha.Count + slTexgen_copy.Count + slTexgen_noalpha.Count > 0 then AddMessage('Saving TexGen files to ' + sOutputDir + '\' + 'DynDOLOD');
         sFolipPluginFileNameSanitized := StripNonAlphanumeric(sFolipPluginFileName) + 'esp';
-        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\');
-        if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
-        if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
-        if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(wbScriptsPath + 'FOLIP\output\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
+        EnsureDirectoryExists(sOutputDir + '\' + 'DynDOLOD\');
+        if slTexgen_alpha.Count > 0 then slTexgen_alpha.SaveToFile(sOutputDir + '\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + sFolipPluginFileNameSanitized + '.txt');
+        if slTexgen_copy.Count > 0 then slTexgen_copy.SaveToFile(sOutputDir + '\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + sFolipPluginFileNameSanitized + '.txt');
+        if slTexgen_noalpha.Count > 0 then slTexgen_noalpha.SaveToFile(sOutputDir + '\' + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + sFolipPluginFileNameSanitized + '.txt');
     end;
 
     //Zip up output for easy installation
     AddMessage('Zipping up output for easy installation...');
-    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
+    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + '\FOLIP Before Generation Output.zip''"';
     AddMessage(cmdline);
     AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
 
@@ -2549,9 +2551,10 @@ function CreateLODMaterialReplacement(om, rm, replacementMat: string; bForceTexG
 }
 var
     ombgsm, rmbgsm, replacementMatbgsm: TwbBGSMFile;
-    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, replacementLodDiffuse, lodDiffuse, lodNormal, lodSpecular, omAuto: string;
+    omDiffuse, omDiffuseNormalized, replacementDiffuse, replacementDiffuseNormalized, replacementNormal, replacementNormalNormalized, replacementSpecular, replacementSpecularNormalized, replacementLodDiffuse,
+    lodDiffuse, lodNormal, lodSpecular, omAuto, paletteScale: string;
     specularMult: float;
-    bLodTextureExists, bOmAutoGenerated: Boolean;
+    bLodTextureExists, bOmAutoGenerated, bGrayscaleToPalette: Boolean;
 begin
     Result := False;
     if not bMakeMissingMaterials then Exit;
@@ -2559,8 +2562,8 @@ begin
     bOmAutoGenerated := False;
 
     if not ResourceExists(om) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + om) then begin
-            omAuto := wbScriptsPath + 'FOLIP\output\' + om;
+        if FileExists(sOutputDir + '\' + om) then begin
+            omAuto := sOutputDir + '\' + om;
             bOmAutoGenerated := True;
         end else begin
             AddMessage(#9 + 'Error: ' + om + ' does not exist.');
@@ -2598,6 +2601,9 @@ begin
             Exit;
         end;
 
+        //Check if this uses Grayscale To Palette
+        bGrayscaleToPalette := (replacementMatbgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
+
         //Get lod diffuse texture of the original material
         omDiffuse := ombgsm.EditValues['Textures\Diffuse'];
         omDiffuseNormalized := wbNormalizeResourceName(omDiffuse, resTexture);
@@ -2609,6 +2615,18 @@ begin
             AddMessage(#9 + 'Replacement material ' + replacementMat + ' uses a diffuse texture that does not exist. Skipping creation of LOD material replacement.');
             Exit;
         end;
+        if bGrayscaleToPalette then begin
+            //Sometimes LOD palette scale will need to be shifted versus the full model's palette scale due to vertex colors.
+            //If this is simply a rasterization of grayscale to palette materials, the om will be equal to the rm.
+            //If the GrayscaleToPaletteColor flag is on, then it is setup to use that palette at a potentially shifted scale.
+            //If both these are true, use the scale from the pre-existing LOD material instead of from the full material.
+            //If GrayscaleToPaletteColor is off, then the material was already rasterized.
+            //TODO: Make rules to shift these when necessary.
+            if (SameText(om, rm) and (ombgsm.EditValues['GrayscaleToPaletteColor'] = 'yes'))
+            then paletteScale := ombgsm.EditValues['GrayscaleToPaletteScale']
+            else paletteScale := replacementMatbgsm.EditValues['GrayscaleToPaletteScale'];
+        end;
+
         replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
 
         //In case the diffuse texture doesn't follow proper naming conventions...
@@ -2678,8 +2696,8 @@ begin
         replacementMatbgsm.EditValues['SkinTint'] := 'no';
         replacementMatbgsm.EditValues['Tessellate'] := 'no';
         replacementMatbgsm.EditValues['SkewSpecularAlpha'] := 'no';
-        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
-        replacementMatbgsm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+        EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(rm));
+        replacementMatbgsm.SaveToFile(sOutputDir + '\' + rm);
         AddMessage(#9 + 'Successfully created LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
         Result := True;
     finally
@@ -2984,8 +3002,8 @@ begin
     bRmAutoGenerated := False;
 
     if not ResourceExists(om) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + om) then begin
-            omScriptsPath := wbScriptsPath + 'FOLIP\output\' + om;
+        if FileExists(sOutputDir + '\' + om) then begin
+            omScriptsPath := sOutputDir + '\' + om;
             bOmAutoGenerated := True;
         end else begin
             AddMessage('Error: ' + om + ' does not exist.');
@@ -2993,8 +3011,8 @@ begin
         end;
     end;
     if not ResourceExists(rm) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + rm) then begin
-            rmScriptsPath := wbScriptsPath + 'FOLIP\output\' + rm;
+        if FileExists(sOutputDir + '\' + rm) then begin
+            rmScriptsPath := sOutputDir + '\' + rm;
             bRmAutoGenerated := True;
         end else begin
             AddMessage('Error: ' + rm + ' does not exist.');
@@ -3015,8 +3033,8 @@ begin
                     if not bMakeMissingMaterials then slMismatchedMaterials.Add('Warning: ' + om + #9 + ' is Two Sided' + #13#10 + #9 + rm + ' should also be Two Sided, but it is not.')
                     else begin
                         bgsmRm.NativeValues['TwoSided'] := bgsmOm.NativeValues['TwoSided'];
-                        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(rm));
-                        bgsmRm.SaveToFile(wbScriptsPath + 'FOLIP\output\' + rm);
+                        EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(rm));
+                        bgsmRm.SaveToFile(sOutputDir + '\' + rm);
                     end;
                 end;
             end;
@@ -3453,6 +3471,7 @@ var
     slArchivedFiles, slVanilla, slModded: TStringList;
     i, total: integer;
     f, fNoLod, archive, tp, fileNameHere, fileNameStripped: string;
+    bRasterized;
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
@@ -3517,6 +3536,7 @@ begin
         total := slArchivedFiles.Count;
         for i := 0 to Pred(total) do begin
             f := slArchivedFiles[i];
+            bRasterized := false;
             try
                 //materials or meshes
                 if IsInLODDir(f, 'materials') then begin
@@ -3525,7 +3545,10 @@ begin
                     fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
                     if (slVanilla.IndexOf(LowerCase(fNoLod)) > -1) and (slModded.IndexOf(LowerCase(fNoLod)) > -1) then begin
                         if ((not ContainsText(LowerCase(fNoLod),'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
+                        //since we opened the files in CompareModdedMaterialToVanilla we took advantage and checked for rasterizing grayscale to palette then.
+                        bRasterized := true;
                     end;
+                    if (bMakeMissingMaterials and (not bRasterized)) then RasterizeMaterial(fNoLod, f);
 
                     if not bReportNonLODMaterials then continue;
                     if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
@@ -3643,7 +3666,7 @@ begin
     end;
 end;
 
-function CompareModdedMaterialToVanilla(f, lodMaterial: string;): Boolean;
+function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 {
     Compares a modded material file to the vanilla material file.
     Returns True if the modded material is different from the vanilla material.
@@ -3654,6 +3677,7 @@ var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
     vanillaContainer: string;
+    bGrayscaleToPalette: boolean;
 begin
     Result := False; //Assume no differences found.
     if not ResourceExists(f) then begin
@@ -3727,6 +3751,8 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
             Result := True;
         end;
+        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        if bGrayscaleToPalette then Result := True;
         if Result then begin
             bgsmLod := TwbBGSMFile.Create;
             try
@@ -3734,11 +3760,7 @@ begin
                     bgsmLod.LoadFromResource(lodMaterial);
                 except on E: Exception do AddMessage(#9 + 'Error loading lod resource ' + lodMaterial + #9 + E.Message);
                 end;
-                if ((bgsmLod.EditValues['GrayscaleToPaletteColor'] = 'no') and (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes')) then begin
-                    AddMessage(#9 + 'Warning: ' + f + ' cannot have an autogenerated matching LOD material created due to its use of Grayscale To Palette Color where its LOD requires a non Grayscale to Palette Color material. It would require manual handling to fix.');
-                    Result := False;
-                end
-                else if bMakeMissingMaterials then CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+                CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
             finally
                 bgsmLod.free;
             end;
@@ -3747,6 +3769,29 @@ begin
         bgsmModded.free;
         bgsmVanilla.free;
     end;
+end;
+
+procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: string);
+{
+    Checks to see
+}
+var
+    bgsm: TwbBGSMFile;
+    bGrayscaleToPalette: boolean;
+    f: string;
+begin
+    if not ResourceExists(NonLODMaterial) then f := LODMaterial;
+    bgsm := TwbBGSMFile.Create;
+    try
+        try
+            bgsm.LoadFromResource(f);
+        except on E: Exception do AddMessage(#9 + 'Error loading resource ' + f + #9 + E.Message);
+        end;
+        bGrayscaleToPalette := (bgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
+    finally
+        bgsm.free;
+    end;
+    if bGrayscaleToPalette then CreateLODMaterialReplacement(LODMaterial, LODMaterial, NonLODMaterial, True);
 end;
 
 function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
@@ -4083,8 +4128,8 @@ begin
     bModelAutoGenerated := False;
 
     if not ResourceExists(model) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + model) then begin
-            modelAuto := wbScriptsPath + 'FOLIP\output\' + model;
+        if FileExists(sOutputDir + '\' + model) then begin
+            modelAuto := sOutputDir + '\' + model;
             bModelAutoGenerated := True;
         end else begin
             AddMessage(#9 + 'Error: ' + model + ' does not exist.');
@@ -4130,8 +4175,8 @@ begin
 
     bModelAutoGenerated := False;
     if not ResourceExists(f) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + f) then begin
-            modelAuto := wbScriptsPath + 'FOLIP\output\' + f;
+        if FileExists(sOutputDir + '\' + f) then begin
+            modelAuto := sOutputDir + '\' + f;
             bModelAutoGenerated := True;
         end else begin
             AddMessage(#9 + 'Error: ' + f + ' does not exist.');
@@ -4153,7 +4198,7 @@ begin
                 end
                 else begin
                     mat := wbNormalizeResourceName(mat, resMaterial);
-                    if not (ResourceExists(mat) or FileExists(wbScriptsPath + 'FOLIP\output\' + mat)) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
+                    if not (ResourceExists(mat) or FileExists(sOutputDir + '\' + mat)) then slMeshCheckMissingMaterials.Add('Error: ' + f + #9 + ' has a specified material that does not seem to exist: ' + #9 + mat);
                     if not ContainsText(ExtractFilePath(mat), 'lod') then slMeshCheckNonLODMaterials.Add('Warning: ' + f + #9 + ' has a specified material that is not in a LOD directory: ' + #9 + mat);
                     slMaterialsFromModel.Add(LowerCase(mat));
                 end;
@@ -4190,8 +4235,8 @@ begin
         end;
     finally
         if bModified then begin
-            EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(f));
-            nif.SaveToFile(wbScriptsPath + 'FOLIP\output\' + f);
+            EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(f));
+            nif.SaveToFile(sOutputDir + '\' + f);
         end;
         nif.free;
     end;
@@ -4222,7 +4267,7 @@ begin
     try
         for i := 0 to Pred(slUsedLODNifFiles.Count) do begin
             f := slUsedLODNifFiles[i];
-            if not (ResourceExists(f) or FileExists(wbScriptsPath + 'FOLIP\output\' + f)) then begin
+            if not (ResourceExists(f) or FileExists(sOutputDir + '\' + f)) then begin
                 slMissingLODNifFiles.Add('Error: ' + f + #9 + ' does not exist.');
                 continue;
             end;
@@ -4433,8 +4478,8 @@ begin
     bHadColorRemap := False;
 
     if not ResourceExists(lodModelNoRemap) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + lodModelNoRemap) then begin
-            lodModelNoRemapAuto := wbScriptsPath + 'FOLIP\output\' + lodModelNoRemap;
+        if FileExists(sOutputDir + '\' + lodModelNoRemap) then begin
+            lodModelNoRemapAuto := sOutputDir + '\' + lodModelNoRemap;
             bModelAutoGenerated := True;
         end else begin
             AddMessage(#9 + 'Error: ' + lodModelNoRemap + ' does not exist. Color remapped LOD model creation aborted.');
@@ -4460,8 +4505,8 @@ begin
             Exit; //No color remap change was created, so exit without saving.
         end;
         //Save the color remapped version of the LOD model.
-        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(lodModelWithRemap));
-        lodModelNoRemapNif.SaveToFile(wbScriptsPath + 'FOLIP\output\' + lodModelWithRemap);
+        EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(lodModelWithRemap));
+        lodModelNoRemapNif.SaveToFile(sOutputDir + '\' + lodModelWithRemap);
         Result := True;
     finally
         lodModelNoRemapNif.Free;
@@ -4482,8 +4527,8 @@ begin
     Result := material;
 
     if not ResourceExists(material) then begin
-        if FileExists(wbScriptsPath + 'FOLIP\output\' + material) then begin
-            materialAuto := wbScriptsPath + 'FOLIP\output\' + material;
+        if FileExists(sOutputDir + '\' + material) then begin
+            materialAuto := sOutputDir + '\' + material;
             bMaterialAutoGenerated := True;
         end else begin
             AddMessage(#9 + 'Error: ' + material + ' does not exist.');
@@ -4497,8 +4542,8 @@ begin
         if materialBGSM.EditValues['GrayscaleToPaletteColor'] <> 'yes' then Exit;
         materialBGSM.EditValues['GrayscaleToPaletteScale'] := TrimRightChars(colorRemap, 1);
         renamedMaterial := TrimLeftChars(material, 5) + colorRemap + '.bgsm';
-        EnsureDirectoryExists(wbScriptsPath + 'FOLIP\output\' + ExtractFilePath(renamedMaterial));
-        materialBGSM.SaveToFile(wbScriptsPath + 'FOLIP\output\' + renamedMaterial);
+        EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(renamedMaterial));
+        materialBGSM.SaveToFile(sOutputDir + '\' + renamedMaterial);
         slMatFiles.Add(renamedMaterial); // Add the newly created color remapped material to the list of materials.
         Result := renamedMaterial;
     finally
