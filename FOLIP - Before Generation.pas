@@ -428,7 +428,7 @@ begin
 
     //Zip up output for easy installation
     AddMessage('Zipping up output for easy installation...');
-    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + '\FOLIP Before Generation Output.zip''"';
+    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
     AddMessage(cmdline);
     AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
 
@@ -2624,11 +2624,10 @@ begin
             //If GrayscaleToPaletteColor is off, then the material was already rasterized.
             //TODO: Make rules to shift these when necessary.
             if (SameText(om, rm) and (ombgsm.EditValues['GrayscaleToPaletteColor'] = 'yes'))
-            then paletteScale := ombgsm.EditValues['GrayscaleToPaletteScale']
-            else paletteScale := replacementMatbgsm.EditValues['GrayscaleToPaletteScale'];
+            then paletteScale := FloatToStr(StrToFloatDef(ombgsm.EditValues['GrayscaleToPaletteScale'], '0'))
+            else paletteScale := FloatToStr(StrToFloatDef(replacementMatbgsm.EditValues['GrayscaleToPaletteScale'], '0'));
             paletteTexture := wbNormalizeResourceName(replacementMatbgsm.EditValues['Textures\Grayscale'], resTexture);
             replacementDiffuseNormalized := CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale);
-            bForceTexGenRedo := true;
         end;
 
         replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
@@ -2712,18 +2711,20 @@ begin
     end;
 end;
 
-function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale): string;
+function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale: string): string;
 var
     diffuse, diffuseNew, palette, outputTexture, cmdline: string;
 begin
     Result := '';
     diffuse := ExtractResourceToTempDirectory(replacementDiffuseNormalized);
     palette := ExtractResourceToTempDirectory(paletteTexture);
+    AddMessage(replacementDiffuseNormalized + #9 + paletteTexture + #9 + paletteScale);
     //textures\path\to\grayscale_d.dds to textures\RasterizedGrayscales\path\to\grayscale_0.937.dds
-    diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5), 'textures\', 'textures\RasterizedGrayscales\', [rfIgnoreCase]) + paletteScale + '_d.dds';
-    outputTexture := sOutputDir + '\' + diffuseNew;
+    diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5),'textures\','textures\RasterizedGrayscales\',[rfIgnoreCase]) + paletteScale + '_d.dds';
+    outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
     cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '"';
+    AddMessage(cmdline);
     ShellExecute(0, 'open', sRasterizeGrayScaleToPalette, cmdline, '', SW_SHOWNORMAL);
     Result := diffuseNew;
 end;
@@ -3677,13 +3678,16 @@ var
 begin
     Result := '';
     try
+
         folder := ExtractFilePath(f);
         filename := ExtractFileName(f);
         outfile := FOLIPTempPath + '\' + folder + filename;
-        container := FetchCurrentContainer(f);
-        EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
-        ResourceCopy(container, f, outfile);
-        Result := FOLIPTempPath + '\' + folder + filename;
+        Result := outfile;
+        if not FileExists(outfile) then begin
+            container := FetchCurrentContainer(f);
+            EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
+            ResourceCopy(container, f, outfile);
+        end;
     except on E: Exception do AddMessage(#9 + 'Error accessing resource ' + f + #9 + E.Message);
     end;
 end;
