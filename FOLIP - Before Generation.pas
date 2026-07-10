@@ -2721,12 +2721,13 @@ begin
     AddMessage(replacementDiffuseNormalized + #9 + paletteTexture + #9 + paletteScale);
     //textures\path\to\grayscale_d.dds to textures\RasterizedGrayscales\path\to\grayscale_0.937.dds
     diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5),'textures\','textures\RasterizedGrayscales\',[rfIgnoreCase]) + paletteScale + '_d.dds';
+    Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
+    if FileExists(outputTexture) then Exit;
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
-    cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '"';
+    cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 dxt5';
     AddMessage(cmdline);
     ShellExecute(0, 'open', sRasterizeGrayScaleToPalette, cmdline, '', SW_SHOWNORMAL);
-    Result := diffuseNew;
 end;
 
 function AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized: string; specularMult: float): Boolean;
@@ -3675,21 +3676,33 @@ function ExtractResourceToTempDirectory(f: string): string;
 }
 var
     container, folder, filename, outfile: string;
+    dds: TBitmap;
 begin
     Result := '';
+    // dds := TBitmap.Create;
+    // try
     try
-
         folder := ExtractFilePath(f);
         filename := ExtractFileName(f);
         outfile := FOLIPTempPath + '\' + folder + filename;
         Result := outfile;
         if not FileExists(outfile) then begin
+            // if SameText(ExtractFileExt(f), '.dds') then begin
+            //     wbDDSResourceToBitmap(f, dds);
+            //     EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
+            //     outfile := TrimLeftChars(outfile, 4) + '.bmp';
+            //     dds.SaveToFile(outfile);
+            // end else begin
             container := FetchCurrentContainer(f);
             EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
             ResourceCopy(container, f, outfile);
+            //end;
         end;
     except on E: Exception do AddMessage(#9 + 'Error accessing resource ' + f + #9 + E.Message);
     end;
+    // finally
+    //     dds.Free;
+    // end;
 end;
 
 function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
@@ -3718,6 +3731,7 @@ begin
     end;
     bgsmModded := TwbBGSMFile.Create;
     bgsmVanilla := TwbBGSMFile.Create;
+    bgsmLod := TwbBGSMFile.Create;
     try
         try
             bgsmModded.LoadFromResource(f);
@@ -3727,6 +3741,11 @@ begin
         try
             bgsmVanilla.LoadFromResource(vanillaContainer, f);
         except on E: Exception do AddMessage(#9 + 'Error loading vanilla resource ' + f + #9 + E.Message);
+        end;
+
+        try
+            bgsmLod.LoadFromResource(lodMaterial);
+        except on E: Exception do AddMessage(#9 + 'Error loading lod resource ' + lodMaterial + #9 + E.Message);
         end;
 
         if bgsmVanilla.NativeValues['UOffset'] <> bgsmModded.NativeValues['UOffset'] then begin
@@ -3777,23 +3796,15 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified GrayscaleToPaletteColor value.');
             Result := True;
         end;
-        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and (bgsmLod.EditValues['GrayscaleToPaletteColor'] = 'yes');
         if bGrayscaleToPalette then Result := True;
         if Result then begin
-            bgsmLod := TwbBGSMFile.Create;
-            try
-                try
-                    bgsmLod.LoadFromResource(lodMaterial);
-                except on E: Exception do AddMessage(#9 + 'Error loading lod resource ' + lodMaterial + #9 + E.Message);
-                end;
-                CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
-            finally
-                bgsmLod.free;
-            end;
+            CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
         end;
     finally
         bgsmModded.free;
         bgsmVanilla.free;
+        bgsmLod.free;
     end;
 end;
 
@@ -3802,16 +3813,25 @@ procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: s
     Checks to see
 }
 var
-    bgsm: TwbBGSMFile;
+    bgsm, bgsmLOD: TwbBGSMFile;
     bGrayscaleToPalette: boolean;
-    f: string;
+    f, paletteScale, stringToReplace: string;
 begin
     f := NonLODMaterial;
-    if not ResourceExists(NonLODMaterial) then begin
-        f := LODMaterial;
-    end;
     bgsm := TwbBGSMFile.Create;
+    bgsmLOD := TwbBGSMFile.Create;
     try
+        try
+            bgsmLOD.LoadFromResource(LODMaterial);
+        except on E: Exception do AddMessage(#9 + 'Error loading resource ' + LODMaterial + #9 + E.Message);
+        end;
+        if not (bgsmLOD.EditValues['GrayscaleToPaletteColor'] = 'yes') then Exit;
+        paletteScale := FloatToStr(StrToFloatDef(bgsmLOD.EditValues['GrayscaleToPaletteScale'], 0));
+        if not ResourceExists(f) then begin
+            stringToReplace := '_' + paletteScale + '.bgsm';
+            f := StringReplace(NonLODMaterial, stringToReplace, '.bgsm', [rfIgnoreCase]);
+            if not ResourceExists(f) then Exit;
+        end;
         try
             bgsm.LoadFromResource(f);
         except on E: Exception do AddMessage(#9 + 'Error loading resource ' + f + #9 + E.Message);
