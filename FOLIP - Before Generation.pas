@@ -2634,11 +2634,10 @@ begin
             if joRasterizeMaterials.Contains(rm) then begin
                 bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor']);
                 paletteScale := Fallback(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'], paletteScale);
-                replacementDiffuseNormalized := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], replacementDiffuseNormalized);
             end;
             if bLodUsesGrayscaleToPalette then begin
                 paletteTexture := wbNormalizeResourceName(replacementMatbgsm.EditValues['Textures\Grayscale'], resTexture);
-                replacementDiffuseNormalized := CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale);
+                replacementDiffuseNormalized := CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
             end;
         end;
 
@@ -2724,7 +2723,7 @@ begin
     end;
 end;
 
-function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale: string): string;
+function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm: string): string;
 var
     diffuse, diffuseNew, palette, outputTexture, cmdline: string;
 begin
@@ -2734,6 +2733,7 @@ begin
     AddMessage(replacementDiffuseNormalized + #9 + paletteTexture + #9 + paletteScale);
     //textures\path\to\grayscale_d.dds to textures\RasterizedGrayscales\path\to\grayscale_0.937.dds
     diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5),'textures\','textures\RasterizedGrayscales\',[rfIgnoreCase]) + paletteScale + '_d.dds';
+    diffuseNew := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], diffuseNew);
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     if FileExists(outputTexture) then Exit;
