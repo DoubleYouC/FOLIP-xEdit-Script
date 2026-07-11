@@ -1284,6 +1284,8 @@ begin
 
                         //Add cell
                         cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
+                        //It is possible for a world to not have a cell at 0,0, but have persistent references that indicate this cell. Fall back to persistent worldspace cell in this case.
+                        if (((cellX = '0') and (cellY = '0')) and SameText(cellRecordID, '')) then cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
                         if bFolipMaster then
                             rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                         else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
@@ -1629,7 +1631,7 @@ begin
             rCell := LinksTo(ElementByIndex(p, 0));
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
-            rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+            rWrld := LinksTo(ElementByIndex(rCell, 0));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
             iCurrentPlugin := CanOverrideDeterminesPlugin(p, iFolipMasterFile);
@@ -1715,7 +1717,7 @@ begin
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
 
-            rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+            rWrld := LinksTo(ElementByIndex(rCell, 0));
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
             iCurrentPlugin := CanOverrideDeterminesPlugin(oppositeEnableParentReplacer, iFolipMasterFile);
@@ -1750,13 +1752,11 @@ begin
                 if (slFakeStatics.IndexOf(RecordFormIdFileId(LinksTo(ElementByPath(r, 'NAME')))) <> -1) then OverOrNew := 'New';
 
                 rCell := LinksTo(ElementByIndex(r, 0));
-                // Skip if in interior cell
-                if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+                if IsInteriorCell(rCell) then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-                // Check for ignored worldspace
-                if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
-                // Check if WRLD inherits LOD from another worldspace
-                if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+                if IsWorldIgnored(rWrld) then continue;
+                if WorldInheritsLOD(rWrld) then continue;
+
 
                 cellX := GetElementEditValues(rCell, 'XCLC\X');
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
@@ -1814,7 +1814,7 @@ begin
 
                 recordId := RecordFormIdFileId(enableParentReplacer);
                 rCell := LinksTo(ElementByIndex(enableParentReplacer, 0));
-                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                rWrld := LinksTo(ElementByIndex(rCell, 0));
                 cellX := GetElementEditValues(rCell, 'XCLC\X');
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
@@ -1853,12 +1853,12 @@ begin
                     AddMessage(#9 + Name(r));
                     rCell := LinksTo(ElementByIndex(r, 0));
                     // Skip if in interior cell
-                    if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+                    if IsInteriorCell(rCell) then continue;
                     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
                     // Check for ignored worldspace
-                    if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+                    if IsWorldIgnored(rWrld) then continue;
                     // Check if WRLD inherits LOD from another worldspace
-                    if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+                    if WorldInheritsLOD(rWrld) then continue;
 
                     cellX := GetElementEditValues(rCell, 'XCLC\X');
                     cellY := GetElementEditValues(rCell, 'XCLC\Y');
@@ -1981,7 +1981,7 @@ begin
                 AddMessage(#9 + Name(r));
 
                 rCell := LinksTo(ElementByIndex(r, 0));
-                rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+                rWrld := LinksTo(ElementByIndex(rCell, 0));
                 cellX := GetElementEditValues(rCell, 'XCLC\X');
                 cellY := GetElementEditValues(rCell, 'XCLC\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
@@ -2065,8 +2065,8 @@ begin
             m := MasterOrSelf(r);
             if not Equals(m, r) then continue;
             if not GetIsPersistent(r) then continue;
-            rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-            if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+            rCell := LinksTo(ElementByIndex(r, 0));
+            if IsInteriorCell(rCell) then continue;
             if ReferencedByCount(r) <> 0 then continue;
             if ElementExists(r, 'VMAD') then continue;
             if ElementExists(r, 'XMPO') then continue;
@@ -2145,10 +2145,10 @@ begin
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         if GetIsCleanDeleted(r) then continue;
-        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
-        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        rCell := LinksTo(ElementByIndex(r, 0));
+        if IsInteriorCell(rCell) then continue;
+        rWrld := LinksTo(ElementByIndex(rCell, 0));
+        if IsWorldIgnored(rWrld) then continue;
 
         bXESP := ElementExists(r, 'XESP');
         if bXESP then begin
@@ -2215,13 +2215,11 @@ begin
                 if not IsWinningOverride(r) then continue;
                 if GetIsDeleted(r) then continue;
                 if GetIsCleanDeleted(r) then continue;
-                rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-                if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+                rCell := LinksTo(ElementByIndex(r, 0));
+                if IsInteriorCell(rCell) then continue;
                 rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-                if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
-
-                // Check if WRLD inherits LOD from another worldspace
-                if (GetElementNativeValues(rWrld, 'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+                if IsWorldIgnored(rWrld) then continue;
+                if WorldInheritsLOD(rWrld) then continue;
 
                 //This reference should get lod if it passes these checks.
                 cnt := cnt + 1;
@@ -2267,8 +2265,8 @@ begin
     bMswp := False;
     iCurrentPlugin := FileByName(joElements.O['STAT'].O['New'].O[fakeStatic].S['File']);
     iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-    rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-    rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+    rCell := LinksTo(ElementByIndex(r, 0));
+    rWrld := LinksTo(ElementByIndex(rCell, 0));
     wrldEdid := GetElementEditValues(rWrld, 'EDID');
     recordId := RecordFormIdFileId(r);
 
@@ -3179,13 +3177,13 @@ begin
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
-        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+        rCell := LinksTo(ElementByIndex(r, 0));
+        if IsInteriorCell(rCell) then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        if IsWorldIgnored(rWrld) then continue;
 
         // Check if WRLD inherits LOD from another worldspace
-        if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+        if WorldInheritsLOD(rWrld) then continue;
 
         //This reference should get lod if it passes these checks.
         cnt := cnt + 1;
@@ -3221,7 +3219,7 @@ begin
         // Check if cell is in an interior cell
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         try
-            if (GetElementNativeValues(rCell, 'DATA - Flags\Is Interior Cell') <> 0) then continue;
+            if IsInteriorCell(rCell) then continue;
         except
             AddMessage('Skipped problem record: '+ GetFileName(rCell) + #9 + Name(rCell));
             continue;
@@ -3229,10 +3227,10 @@ begin
 
         // Check if WRLD is in the ignore list
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        if IsWorldIgnored(rWrld) then continue;
 
         // Check if WRLD inherits LOD from another worldspace
-        if (GetElementNativeValues(rWrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0) then continue;
+        if WorldInheritsLOD(rWrld) then continue;
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementEditValues(rCell, 'XCLC\X');
@@ -5167,6 +5165,24 @@ begin
     finally
         temp.Free;
     end;
+end;
+
+function WorldInheritsLOD(wrld: IwbMainRecord): boolean;
+begin
+    if ElementExists(wrld, 'Parent Worldspace\PNAM - Flags') then
+        Result := (GetElementNativeValues(wrld,'Parent Worldspace\PNAM - Flags\Use LOD Data') <> 0)
+    else
+        Result := (GetElementNativeValues(wrld,'Parent\PNAM - PNAM\Flags\Use LOD Data') <> 0);
+end;
+
+function IsWorldIgnored(wrld: IwbMainRecord): boolean;
+begin
+    Result := Pos(RecordFormIdFileId(wrld), sIgnoredWorldspaces) <> 0;
+end;
+
+function IsInteriorCell(cell: IwbMainRecord): boolean;
+begin
+    Result := (GetElementNativeValues(cell, 'DATA - Flags\Is Interior Cell') <> 0);
 end;
 
 end.
