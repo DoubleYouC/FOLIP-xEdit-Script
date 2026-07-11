@@ -2634,6 +2634,7 @@ begin
             if joRasterizeMaterials.Contains(rm) then begin
                 bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor']);
                 paletteScale := Fallback(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'], paletteScale);
+                replacementDiffuseNormalized := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], replacementDiffuseNormalized);
             end;
             if bLodUsesGrayscaleToPalette then begin
                 paletteTexture := wbNormalizeResourceName(replacementMatbgsm.EditValues['Textures\Grayscale'], resTexture);
