@@ -27,7 +27,7 @@ var
 
     uiScale: integer;
 
-    sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, pluginFileNameHere: string;
+    sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, sIgnoredPlugins, pluginFileNameHere: string;
 
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
@@ -231,6 +231,7 @@ begin
 
         sIgnoredWorldspaces := '';
         sEnableParentFormidExclusions := '';
+        sIgnoredPlugins := '';
 
 
         FetchRules;
@@ -1295,6 +1296,7 @@ begin
                         if bFolipMaster then
                             rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                         else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
+                        if IsInIgnoredPlugin(MasterOrSelf((rCell))) then continue;
                         if Assigned(rCell) then nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                     end;
 
@@ -1477,6 +1479,7 @@ begin
     }
 
     rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
+    if IsInIgnoredPlugin(rOriginal) then Exit;
     rOverride := CopyElementToFileWithVC(rOriginal, iCurrentPlugin);
     SetIsPersistent(rOverride, bPersistent);
     SetIsVisibleWhenDistant(rOverride, (placedReferenceOverride.S['Visible When Distant'] = '1'));
@@ -4022,6 +4025,26 @@ begin
         end;
     end;
 
+    //Ignore plugins
+    j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - Ignore Plugins.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Ignore Plugins File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            key := 'Ignore Plugins';
+            for a := 0 to Pred(sub.A[key].Count) do begin
+                if sIgnoredPlugins = '' then
+                    sIgnoredPlugins := sub.A[key].S[a]
+                else
+                    sIgnoredPlugins := sIgnoredPlugins + ',' + sub.A[key].S[a];
+            end;
+        finally
+            sub.Free;
+            AddMessage('Ignored Plugins: ' + sIgnoredPlugins);
+        end;
+    end;
+
 end;
 
 function AssignLODModels(s: IInterface; joLOD: TJsonObject; var sMissingLodMessage: string): Boolean;
@@ -5236,6 +5259,15 @@ end;
 function IsInteriorCell(cell: IwbMainRecord): boolean;
 begin
     Result := (GetElementNativeValues(cell, 'DATA - Flags\Is Interior Cell') <> 0);
+end;
+
+function IsInIgnoredPlugin(r: IwbMainRecord): boolean;
+var
+    f: string;
+begin
+    Result := False;
+    f := GetFileName(GetFile(r));
+    Result := (Pos(f, sIgnoredPlugins) <> 0);
 end;
 
 end.
