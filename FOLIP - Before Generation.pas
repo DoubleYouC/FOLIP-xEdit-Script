@@ -513,7 +513,7 @@ var
     fImage: TImage;
     gbOptions: TGroupBox;
     chkFakeStatics, chkForceLOD8, chkIgnoreNoLOD, chkReportNonLODMaterials, chkReportUVs, chkMakeMissingMaterials,
-    chkReportMissingLOD, chkRespectEnableMarkers, chkDeepScan: TCheckBox;
+    chkReportMissingLOD, chkRespectEnableMarkers, chkDeepScan, chkForceRasterize: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -652,6 +652,18 @@ begin
             + #13#10 + 'based on file name or nif block.';
         chkDeepScan.ShowHint := True;
 
+        chkForceRasterize := TCheckBox.Create(gbOptions);
+        chkForceRasterize.Parent := gbOptions;
+        chkForceRasterize.Left := chkReportNonLODMaterials.Left + chkReportNonLODMaterials.Width + 16;
+        chkForceRasterize.Top := chkDeepScan.Top;
+        chkForceRasterize.Width := 120;
+        chkForceRasterize.Caption := 'Force Rasterize';
+        chkForceRasterize.Hint := 'Forces rasterization of all grayscale to '
+            + #13#10 + 'palette textures. Generally it is only useful if you'
+            + #13#10 + 'have replaced the vanilla texture archives with vastly'
+            + #13#10 + 'different textures.';
+        chkForceRasterize.ShowHint := True;
+
         chkMakeMissingMaterials := TCheckBox.Create(gbOptions);
         chkMakeMissingMaterials.Parent := gbOptions;
         chkMakeMissingMaterials.Left := chkFakeStatics.Left;
@@ -711,6 +723,7 @@ begin
         chkRespectEnableMarkers.Checked := bRespectEnableMarkers;
         chkMakeMissingMaterials.Checked := bMakeMissingMaterials;
         chkDeepScan.Checked := bDeepScan;
+        chkForceRasterize.Checked := bForceRasterize;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -729,6 +742,7 @@ begin
         bRespectEnableMarkers := chkRespectEnableMarkers.Checked;
         bMakeMissingMaterials := chkMakeMissingMaterials.Checked;
         bDeepScan := chkDeepScan.Checked;
+        bForceRasterize := chkForceRasterize.Checked;
 
     finally
         frm.Free;
