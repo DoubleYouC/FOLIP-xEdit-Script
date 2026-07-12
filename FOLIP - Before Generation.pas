@@ -18,7 +18,7 @@ var
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
-    slMainMasters, slFakeStatics, slAddedTexGenTextures: TStringList;
+    slMainMasters, slFakeStatics, slAddedTexGenTextures, slMissingGrayscaleMaterials: TStringList;
 
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
     flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
@@ -132,6 +132,10 @@ begin
         slOutsideUVRange := TStringList.Create;
         slOutsideUVRange.Sorted := True;
         slOutsideUVRange.Duplicates := dupIgnore;
+
+        slMissingGrayscaleMaterials :=TStringList.Create;
+        slMissingGrayscaleMaterials.Sorted := True;
+        slMissingGrayscaleMaterials.Duplicates := dupIgnore;
 
         slFullLODMessages := TStringList.Create;
         slFullLODMessages.Sorted := True;
@@ -291,6 +295,7 @@ begin
         slPatchMasters.Free;
         slMainMasters.Free;
         slAddedTexGenTextures.Free;
+        slMissingGrayscaleMaterials.Free;
 
         joRules.Free;
         joMswpMap.Free;
@@ -364,6 +369,7 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
+    ListStringsInStringList(slMissingGrayscaleMaterials);
 
     if bSkip then Exit;
 
@@ -3869,7 +3875,10 @@ begin
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
-            then CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+            then begin
+                slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+                CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+            end;
         end;
     finally
         bgsmModded.free;
@@ -3934,8 +3943,10 @@ begin
     // end;
     if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
         CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
-        if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
-            then CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+        if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe))) then begin
+            slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+            CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+        end;
     end;
 end;
 
