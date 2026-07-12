@@ -299,7 +299,7 @@ begin
         EnsureDirectoryExists(sOutputDir +'\');
         joElements.Free;
 
-        //joRasterizeMaterials.SaveToFile(sOutputDir + '\RasterizeMaterials.json', False, TEncoding.UTF8, True);
+        joRasterizeMaterials.SaveToFile(sOutputDir + '\RasterizeMaterials.json', False, TEncoding.UTF8, True);
         joRasterizeMaterials.Free;
 
         //Save user settings
@@ -2642,6 +2642,10 @@ begin
                 paletteTexture := wbNormalizeResourceName(replacementMatbgsm.EditValues['Textures\Grayscale'], resTexture);
                 replacementDiffuseNormalized := CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
             end;
+            joRasterizeMaterials.O[rm].S['Full Material'] := replacementMat;
+            joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor'] := true;
+            joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'] := paletteScale;
+            joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'] := replacementDiffuseNormalized;
         end;
 
         replacementLodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
@@ -2683,6 +2687,7 @@ begin
         replacementMatbgsm.EditValues['Textures\SmoothSpec'] := lodSpecular;
         replacementMatbgsm.EditValues['Textures\Grayscale'] := '';
         replacementMatbgsm.EditValues['SpecularEnabled'] := 'yes';
+        replacementMatbgsm.NativeValues['AlphaTest'] := ombgsm.NativeValues['AlphaTest'];
 
         replacementMatbgsm.EditValues['ScreenSpaceReflections'] := 'no';
         replacementMatbgsm.EditValues['WetnessControlScreenSpaceReflections'] := 'no';
@@ -3732,7 +3737,7 @@ function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
-    vanillaContainer: string;
+    vanillaContainer, stringToReplace, whatItShouldBe: string;
     bGrayscaleToPalette, bLodUsesGrayscaleToPalette: boolean;
 begin
     Result := False; //Assume no differences found.
@@ -3826,6 +3831,10 @@ begin
         if bGrayscaleToPalette then Result := True;
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+            stringToReplace := '_' + paletteScale + '.bgsm';
+            whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
+            if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
+            then CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
         end;
     finally
         bgsmModded.free;
@@ -3841,7 +3850,7 @@ procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: s
 var
     bgsm, bgsmLOD: TwbBGSMFile;
     bGrayscaleToPalette, bLodUsesGrayscaleToPalette: boolean;
-    f, paletteScale, stringToReplace: string;
+    f, paletteScale, stringToReplace, whatItShouldBe: string;
 begin
     f := NonLODMaterial;
     bgsm := TwbBGSMFile.Create;
@@ -3863,7 +3872,12 @@ begin
         if not ResourceExists(f) then begin
             stringToReplace := '_' + paletteScale + '.bgsm';
             f := StringReplace(NonLODMaterial, stringToReplace, '.bgsm', [rfIgnoreCase]);
-            if not ResourceExists(f) then Exit;
+            if not ResourceExists(f) then begin
+                joRasterizeMaterials.O[LODMaterial].S['Full Material'] := '';
+                joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
+                joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
+                Exit;
+            end;
         end;
         try
             bgsm.LoadFromResource(f);
@@ -3873,12 +3887,19 @@ begin
     finally
         bgsm.free;
     end;
+    stringToReplace := '_' + paletteScale + '.bgsm';
+    whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
+
     // if bGrayscaleToPalette and not bLodUsesGrayscaleToPalette then begin
     //     joRasterizeMaterials.O[LODMaterial].S['Full Material'] := f;
     //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
     //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
     // end;
-    if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+    if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
+        CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+        if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
+            then CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+    end;
 end;
 
 function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
