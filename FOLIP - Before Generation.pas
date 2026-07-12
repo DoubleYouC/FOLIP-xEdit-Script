@@ -31,7 +31,7 @@ var
 
     bFakeStatics, bForceLOD8, bReportMissingLOD, bReportUVs, bReportNonLODMaterials, bSaveUserRules, bUserRulesChanged, bRespectEnableMarkers,
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
-    bPreviousBeforeGenerationPresent, bDeepScan: Boolean;
+    bPreviousBeforeGenerationPresent, bDeepScan, bForceRasterize: Boolean;
 
     joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements, joWinningCells, joRasterizeMaterials: TJsonObject;
 
@@ -48,10 +48,40 @@ const
     sOutputDir = wbScriptsPath + 'FOLIP\output';
     FOLIPTempPath = wbScriptsPath + 'FOLIP\Temp';
     texconv = wbScriptsPath + 'Texconvx64.exe';
-    sVanillaTextureArchives = 'Fallout4 - Startup.ba2, Fallout4 - Textures.ba2, Fallout4 - Textures1.ba2, Fallout4 - Textures2.ba2, Fallout4 - Textures3.ba2,' +
-    ' Fallout4 - Textures4.ba2, Fallout4 - Textures5.ba2, Fallout4 - Textures6.ba2, Fallout4 - Textures7.ba2, Fallout4 - Textures8.ba2, Fallout4 - Textures9.ba2,' +
-    ' Fallout4 - TexturesPatch.ba2, DLCworkshop03 - Textures.ba2, DLCworkshop02 - Textures.ba2, DLCworkshop01 - Textures.ba2, DLCRobot - Textures.ba2,' +
-    ' DLCNukaWorld - Textures.ba2, DLCCoast - Textures.ba2';
+    sVanillaTextureArchives = 'Fallout4 - Startup.ba2,' +
+    ' Fallout4 - Textures.ba2,' +
+    ' Fallout4 - Textures1.ba2,' +
+    ' Fallout4 - Textures2.ba2,' +
+    ' Fallout4 - Textures3.ba2,' +
+    ' Fallout4 - Textures4.ba2,' +
+    ' Fallout4 - Textures5.ba2,' +
+    ' Fallout4 - Textures6.ba2,' +
+    ' Fallout4 - Textures7.ba2,' +
+    ' Fallout4 - Textures8.ba2,' +
+    ' Fallout4 - Textures9.ba2,' +
+    ' Fallout4 - TexturesPatch.ba2,' +
+    ' DLCworkshop03 - Textures.ba2,' +
+    ' DLCworkshop02 - Textures.ba2,' +
+    ' DLCworkshop01 - Textures.ba2,' +
+    ' DLCRobot - Textures.ba2,' +
+    ' DLCNukaWorld - Textures.ba2,' +
+    ' DLCCoast - Textures.ba2,' +
+    ' DLCUltraHighResolution - Textures01.ba2,' +
+    ' DLCUltraHighResolution - Textures02.ba2,' +
+    ' DLCUltraHighResolution - Textures03.ba2,' +
+    ' DLCUltraHighResolution - Textures04.ba2,' +
+    ' DLCUltraHighResolution - Textures05.ba2,' +
+    ' DLCUltraHighResolution - Textures06.ba2,' +
+    ' DLCUltraHighResolution - Textures07.ba2,' +
+    ' DLCUltraHighResolution - Textures08.ba2,' +
+    ' DLCUltraHighResolution - Textures09.ba2,' +
+    ' DLCUltraHighResolution - Textures10.ba2,' +
+    ' DLCUltraHighResolution - Textures11.ba2,' +
+    ' DLCUltraHighResolution - Textures12.ba2,' +
+    ' DLCUltraHighResolution - Textures13.ba2,' +
+    ' DLCUltraHighResolution - Textures14.ba2,' +
+    ' DLCUltraHighResolution - Textures15.ba2,' +
+    ' DLCUltraHighResolution - Textures16.ba2';
 
 // ----------------------------------------------------
 // Main functions and procedures go up immediately below.
@@ -197,8 +227,10 @@ begin
                 bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
                 bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'True'));
                 bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
+                bForceRasterize := StrToBool(joUserSettings.S['ForceRasterize']);
 
                 iSleepTime := StrToInt(Fallback(joUserSettings.S['SleepTime'], 75));
+
                 bLoadDefaults := False;
             except
                 AddMessage('User settings are incomplete. Loading defaults.');
@@ -229,6 +261,7 @@ begin
             bRemoveVWD := True;
             bSkipPrecombined := True;
             bRemoveBeforeGeneration := False;
+            bForceRasterize := False;
 
             //Sleep Time after launching RasterizeGrayscaleToPalette. Could be useful if it is stressing the user's machine too much.
             iSleepTime := 75;
@@ -335,6 +368,7 @@ begin
         joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
         joUserSettings.S['MakeMissingMaterials'] := BoolToStr(bMakeMissingMaterials);
         joUserSettings.S['SleepTime'] := iSleepTime;
+        joUserSettings.S['ForceRasterize'] := BoolToStr(bForceRasterize);
 
         joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
         joUserSettings.Free;
@@ -2764,6 +2798,7 @@ end;
 function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm: string): string;
 var
     diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName, paletteTextureContainer, diffuseTextureContainer: string;
+    bTexturesAreVanilla: boolean;
 begin
     Result := '';
     diffuse := ExtractResourceToTempDirectory(replacementDiffuseNormalized);
@@ -2776,12 +2811,13 @@ begin
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     if FileExists(outputTexture) then Exit;
-    if ResourceExists(diffuseNew) then begin
+    if ((not bForceRasterize) and ResourceExists(diffuseNew)) then begin
         //If this was a already provided rasterized diffuse texture, check to see if we need to regenerate it to match current modded textures.
         paletteTextureContainer := FetchCurrentContainer(paletteTexture);
         diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
         //If both the diffuse and palette texture are vanilla textures, then no need to regenerate the texture.
-        if ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0)) then Exit;
+        bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
+        if bTexturesAreVanilla then Exit;
     end;
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
     cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 BC3_UNORM';
@@ -3595,6 +3631,7 @@ begin
             if ContainsText(archive, ' - Voices_pl.ba2') then continue;
             if ContainsText(archive, ' - Voices_ptbr.ba2') then continue;
             if ContainsText(archive, ' - Voices_ru.ba2') then continue;
+            if ContainsText(archive, 'DLCUltraHighResolution - Textures') then continue;
             if archive <> '' then AddMessage('Loaded archive: ' + archive);
 
             //Check if the archive is a vanilla archive.
@@ -3776,10 +3813,11 @@ function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
-    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale: string;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette: boolean;
+    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture, paletteTextureContainer, diffuseTextureContainer: string;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists, bTexturesAreVanilla: boolean;
 begin
     Result := False; //Assume no differences found.
+    bRuleExists := False;
     if not ResourceExists(f) then begin
         AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
         Exit;
@@ -3833,7 +3871,8 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified TwoSided value.');
             Result := True;
         end;
-        if bgsmVanilla.EditValues['Textures\Diffuse'] <> bgsmModded.EditValues['Textures\Diffuse'] then begin
+        diffuseTexture := bgsmModded.EditValues['Textures\Diffuse'];
+        if bgsmVanilla.EditValues['Textures\Diffuse'] <> diffuseTexture then begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Diffuse texture.');
             Result := True;
         end;
@@ -3845,7 +3884,8 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Specular texture.');
             Result := True;
         end;
-        if bgsmVanilla.EditValues['Textures\Grayscale'] <> bgsmModded.EditValues['Textures\Grayscale'] then begin
+        paletteTexture := bgsmModded.EditValues['Textures\Grayscale'];
+        if bgsmVanilla.EditValues['Textures\Grayscale'] <> paletteTexture then begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Grayscale palette texture.');
             Result := True;
         end;
@@ -3860,17 +3900,37 @@ begin
         bLodUsesGrayscaleToPalette := (bgsmLOD.EditValues['GrayscaleToPaletteColor'] = 'yes');
         if joRasterizeMaterials.Contains(LODMaterial) then begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
+            bRuleExists := true;
         end;
-        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and (bgsmLod.EditValues['GrayscaleToPaletteColor'] = 'yes');
-        if (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and not bLodUsesGrayscaleToPalette then begin
+        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        if (bGrayscaleToPalette and (not bLodUsesGrayscaleToPalette) and (not bRuleExists)) then begin
             joRasterizeMaterials.O[LODMaterial].S['Full Material'] := f;
             joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
             joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
         end;
-        if bGrayscaleToPalette then Result := True;
+        if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
+            if (not bForceRasterize) then begin
+                diffuseTexture := wbNormalizeResourceName(diffuseTexture, resTexture);
+                paletteTexture := wbNormalizeResourceName(paletteTexture, resTexture);
+                paletteTextureContainer := FetchCurrentContainer(paletteTexture);
+                diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
+                //If both the diffuse and palette texture are vanilla textures, then no need to regenerate the texture.
+                bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
+                if (not bTexturesAreVanilla) then Result := True;
+            end else Result := True;
+        end;
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
 
+            paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
+            stringToReplace := '_' + paletteScale + '.bgsm';
+            whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
+            if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
+            then begin
+                slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+                CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+            end;
+        end else if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
@@ -3893,10 +3953,11 @@ procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: s
 }
 var
     bgsm, bgsmLOD: TwbBGSMFile;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette: boolean;
-    f, paletteScale, stringToReplace, whatItShouldBe: string;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bTexturesAreVanilla: boolean;
+    f, paletteScale, stringToReplace, whatItShouldBe, paletteTexture, diffuseTexture, paletteTextureContainer, diffuseTextureContainer: string;
 begin
     f := NonLODMaterial;
+    bTexturesAreVanilla := False;
     bgsm := TwbBGSMFile.Create;
     bgsmLOD := TwbBGSMFile.Create;
     try
@@ -3929,6 +3990,15 @@ begin
         end;
         bGrayscaleToPalette := (bgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
         paletteScale := FloatToStr(StrToFloatDef(bgsm.EditValues['GrayscaleToPaletteScale'], paletteScale));
+        if not bForceRasterize then begin
+            paletteTexture := bgsm.EditValues['Textures\Grayscale'];
+            diffuseTexture := bgsm.EditValues['Textures\Diffuse'];
+            diffuseTexture := wbNormalizeResourceName(diffuseTexture, resTexture);
+            paletteTexture := wbNormalizeResourceName(paletteTexture, resTexture);
+            paletteTextureContainer := FetchCurrentContainer(paletteTexture);
+            diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
+            bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
+        end;
     finally
         bgsm.free;
     end;
@@ -3942,7 +4012,7 @@ begin
     //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
     // end;
     if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
-        CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+        if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
         if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe))) then begin
             slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
             CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
