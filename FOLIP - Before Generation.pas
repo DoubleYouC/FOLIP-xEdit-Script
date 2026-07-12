@@ -3737,7 +3737,7 @@ function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
-    vanillaContainer, stringToReplace, whatItShouldBe: string;
+    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale: string;
     bGrayscaleToPalette, bLodUsesGrayscaleToPalette: boolean;
 begin
     Result := False; //Assume no differences found.
@@ -3831,6 +3831,8 @@ begin
         if bGrayscaleToPalette then Result := True;
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+
+            paletteScale := bgsmLod.EditValues['GrayscaleToPaletteScale'];
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
