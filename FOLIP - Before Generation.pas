@@ -49,7 +49,6 @@ const
     FOLIPTempPath = wbScriptsPath + 'FOLIP\Temp';
     texconv = wbScriptsPath + 'Texconvx64.exe';
     sVanillaTextureArchives = 'Fallout4 - Startup.ba2,' +
-    ' Fallout4 - Textures.ba2,' +
     ' Fallout4 - Textures1.ba2,' +
     ' Fallout4 - Textures2.ba2,' +
     ' Fallout4 - Textures3.ba2,' +
@@ -229,7 +228,7 @@ begin
                 bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
                 bForceRasterize := StrToBool(joUserSettings.S['ForceRasterize']);
 
-                iSleepTime := StrToInt(Fallback(joUserSettings.S['SleepTime'], 75));
+                iSleepTime := StrToInt(Fallback(joUserSettings.S['SleepTime'], 100));
 
                 bLoadDefaults := False;
             except
@@ -264,7 +263,7 @@ begin
             bForceRasterize := False;
 
             //Sleep Time after launching RasterizeGrayscaleToPalette. Could be useful if it is stressing the user's machine too much.
-            iSleepTime := 75;
+            iSleepTime := 100;
         end;
 
         //Used to tell the Rule Editor whether or not to save changes.
@@ -2811,8 +2810,7 @@ end;
 
 function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm: string): string;
 var
-    diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName, paletteTextureContainer, diffuseTextureContainer: string;
-    bTexturesAreVanilla: boolean;
+    diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName: string;
 begin
     Result := '';
     diffuse := ExtractResourceToTempDirectory(replacementDiffuseNormalized);
@@ -2825,14 +2823,8 @@ begin
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     if FileExists(outputTexture) then Exit;
-    if ((not bForceRasterize) and ResourceExists(diffuseNew)) then begin
-        //If this was a already provided rasterized diffuse texture, check to see if we need to regenerate it to match current modded textures.
-        paletteTextureContainer := FetchCurrentContainer(paletteTexture);
-        diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
-        //If both the diffuse and palette texture are vanilla textures, then no need to regenerate the texture.
-        bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
-        if bTexturesAreVanilla then Exit;
-    end;
+    if not bForceRasterize then if ResourceExists(diffuseNew) then if GrayscalePaletteTexturesVanilla(paletteTexture, replacementDiffuseNormalized) then Exit;
+    AddMessage('Creating Rasterized Diffuse Texture: ' + #9 + diffuseNew);
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
     cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 BC3_UNORM';
     AddMessage(cmdline);
@@ -3827,8 +3819,8 @@ function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
-    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture, paletteTextureContainer, diffuseTextureContainer: string;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists, bTexturesAreVanilla: boolean;
+    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture: string;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists: boolean;
 begin
     Result := False; //Assume no differences found.
     bRuleExists := False;
@@ -3926,11 +3918,7 @@ begin
             if (not bForceRasterize) then begin
                 diffuseTexture := wbNormalizeResourceName(diffuseTexture, resTexture);
                 paletteTexture := wbNormalizeResourceName(paletteTexture, resTexture);
-                paletteTextureContainer := FetchCurrentContainer(paletteTexture);
-                diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
-                //If both the diffuse and palette texture are vanilla textures, then no need to regenerate the texture.
-                bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
-                if (not bTexturesAreVanilla) then Result := True;
+                if (not GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture)) then Result := True;
             end else Result := True;
         end;
         if Result then begin
@@ -3968,7 +3956,7 @@ procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: s
 var
     bgsm, bgsmLOD: TwbBGSMFile;
     bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bTexturesAreVanilla: boolean;
-    f, paletteScale, stringToReplace, whatItShouldBe, paletteTexture, diffuseTexture, paletteTextureContainer, diffuseTextureContainer: string;
+    f, paletteScale, stringToReplace, whatItShouldBe, paletteTexture, diffuseTexture: string;
 begin
     f := NonLODMaterial;
     bTexturesAreVanilla := False;
@@ -4009,9 +3997,7 @@ begin
             diffuseTexture := bgsm.EditValues['Textures\Diffuse'];
             diffuseTexture := wbNormalizeResourceName(diffuseTexture, resTexture);
             paletteTexture := wbNormalizeResourceName(paletteTexture, resTexture);
-            paletteTextureContainer := FetchCurrentContainer(paletteTexture);
-            diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
-            bTexturesAreVanilla := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
+            bTexturesAreVanilla := GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture)
         end;
     finally
         bgsm.free;
@@ -5421,6 +5407,15 @@ begin
     Result := False;
     f := GetFileName(GetFile(r));
     Result := (Pos(f, sIgnoredPlugins) <> 0);
+end;
+
+function GrayscalePaletteTexturesModified(paletteTexture, diffuseTexture): boolean;
+var
+    paletteTextureContainer, diffuseTextureContainer: string;
+begin
+    paletteTextureContainer := ExtractFileName(FetchCurrentContainer(paletteTexture));
+    diffuseTextureContainer := ExtractFileName(FetchCurrentContainer(diffuseTexture));
+    Result := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
 end;
 
 end.
