@@ -3834,7 +3834,7 @@ begin
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
 
-            paletteScale := FloatToStr(StrToFloatDef(bgsmLOD.EditValues['GrayscaleToPaletteScale'], 0));
+            paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
@@ -3888,9 +3888,11 @@ begin
         except on E: Exception do AddMessage(#9 + 'Error loading resource ' + f + #9 + E.Message);
         end;
         bGrayscaleToPalette := (bgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        paletteScale := FloatToStr(StrToFloatDef(bgsm.EditValues['GrayscaleToPaletteScale'], paletteScale));
     finally
         bgsm.free;
     end;
+
     stringToReplace := '_' + paletteScale + '.bgsm';
     whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
 
