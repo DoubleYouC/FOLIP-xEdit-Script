@@ -1497,7 +1497,7 @@ begin
         tsLinkedRef := SplitString(linkedRefAdd, '|');
         keyword := tsLinkedRef[0];
         linkedRef := tsLinkedRef[1];
-        AddLinkedReference(n, keyword, linkedRef);
+        AddLinkedReference(rOverride, keyword, linkedRef);
     end;
 
     bXesp := (placedReferenceOverride.S['XESP'] = '1');
@@ -3825,11 +3825,11 @@ begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
         end;
         bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and (bgsmLod.EditValues['GrayscaleToPaletteColor'] = 'yes');
-        // if bGrayscaleToPalette and not bLodUsesGrayscaleToPalette then begin
-        //     joRasterizeMaterials.O[LODMaterial].S['Full Material'] := f;
-        //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
-        //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
-        // end;
+        if (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and not bLodUsesGrayscaleToPalette then begin
+            joRasterizeMaterials.O[LODMaterial].S['Full Material'] := f;
+            joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
+            joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
+        end;
         if bGrayscaleToPalette then Result := True;
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
