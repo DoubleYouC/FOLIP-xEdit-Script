@@ -48,6 +48,10 @@ const
     sOutputDir = wbScriptsPath + 'FOLIP\output';
     FOLIPTempPath = wbScriptsPath + 'FOLIP\Temp';
     texconv = wbScriptsPath + 'Texconvx64.exe';
+    sVanillaTextureArchives = 'Fallout4 - Startup.ba2, Fallout4 - Textures.ba2, Fallout4 - Textures1.ba2, Fallout4 - Textures2.ba2, Fallout4 - Textures3.ba2,' +
+    ' Fallout4 - Textures4.ba2, Fallout4 - Textures5.ba2, Fallout4 - Textures6.ba2, Fallout4 - Textures7.ba2, Fallout4 - Textures8.ba2, Fallout4 - Textures9.ba2,' +
+    ' Fallout4 - TexturesPatch.ba2, DLCworkshop03 - Textures.ba2, DLCworkshop02 - Textures.ba2, DLCworkshop01 - Textures.ba2, DLCRobot - Textures.ba2,' +
+    ' DLCNukaWorld - Textures.ba2, DLCCoast - Textures.ba2';
 
 // ----------------------------------------------------
 // Main functions and procedures go up immediately below.
@@ -2753,7 +2757,7 @@ end;
 
 function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm: string): string;
 var
-    diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName: string;
+    diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName, paletteTextureContainer, diffuseTextureContainer: string;
 begin
     Result := '';
     diffuse := ExtractResourceToTempDirectory(replacementDiffuseNormalized);
@@ -2766,6 +2770,13 @@ begin
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     if FileExists(outputTexture) then Exit;
+    if ResourceExists(diffuseNew) then begin
+        //If this was a already provided rasterized diffuse texture, check to see if we need to regenerate it to match current modded textures.
+        paletteTextureContainer := FetchCurrentContainer(paletteTexture);
+        diffuseTextureContainer := FetchCurrentContainer(paletteTexture);
+        //If both the diffuse and palette texture are vanilla textures, then no need to regenerate the texture.
+        if ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0)) then Exit;
+    end;
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
     cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 BC3_UNORM';
     AddMessage(cmdline);
@@ -3889,7 +3900,7 @@ begin
         if joRasterizeMaterials.Contains(LODMaterial) then begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
             paletteScale := Fallback(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'], paletteScale);
-            f := joRasterizeMaterials.O[LODMaterial].S['Full Material'];
+            f := LowerCase(joRasterizeMaterials.O[LODMaterial].S['Full Material']);
         end;
         if not bLodUsesGrayscaleToPalette then Exit;
 
