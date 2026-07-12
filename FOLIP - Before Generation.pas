@@ -25,7 +25,7 @@ var
 
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
 
-    uiScale: integer;
+    uiScale, iSleepTime: integer;
 
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, sIgnoredPlugins, pluginFileNameHere: string;
 
@@ -189,6 +189,8 @@ begin
                 bAddVWD := StrToBool(joUserSettings.S['AddVWD']);
                 bSkipPrecombined := StrToBool(Fallback(joUserSettings.S['SkipPrecombined'], 'True'));
                 bRemoveBeforeGeneration := StrToBool(joUserSettings.S['RemoveBeforeGeneration']);
+
+                iSleepTime := StrToInt(Fallback(joUserSettings.S['SleepTime'], 75));
                 bLoadDefaults := False;
             except
                 AddMessage('User settings are incomplete. Loading defaults.');
@@ -219,6 +221,9 @@ begin
             bRemoveVWD := True;
             bSkipPrecombined := True;
             bRemoveBeforeGeneration := False;
+
+            //Sleep Time after launching RasterizeGrayscaleToPalette. Could be useful if it is stressing the user's machine too much.
+            iSleepTime := 75;
         end;
 
         //Used to tell the Rule Editor whether or not to save changes.
@@ -320,6 +325,7 @@ begin
         joUserSettings.S['SkipPrecombined'] := BoolToStr(bSkipPrecombined);
         joUserSettings.S['RemoveBeforeGeneration'] := BoolToStr(bRemoveBeforeGeneration);
         joUserSettings.S['MakeMissingMaterials'] := BoolToStr(bMakeMissingMaterials);
+        joUserSettings.S['SleepTime'] := iSleepTime;
 
         joUserSettings.SaveToFile(wbDataPath + sUserSettingsFileName, False, TEncoding.UTF8, True);
         joUserSettings.Free;
@@ -457,7 +463,7 @@ function MainMenuForm: Boolean;
 var
     frm: TForm;
     btnRuleEditor, btnStart, btnCancel: TButton;
-    edPluginName: TEdit;
+    edPluginName, edSleepTime: TEdit;
     pnl: TPanel;
     picFolip: TPicture;
     fImage: TImage;
@@ -537,32 +543,23 @@ begin
             + #13#10 + 'increasing the fBlockLevel0Distance.';
         chkForceLOD8.ShowHint := True;
 
-
-
-        chkReportNonLODMaterials := TCheckBox.Create(gbOptions);
-        chkReportNonLODMaterials.Parent := gbOptions;
-        chkReportNonLODMaterials.Left := 16;
-        chkReportNonLODMaterials.Top := chkForceLOD8.Top + 30;
-        chkReportNonLODMaterials.Width := 120;
-        chkReportNonLODMaterials.Caption := 'Report Materials';
-        chkReportNonLODMaterials.Hint := 'Adds various warnings for debugging LOD materials.';
-        chkReportNonLODMaterials.ShowHint := True;
-
-        chkReportUVs := TCheckBox.Create(gbOptions);
-        chkReportUVs.Parent := gbOptions;
-        chkReportUVs.Left := chkReportNonLODMaterials.Left + chkReportNonLODMaterials.Width + 16;
-        chkReportUVs.Top := chkReportNonLODMaterials.Top;
-        chkReportUVs.Width := 120;
-        chkReportUVs.Caption := 'Report UVs';
-        chkReportUVs.Hint := 'Adds warnings to LOD meshes that appear to be'
-            + #13#10 + 'outside the 0 to 1 UV range. This is for information'
-            + #13#10 + 'purposes only and has no visual benefit.';
-        chkReportUVs.ShowHint := True;
+        edSleepTime := TEdit.Create(gbOptions);
+        edSleepTime.Parent := gbOptions;
+        edSleepTime.Name := 'edSleepTime';
+        edSleepTime.Left := 104;
+        edSleepTime.Top := edPluginName.Top + 30;
+        edSleepTime.Width := 180;
+        edSleepTime.Hint := 'Sets the sleep time (milliseconds) between consecutive launches'
+            + #13#10 + 'of RasterizeGrayscaleToPalette. Reduces CPU load at the expense of'
+            + #13#10 + 'generation time. Increase to around 1000 or so if this is'
+            + #13#10 + 'causing your PC to slow down too much during generation.';
+        edSleepTime.ShowHint := True;
+        CreateLabel(gbOptions, 16, edSleepTime.Top + 4, 'Sleep Time:');
 
         chkRespectEnableMarkers := TCheckBox.Create(gbOptions);
         chkRespectEnableMarkers.Parent := gbOptions;
         chkRespectEnableMarkers.Left := chkFakeStatics.Left;
-        chkRespectEnableMarkers.Top := chkReportUVs.Top;
+        chkRespectEnableMarkers.Top := chkForceLOD8.Top + 30;
         chkRespectEnableMarkers.Width := 200;
         chkRespectEnableMarkers.Caption := 'Respect Enable Parents';
         chkRespectEnableMarkers.Hint := 'Adds LOD Respects State Flag to relevant'
@@ -581,10 +578,40 @@ begin
             + #13#10 + 'will ignore it and use LOD if available.';
         chkIgnoreNoLOD.ShowHint := True;
 
+        chkReportNonLODMaterials := TCheckBox.Create(gbOptions);
+        chkReportNonLODMaterials.Parent := gbOptions;
+        chkReportNonLODMaterials.Left := 16;
+        chkReportNonLODMaterials.Top := chkRespectEnableMarkers.Top + 30;
+        chkReportNonLODMaterials.Width := 120;
+        chkReportNonLODMaterials.Caption := 'Report Materials';
+        chkReportNonLODMaterials.Hint := 'Adds various warnings for debugging LOD materials.';
+        chkReportNonLODMaterials.ShowHint := True;
+
+        chkReportUVs := TCheckBox.Create(gbOptions);
+        chkReportUVs.Parent := gbOptions;
+        chkReportUVs.Left := chkReportNonLODMaterials.Left + chkReportNonLODMaterials.Width + 16;
+        chkReportUVs.Top := chkReportNonLODMaterials.Top;
+        chkReportUVs.Width := 120;
+        chkReportUVs.Caption := 'Report UVs';
+        chkReportUVs.Hint := 'Adds warnings to LOD meshes that appear to be'
+            + #13#10 + 'outside the 0 to 1 UV range. This is for information'
+            + #13#10 + 'purposes only and has no visual benefit.';
+        chkReportUVs.ShowHint := True;
+
+        chkDeepScan := TCheckBox.Create(gbOptions);
+        chkDeepScan.Parent := gbOptions;
+        chkDeepScan.Left := chkReportNonLODMaterials.Left;
+        chkDeepScan.Top := chkReportUVs.Top + 30;
+        chkDeepScan.Width := 150;
+        chkDeepScan.Caption := 'Deep Scan';
+        chkDeepScan.Hint := 'Attempts to find more LOD models'
+            + #13#10 + 'based on file name or nif block.';
+        chkDeepScan.ShowHint := True;
+
         chkMakeMissingMaterials := TCheckBox.Create(gbOptions);
         chkMakeMissingMaterials.Parent := gbOptions;
-        chkMakeMissingMaterials.Left := chkReportNonLODMaterials.Left;
-        chkMakeMissingMaterials.Top := chkReportUVs.Top + 30;
+        chkMakeMissingMaterials.Left := chkFakeStatics.Left;
+        chkMakeMissingMaterials.Top := chkReportUVs.Top;
         chkMakeMissingMaterials.Width := 200;
         chkMakeMissingMaterials.Caption := 'Auto Generate Missing Materials';
         chkMakeMissingMaterials.Hint := 'Missing LOD materials will be'
@@ -594,23 +621,13 @@ begin
         chkReportMissingLOD := TCheckBox.Create(gbOptions);
         chkReportMissingLOD.Parent := gbOptions;
         chkReportMissingLOD.Left := chkFakeStatics.Left;
-        chkReportMissingLOD.Top := chkReportUVs.Top + 30;
+        chkReportMissingLOD.Top := chkMakeMissingMaterials.Top + 30;
         chkReportMissingLOD.Width := 200;
         chkReportMissingLOD.Caption := 'Report Large Objects without LOD';
         chkReportMissingLOD.Hint := 'Adds messages about large objects'
             + #13#10 + 'that do not have LOD. This is for information'
             + #13#10 + 'purposes only and has no visual benefit.';
         chkReportMissingLOD.ShowHint := True;
-
-        chkDeepScan := TCheckBox.Create(gbOptions);
-        chkDeepScan.Parent := gbOptions;
-        chkDeepScan.Left := chkReportNonLODMaterials.Left;
-        chkDeepScan.Top := chkMakeMissingMaterials.Top + 30;
-        chkDeepScan.Width := 150;
-        chkDeepScan.Caption := 'Deep Scan';
-        chkDeepScan.Hint := 'Attempts to find more LOD models'
-            + #13#10 + 'based on file name or nif block.';
-        chkDeepScan.ShowHint := True;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
@@ -640,6 +657,7 @@ begin
         frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
 
         edPluginName.Text := sFolipPluginFileName;
+        edSleepTime.Text := IntToStr(iSleepTime);
         chkFakeStatics.Checked := bFakeStatics;
         chkForceLOD8.Checked := bForceLOD8;
         chkIgnoreNoLOD.Checked := bIgnoreNoLOD;
@@ -657,6 +675,7 @@ begin
         else Result := True;
 
         sFolipPluginFileName := edPluginName.Text;
+        iSleepTime := StrToInt(edSleepTime.Text);
         bFakeStatics := chkFakeStatics.Checked;
         bForceLOD8 := chkForceLOD8.Checked;
         bIgnoreNoLOD := chkIgnoreNoLOD.Checked;
@@ -2748,9 +2767,10 @@ begin
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
     if FileExists(outputTexture) then Exit;
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
-    cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 dxt5';
+    cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 BC3_UNORM';
     AddMessage(cmdline);
     ShellExecute(0, 'open', sRasterizeGrayScaleToPalette, cmdline, '', SW_SHOWNORMAL);
+    Sleep(iSleepTime);
 end;
 
 function AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized: string; specularMult: float): Boolean;
