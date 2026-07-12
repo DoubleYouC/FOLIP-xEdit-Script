@@ -1491,7 +1491,7 @@ begin
     end;
 
     linkedRefRemove := placedReferenceOverride.S['RemoveLinkedReference'];
-    if linkedRefRemove <> '' then RemoveLinkedReferenceByKeyword(n, linkedRefRemove);
+    if linkedRefRemove <> '' then RemoveLinkedReferenceByKeyword(rOverride, linkedRefRemove);
     linkedRefAdd := placedReferenceOverride.S['AddLinkedReference'];
     if linkedRefAdd <> '' then begin
         tsLinkedRef := SplitString(linkedRefAdd, '|');
@@ -2725,6 +2725,7 @@ begin
         replacementMatbgsm.SaveToFile(sOutputDir + '\' + rm);
         AddMessage(#9 + 'Successfully created LOD Material Replacement: ' + rm + #9 + 'from' + #9 + om);
         Result := True;
+        slMatFiles.Add(rm);
     finally
         ombgsm.Free;
         replacementMatbgsm.Free;
@@ -2733,14 +2734,15 @@ end;
 
 function CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm: string): string;
 var
-    diffuse, diffuseNew, palette, outputTexture, cmdline: string;
+    diffuse, diffuseNew, palette, outputTexture, cmdline, paletteName: string;
 begin
     Result := '';
     diffuse := ExtractResourceToTempDirectory(replacementDiffuseNormalized);
     palette := ExtractResourceToTempDirectory(paletteTexture);
+    paletteName := TrimLeftChars(ExtractFileName(palette), 4);
     AddMessage(replacementDiffuseNormalized + #9 + paletteTexture + #9 + paletteScale);
     //textures\path\to\grayscale_d.dds to textures\RasterizedGrayscales\path\to\grayscale_0.937.dds
-    diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5),'textures\','textures\RasterizedGrayscales\',[rfIgnoreCase]) + paletteScale + '_d.dds';
+    diffuseNew := StringReplace(TrimLeftChars(replacementDiffuseNormalized, 5),'textures\','textures\RasterizedGrayscales\',[rfIgnoreCase]) + paletteName + '_' + paletteScale + '_d.dds';
     diffuseNew := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], diffuseNew);
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
@@ -3832,7 +3834,7 @@ begin
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
 
-            paletteScale := bgsmLod.EditValues['GrayscaleToPaletteScale'];
+            paletteScale := FloatToStr(StrToFloatDef(bgsmLOD.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
