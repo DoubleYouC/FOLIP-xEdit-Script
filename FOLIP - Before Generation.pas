@@ -5021,7 +5021,7 @@ begin
             if LowerCase(parts[i]) = 'lod' then begin
                 Result := True;
                 if i = 2 then begin
-                    between := parts[1] + '\';
+                    between := LowerCase(parts[1] + '\');
                     if slTopLevelModPatternPaths.IndexOf(between) = -1 then begin
                         AddMessage('Added sub path: ' + between);
                         slTopLevelModPatternPaths.Add(between);
@@ -5052,7 +5052,7 @@ begin
         //meshes\ to meshes\lod
         Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
     end
-    else if slTopLevelModPatternPaths.IndexOf(parts[1]) = -1 then begin
+    else if slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1])) = -1 then begin
         //meshes\path\to\model.nif to meshes\lod\path\to\model.nif
         Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
     end
