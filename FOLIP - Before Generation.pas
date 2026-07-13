@@ -173,20 +173,8 @@ begin
         slMissingColorRemaps.Sorted := True;
 
         slFOLIPTexgen_noalpha := TStringList.Create;
-        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt') then begin
-            slFOLIPTexgen_noalpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
-            AddMessage('Loaded TexGen noalpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_folipnewlodsesp.txt');
-        end;
         slFOLIPTexgen_copy := TStringList.Create;
-        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt') then begin
-            slFOLIPTexgen_copy.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
-            AddMessage('Loaded TexGen copy rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_folipnewlodsesp.txt');
-        end;
         slFOLIPTexgen_alpha := TStringList.Create;
-        if FileExists(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt') then begin
-            slFOLIPTexgen_alpha.LoadFromFile(wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
-            AddMessage('Loaded TexGen alpha rules from ' + wbDataPath + 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_folipnewlodsesp.txt');
-        end;
         slTexgen_copy := TStringList.Create;
         slTexgen_alpha := TStringList.Create;
         slTexgen_noalpha := TStringList.Create;
@@ -3986,7 +3974,7 @@ begin
             lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['RasterizedDiffusePath'], resTexture));
             correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
 
-            bLODMaterialNeedsFixed := (not SameText(lodTexture, correctLodTexture));
+            if lodTexture = correctLodTexture then bLODMaterialNeedsFixed := True;
             if bLODMaterialNeedsFixed then begin
                 AddMessage(lodTexture);
                 AddMessage(correctLodTexture);
@@ -4031,7 +4019,7 @@ begin
     // end;
     if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
         if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
-        //if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+        if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
         if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe)) then begin
             slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
             CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
@@ -4080,7 +4068,7 @@ procedure LoadRules(f: string);
 var
     sub: TJsonObject;
     c, a: integer;
-    j, key: string;
+    j, key, fStripped: string;
 begin
     //LOD Rules
     j := 'FOLIP\' + TrimLeftChars(f, 4) + ' - LODRules.json';
@@ -4201,6 +4189,25 @@ begin
             sub.Free;
             AddMessage('Ignored Plugins: ' + sIgnoredPlugins);
         end;
+    end;
+
+    fStripped := StripNonAlphanumeric(f);
+    j := 'DynDOLOD\DynDOLOD_FO4_TexGen_noalpha_' + fStripped + '.txt';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded TexGen noalpha rules: ' + j);
+        AppendFileToStringList(wbDataPath + j, slFOLIPTexgen_noalpha);
+    end;
+
+    j := 'DynDOLOD\DynDOLOD_FO4_TexGen_copy_' + fStripped + '.txt';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded TexGen copy rules: ' + j);
+        AppendFileToStringList(wbDataPath + j, slFOLIPTexgen_copy);
+    end;
+
+    j := 'DynDOLOD\DynDOLOD_FO4_TexGen_alpha_' + fStripped + '.txt';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded TexGen alpha rules: ' + j);
+        AppendFileToStringList(wbDataPath + j, slFOLIPTexgen_alpha);
     end;
 
 end;
@@ -5442,6 +5449,23 @@ begin
     paletteTextureContainer := ExtractFileName(FetchCurrentContainer(paletteTexture));
     diffuseTextureContainer := ExtractFileName(FetchCurrentContainer(diffuseTexture));
     Result := ((Pos(paletteTextureContainer, sVanillaTextureArchives) > 0) and (Pos(diffuseTextureContainer, sVanillaTextureArchives) > 0));
+end;
+
+procedure AppendFileToStringList(fileToAppend: string; sl: TStringList);
+{
+    Given a path to a text file, append it to the input stringlist.
+}
+var
+    slFile: TStringList;
+    i: integer;
+begin
+    slFile := TStringList.Create();
+    try
+        slFile.LoadFromFile(fileToAppend);
+        for i := 0 to Pred(slFile.Count) do sl.Add(slFile[i]);
+    finally
+        slFile.Free;
+    end;
 end;
 
 end.
