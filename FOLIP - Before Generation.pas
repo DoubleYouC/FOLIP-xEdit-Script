@@ -3819,11 +3819,12 @@ function CompareModdedMaterialToVanilla(const f, lodMaterial: string): Boolean;
 var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
-    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture: string;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists: boolean;
+    vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture, lodTexture, correctLodTexture: string;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists, bLODMaterialNeedsFixed: boolean;
 begin
     Result := False; //Assume no differences found.
     bRuleExists := False;
+    bLODMaterialNeedsFixed := False;
     if not ResourceExists(f) then begin
         AddMessage(#9 + 'Warning: ' + f + ' does not exist.');
         Exit;
@@ -3906,6 +3907,12 @@ begin
         bLodUsesGrayscaleToPalette := (bgsmLOD.EditValues['GrayscaleToPaletteColor'] = 'yes');
         if joRasterizeMaterials.Contains(LODMaterial) then begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
+            lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['Textures\Diffuse'], resTexture));
+            correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
+            bLODMaterialNeedsFixed := (not SameText(lodTexture, correctLodTexture));
+            if bLodUsesGrayscaleToPalette then if bLODMaterialNeedsFixed then begin
+                Result := True;
+            end;
             bRuleExists := true;
         end;
         bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
@@ -3936,10 +3943,12 @@ begin
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
-            if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
+
+            if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe))
             then begin
                 slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
                 CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+                AddMessage('Compare ' + whatItShouldBe);
             end;
         end;
     finally
@@ -3955,11 +3964,12 @@ procedure CheckIfGrayscaleToPaletteMaterial(const NonLODMaterial, LODMaterial: s
 }
 var
     bgsm, bgsmLOD: TwbBGSMFile;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bTexturesAreVanilla: boolean;
-    f, paletteScale, stringToReplace, whatItShouldBe, paletteTexture, diffuseTexture: string;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bTexturesAreVanilla, bLODMaterialNeedsFixed: boolean;
+    f, paletteScale, stringToReplace, whatItShouldBe, paletteTexture, diffuseTexture, lodTexture, correctLodTexture: string;
 begin
     f := NonLODMaterial;
     bTexturesAreVanilla := False;
+    bLODMaterialNeedsFixed := False;
     bgsm := TwbBGSMFile.Create;
     bgsmLOD := TwbBGSMFile.Create;
     try
@@ -3973,6 +3983,14 @@ begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
             paletteScale := Fallback(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'], paletteScale);
             f := LowerCase(joRasterizeMaterials.O[LODMaterial].S['Full Material']);
+            lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['RasterizedDiffusePath'], resTexture));
+            correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
+
+            bLODMaterialNeedsFixed := (not SameText(lodTexture, correctLodTexture));
+            if bLODMaterialNeedsFixed then begin
+                AddMessage(lodTexture);
+                AddMessage(correctLodTexture);
+            end;
         end;
         if not bLodUsesGrayscaleToPalette then Exit;
 
@@ -4013,7 +4031,8 @@ begin
     // end;
     if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
         if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
-        if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe))) then begin
+        //if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+        if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe)) then begin
             slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
             CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
         end;
@@ -5007,7 +5026,7 @@ begin
             if LowerCase(parts[i]) = 'lod' then begin
                 Result := True;
                 if i = 2 then begin
-                    between := LowerCase(parts[1] + '\');
+                    between := LowerCase(parts[1]) + '\';
                     if slTopLevelModPatternPaths.IndexOf(between) = -1 then begin
                         AddMessage('Added sub path: ' + between);
                         slTopLevelModPatternPaths.Add(between);
@@ -5038,13 +5057,17 @@ begin
         //meshes\ to meshes\lod
         Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
     end
-    else if slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1])) = -1 then begin
-        //meshes\path\to\model.nif to meshes\lod\path\to\model.nif
-        Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
-    end
-    else begin
+    else if (slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1])) <> -1) then begin
         //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
         Result := StringReplace(f, parts[1], parts[1] + '\lod', [rfIgnoreCase]);
+    end
+    else if (slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1]) + '\') <> -1) then begin
+        //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
+        Result := StringReplace(f, parts[1] + '\', parts[1] + '\lod\', [rfIgnoreCase]);
+    end
+    else begin
+        //meshes\path\to\model.nif to meshes\lod\path\to\model.nif
+        Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
     end;
 end;
 
@@ -5409,7 +5432,10 @@ begin
     Result := (Pos(f, sIgnoredPlugins) <> 0);
 end;
 
-function GrayscalePaletteTexturesModified(paletteTexture, diffuseTexture): boolean;
+function GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture: string): boolean;
+{
+    Check if relevant greyscale and palette textures are being provided by vanilla archives.
+}
 var
     paletteTextureContainer, diffuseTextureContainer: string;
 begin
