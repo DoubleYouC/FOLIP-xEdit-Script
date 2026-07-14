@@ -364,7 +364,7 @@ var
     bSkip: Boolean;
     sFolipPluginFileNameSanitized, cmdline: string;
     fs: TFileStream;
-    diamondCityWrld, goodneighborWrld: IwbElement;
+    diamondCityWrld, goodneighborWrld: IwbMainRecord;
 begin
     bSkip := False;
     //Create FOLIP plugins
@@ -1608,7 +1608,6 @@ var
     xesp: IwbElement;
 begin
     {
-    placedReference.S['File'] := GetFileName(iCurrentPlugin);
     placedReference.S['Visible When Distant'] := 1;
     placedReference.S['Visible When Distant'] := 1;
     placedReference.S['Initially Disabled'] := 1;
@@ -1692,7 +1691,7 @@ procedure ProcessEnableParents;
 var
     i, pi, oi, idx: integer;
 
-    p, m, r, n, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer, xesp: IwbElement;
+    p, r, base, rCell, rWrld, oppositeEnableParentReplacer, oreplacer, enableParentReplacer, ereplacer: IwbMainRecord;
 
     parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid, OverOrNew, pluginFileNameOriginal: string;
 
@@ -1756,7 +1755,7 @@ begin
             if GetIsDeleted(r) then continue;
             if GetIsCleanDeleted(r) then continue;
 
-            base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+            base := WinningOverride(BaseRecord(r));
             if (slHasLOD.IndexOf(RecordFormIdFileId(base)) <> -1) then bBaseHasLOD := True;
 
             //Split between refs with LOD and not having LOD
@@ -2018,8 +2017,8 @@ procedure MultiRefLOD;
 var
     c, a, i: integer;
     MultiRefLODReference, ref, MultiRefLODFormidStr, editorid, cellX, cellY, wrldEdid, recordId: string;
-    r, MultiRefLODElement, n, rCell, rWrld: IwbElement;
-    linkedrefs, lref: IInterface;
+    r, MultiRefLODElement, rCell, rWrld: IwbMainRecord;
+    linkedrefs, lref: IwbElement;
     bNeedsModified, bHadMultiRefLODCorrect: Boolean;
 begin
     for c := 0 to Pred(joMultiRefLOD.Count) do begin
@@ -2099,12 +2098,12 @@ begin
     end;
 end;
 
-function AddLinkedReference(e: IInterface; keyword, ref: String): Integer;
+function AddLinkedReference(e: IwbMainRecord; keyword, ref: String): Integer;
 {
   Add a linked reference.
 }
 var
-    el, linkedrefs, lref: IInterface;
+    linkedrefs, lref: IwbElement;
     i: Integer;
 begin
     Result := 0;
@@ -2122,13 +2121,13 @@ begin
     end;
 end;
 
-function RemoveLinkedReferenceByKeyword(e: IwbElement; keyword: String): Integer;
+function RemoveLinkedReferenceByKeyword(e: IwbMainRecord; keyword: String): Integer;
 {
   Remove a linked reference by keyword. Returns 1 if a reference was removed, 0 if not.
 }
 var
-    linkedrefs, lref: IInterface;
-    i: Integer;
+    linkedrefs, lref: IwbElement;
+    i: integer;
 begin
     Result := 0;
     if not ElementExists(e, 'Linked References') then Exit;
@@ -2242,7 +2241,6 @@ begin
             pluginFileNameHere := GetFileName(iCurrentPlugin);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Set Is Persistent'] := 1;
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := pluginFileNameHere;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := IntToHex(GetLoadOrderFormID(stolen), 8);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
@@ -2289,7 +2287,8 @@ var
     model, editorid, recordId, wrldEdid, cellX, cellY: string;
     bIsFullLOD, bIsFullLODFlagged, bXESP, bRespect: Boolean;
     i: integer;
-    r, rCell, rWrld, parentRef, xesp: IInterface;
+    r, rCell, rWrld, parentRef: IwbMainRecord;
+    xesp: IwbElement;
 begin
     Result := false;
     editorid := LowerCase(GetElementEditValues(s, 'EDID'));
@@ -2353,7 +2352,7 @@ end;
 procedure ProcessActiFurnMstt;
 var
     si, i, cnt: integer;
-    r, s, ms, rCell, rWrld: IwbElement;
+    r, s, ms, rCell, rWrld: IwbMainRecord;
     HasLOD, bFullLOD: Boolean;
     joLOD: TJsonObject;
     fakeStaticFormID, sMissingLodMessage, fakeStatic: string;
@@ -2415,12 +2414,13 @@ begin
     end;
 end;
 
-procedure DuplicateRef(const r: IwbElement; fakeStatic: string);
+procedure DuplicateRef(const r: IwbMainRecord; fakeStatic: string);
 {
     Duplicates a placed reference, but used the fakeStatic base.
 }
 var
-    n, rCell, rWrld, wCell, nCell, ms, xesp, xespDup, parentRef: IwbElement;
+    rCell, rWrld, ms, parentRef: IwbMainRecord;
+    xesp: IwbElement;
     bHasOppositeParent, bMswp: Boolean;
     c: TwbGridCell;
     parentFormid, cellX, cellY, wrldEdid, recordId: string;
@@ -2511,12 +2511,12 @@ begin
     SetElementNativeValues(copyTo, 'OBND\Z2', GetElementNativeValues(copyFrom, 'OBND\Z2'));
 end;
 
-function AddFakeStatic(s: IwbElement): string;
+function AddFakeStatic(s: IwbMainRecord): string;
 {
     Adds a fake static version of the non-static input and returns the recordId of the original object.
 }
 var
-    ms, fakeStatic: IwbElement;
+    ms: IwbMainRecord;
     patchStatGroup: IwbGroupRecord;
     HasMS: Boolean;
     fakeStaticEditorId, recordId, msFormid: string;
@@ -2553,10 +2553,11 @@ procedure AssignLODMaterialsList;
 }
 var
     i, si, tp, sc, cnt, n, oms: integer;
-    m, mn, substitutions, sub: IInterface;
+    m: IwbMainRecord;
+    substitutions, sub: IwbElement;
     colorRemap, originalMat, originalLODMat, replacementMat, om, rm, recordId: string;
     slLODSubOriginal, slLODSubReplacement, slExistingSubstitutions, slMissingMaterials, slTopPaths, slLODOriginals, slLODReplacements, slDummy, slMismatchedMaterials: TStringList;
-    hasLODOriginalMaterial, hasLODReplacementMaterial: Boolean;
+    hasLODOriginalMaterial, hasLODReplacementMaterial: boolean;
 begin
     slDummy := TStringList.Create;
     //store missing lod materials here
@@ -2689,7 +2690,6 @@ begin
             for n := 0 to Pred(cnt) do begin
                 //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
                 joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);
-                //AddMaterialSwap(mn, slLODSubOriginal[n], slLODSubReplacement[n]);
             end;
             slLODSubOriginal.Free;
             slLODSubReplacement.Free;
@@ -3290,7 +3290,7 @@ procedure AssignLODModelsList;
 var
     i, cnt: integer;
     HasLOD, bHasEnableParent, bHasSCOLNeedingLOD: Boolean;
-    ms, s: IwbElement;
+    ms, s: IwbMainRecord;
     joLOD: TJsonObject;
     sMissingLodMessage: string;
 begin
@@ -3343,10 +3343,10 @@ begin
     end;
 end;
 
-function IsObjectUsedInExterior(s: IInterface): boolean;
+function IsObjectUsedInExterior(s: IwbMainRecord): boolean;
 var
     si, cnt: integer;
-    r, rCell, rWrld: IInterface;
+    r, rCell, rWrld: IwbMainRecord;
 begin
     cnt := 0;
 
@@ -3375,10 +3375,11 @@ begin
     if cnt > 0 then Result := True else Result := False;
 end;
 
-function ProcessReferences(s: IwbElement; var bHasEnableParent: Boolean; var bHasSCOLNeedingLOD: Boolean): integer;
+function ProcessReferences(s: IwbMainRecord; var bHasEnableParent: Boolean; var bHasSCOLNeedingLOD: Boolean): integer;
 var
     si, cnt: integer;
-    ms, r, rCell, rWrld, xesp, parentRef, n, base: IwbElement;
+    ms, r, rCell, rWrld, parentRef, base: IwbMainRecord;
+    xesp: IwbElement;
     parent, wrldEdid, cellX, cellY, recordId: string;
 begin
     cnt := 0;
@@ -3438,7 +3439,7 @@ begin
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
         end;
 
-        base := WinningOverride(LinksTo(ElementByPath(r, 'NAME')));
+        base := WinningOverride(BaseRecord(r));
 
         if ((Signature(base) <> 'SCOL') and (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0')) then begin
             if ElementExists(r, 'XATR') then begin
@@ -3486,9 +3487,8 @@ begin
     Result := cnt;
 end;
 
-procedure AssignLODToStat(var s: IwbElement; const joLOD: TJsonObject; const bAddHasDistantLOD: Boolean; const OverOrNew: string);
+procedure AssignLODToStat(var s: IwbMainRecord; const joLOD: TJsonObject; const bAddHasDistantLOD: Boolean; const OverOrNew: string);
 var
-    n: IwbElement;
     recordId: string;
 begin
     //AddMessage(ShortName(s) + #9 + joLOD.S['level0'] + #9 + joLOD.S['level1'] + #9 + joLOD.S['level2']);
@@ -3542,7 +3542,8 @@ procedure CollectRecords;
 var
     i, j, idx, blockidx, subblockidx, cellidx: integer;
     recordId, wrldEdid, cellX, cellY: string;
-    r, block, subblock, rCell, rWrld: IwbElement;
+    r, rCell, rWrld: IwbMainRecord;
+    block, subblock: IInterface;
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
 begin
@@ -4314,14 +4315,13 @@ begin
 
 end;
 
-function AssignLODModels(s: IInterface; joLOD: TJsonObject; var sMissingLodMessage: string): Boolean;
+function AssignLODModels(s: IwbMainRecord; joLOD: TJsonObject; var sMissingLodMessage: string): Boolean;
 {
     Assigns LOD Models to Stat records.
 }
 var
     hasChanged, ruleOverride: Boolean;
     i, c, hasDistantLOD, xBnd, yBnd, zBnd: integer;
-    n: IInterface;
     colorRemap, lod4, lod8, lod16, lod32, model, omodel, olod4, olod8, olod16, olod32, editorid: string;
     slTopPaths, slMaterialsFromFullModel: TStringList;
 begin
@@ -4683,7 +4683,7 @@ begin
     end;
 end;
 
-function LODModelForLevel(e: IwbElement; model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
+function LODModelForLevel(e: IwbMainRecord; model, colorRemap, level, original: string; slTopPaths: TStringList;): string;
 {
     Given a model and level, checks to see if an LOD model exists and returns it.
 }
@@ -4977,7 +4977,7 @@ begin
     end;
 end;
 
-function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
+function RefMastersDeterminePlugin(e: IwbMainRecord; inputFile: IwbFile): IwbFile;
 {
     Determines the plugin to use based on the reference's required masters.
 }
@@ -5180,7 +5180,7 @@ begin
     end;
 end;
 
-function GetIsCleanDeleted(r: IInterface): Boolean;
+function GetIsCleanDeleted(r: IwbMainRecord): Boolean;
 {
     Checks to see if a reference has an XESP set to opposite of the PlayerRef
 }
@@ -5319,12 +5319,12 @@ begin
     end;
 end;
 
-function CopyElementToFileWithVC(e: IwbElement; f: IwbFile): IwbElement;
+function CopyElementToFileWithVC(e: IwbMainRecord; f: IwbFile): IwbMainRecord;
 {
     Copies an element (e) to a file (f), but also copies the version control data from the element being copied.
 }
 var
-    n: IwbElement;
+    n: IwbMainRecord;
 begin
     n := wbCopyElementToFile(e, f, False, True);
     SetFormVCS1(n, GetFormVCS1(e));
@@ -5332,15 +5332,7 @@ begin
     Result := n;
 end;
 
-// function RecordFormIdFileId(e: IwbElement): string;
-// {
-//     Returns the record ID of an element.
-// }
-// begin
-//     Result := TrimRightChars(IntToHex(FixedFormID(MasterOrSelf(e)), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
-// end;
-
-function RecordFormIdFileId(e: IwbElement): string;
+function RecordFormIdFileId(e: IwbMainRecord): string;
 {
     Returns the record ID of an element.
 }
@@ -5349,7 +5341,7 @@ begin
     Result := IntToHex(FormID(e), 8) + ':' + GetFileName(GetFile(e));
 end;
 
-function GetRecordFromFormIdFileId(recordId: string): IwbElement;
+function GetRecordFromFormIdFileId(recordId: string): IwbMainRecord;
 {
     Returns the record from the given formid:filename.
 }
@@ -5416,7 +5408,7 @@ begin
     Result := newf;
 end;
 
-function GetHighestPossibleOverrideForFile(r: IwbMainRecord; inputFile: IwbFile): IwbElement;
+function GetHighestPossibleOverrideForFile(r: IwbMainRecord; inputFile: IwbFile): IwbMainRecord;
 {
     Gets the highest possible override desired for the given reference and plugin.
 }
