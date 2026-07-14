@@ -3543,7 +3543,7 @@ var
     i, j, idx, blockidx, subblockidx, cellidx: integer;
     recordId, wrldEdid, cellX, cellY: string;
     r, rCell, rWrld: IwbMainRecord;
-    block, subblock: IInterface;
+    block, subblock: IwbElement;
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
 begin
