@@ -1254,7 +1254,7 @@ var
     f, i, w, x, y, r: integer;
     recordId, wrldEdid, wrldRecordId, cellRecordId, ref, cellX, cellY, fileHere, messageHere: string;
     bFolipMaster, bInterior, bPersistent, bAddedPersistentWorldspaceCell: boolean;
-    rWrld, rCell, nCell: IwbMainRecord;
+    rWrld, rCell, nCell, pCell: IwbMainRecord;
 begin
     AddMessage('Processing elements...');
     {
@@ -1280,6 +1280,7 @@ begin
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['fakeStatic'] := fakeStatic;
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := 1;
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Opposite Enable Parent'] := 0;
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Visible When Distant'] := 1;
@@ -1375,7 +1376,7 @@ begin
                             if bFolipMaster then
                                 rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                             else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                            wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                            pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
                             bAddedPersistentWorldspaceCell := True;
                         end;
 
@@ -1398,7 +1399,21 @@ begin
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Names[r];
                         AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
-                        ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, nCell);
+
+                        bPersistent := (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref].S['Set Is Persistent'] = '1');
+                        if (bPersistent and (cellX = '0') and (cellY = '0') and (not bAddedPersistentWorldspaceCell)) then begin
+                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+                            if bFolipMaster then
+                                rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
+                            else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
+                            pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                            bAddedPersistentWorldspaceCell := True;
+                        end;
+                        if bPersistent
+                        then
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, pCell)
+                        else
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, nCell);
                     end;
                 end;
             end;
@@ -1581,12 +1596,12 @@ begin
     end;
 end;
 
-procedure ProcessNewReference(placedReference: TJsonObject; fileHere: string; nCell: IwbMainRecord);
+procedure ProcessNewReference(placedReference: TJsonObject; fileHere: string; bPersistent: boolean; nCell: IwbMainRecord);
 {
     Add a placed reference.
 }
 var
-    cellRecordId, wrldRecordId, fakeStatic, fakeStaticFormId, scale, ms: string;
+    cellRecordId, wrldRecordId, fakeStatic, baseFormId, fakeStaticFormId, scale, ms: string;
     bPersistent, bXesp: boolean;
     i, flst: integer;
     rWrld, rCell, rNew: IwbMainRecord;
@@ -1595,9 +1610,12 @@ begin
     {
     placedReference.S['File'] := GetFileName(iCurrentPlugin);
     placedReference.S['Visible When Distant'] := 1;
+    placedReference.S['Visible When Distant'] := 1;
     placedReference.S['Initially Disabled'] := 1;
+    placedReference.S['Set Is Persistent'] := 0;
 
     placedReference.S['fakeStatic'] := fakeStatic;
+    placedReference.S['NAME'] := '000e4610'; //Enable Marker
 
     placedReference.S['XESP'] := 1;
     placedReference.S['XESP Reference'] := parentFormid;
@@ -1614,17 +1632,21 @@ begin
     placedReference.S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
 
     placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
-
     }
 
     rNew := Add(nCell, 'REFR', True);
     SetIsVisibleWhenDistant(rNew, (placedReference.S['Visible When Distant'] = '1'));
     SetIsInitiallyDisabled(rNew, (placedReference.S['Initially Disabled'] = '1'));
+    SetIsPersistent(rNew, bPersistent);
 
     fakeStatic := placedReference.S['fakeStatic'];
+    baseFormId := placedReference.S['NAME'];
     if fakeStatic <> '' then begin
         fakeStaticFormId := joElements.O['STAT'].O['New'].O[fakeStatic].O[fileHere].S['fakeStaticFormId'];
         SetElementEditValues(rNew, 'NAME', fakeStaticFormId);
+    end
+    else if baseFormId <> '' then begin
+        SetElementEditValues(rNew, 'NAME', baseFormId);
     end;
 
     bXesp := (placedReference.S['XESP'] = '1');
@@ -2120,10 +2142,11 @@ begin
     end;
 end;
 
-function GetSuitableReplacement: IwbElement;
+function GetSuitableReplacement: IwbMainRecord;
 var
-    stolen, r, m, rCell: IwbElement;
+    stolen, r, m, rCell, rWrld: IwbMainRecord;
     i, j: integer;
+    wrldEdid, cellX, cellY, recordId: string;
 begin
     Result := nil;
     for j := 0 to Pred(tlTxst.Count) do begin
@@ -2140,29 +2163,97 @@ begin
             rCell := LinksTo(ElementByIndex(r, 0));
             if IsInteriorCell(rCell) then continue;
             if ReferencedByCount(r) <> 0 then continue;
+            if ElementExists(r, 'XESP') then continue;
+            if ElementExists(r, 'Linked References') then continue;
             if ElementExists(r, 'VMAD') then continue;
-            if ElementExists(r, 'XMPO') then continue;
+            if ElementExists(r, 'XMBO') then continue;
+            if ElementExists(r, 'XPRM') then continue;
             if ElementExists(r, 'XPOD') then continue;
             if ElementExists(r, 'XPTL') then continue;
             if ElementExists(r, 'XORD') then continue;
+            if ElementExists(r, 'XOCP') then continue;
+            if ElementExists(r, 'Bound Data') then continue;
             if ElementExists(r, 'XMBP') then continue;
-            if ElementExists(r, 'XRGD') then continue;
+            if ElementExists(r, 'Ragdoll Data') then continue;
+            if ElementExists(r, 'XRDS') then continue;
+            if ElementExists(r, 'XEMI') then continue;
+            if ElementExists(r, 'XLIG') then continue;
+            if ElementExists(r, 'Lit Water') then continue;
+            if ElementExists(r, 'Reflected/Refracted By') then continue;
+            if ElementExists(r, 'XALP') then continue;
             if ElementExists(r, 'XTEL') then continue;
             if ElementExists(r, 'XTNM') then continue;
             if ElementExists(r, 'XMBR') then continue;
-            if ElementExists(r, 'XMCN') then continue;
-            if ElementExists(r, 'XMCU') then continue;
+            if ElementExists(r, 'Water Current Velocities') then continue;
             if ElementExists(r, 'XASP') then continue;
             if ElementExists(r, 'XATP') then continue;
+            if ElementExists(r, 'XAMC') then continue;
             if ElementExists(r, 'XLKT') then continue;
-            if ElementExists(r, 'XPDD') then continue;
-            if ElementExists(r, 'XPRM') then continue;
             if ElementExists(r, 'XRFG') then continue;
             if ElementExists(r, 'XRDO') then continue;
             if ElementExists(r, 'XBSD') then continue;
-            if ElementExists(r, 'XESP') then continue;
+            if ElementExists(r, 'XPDD') then continue;
+            if ElementExists(r, 'XSPC') then continue;
+            if ElementExists(r, 'Activate Parents') then continue;
+            if ElementExists(r, 'XLIB') then continue;
+            if ElementExists(r, 'XLCM') then continue;
+            if ElementExists(r, 'XLCN') then continue;
+            if ElementExists(r, 'XTRI') then continue;
+            if ElementExists(r, 'XLOC') then continue;
+            if ElementExists(r, 'XEZN') then continue;
+            if ElementExists(r, 'XNDP') then continue;
+            if ElementExists(r, 'XLRL') then continue;
+            if ElementExists(r, 'XLRT') then continue;
+            if ElementExists(r, 'XIS2') then continue;
+            if ElementExists(r, 'Ownership') then continue;
+            if ElementExists(r, 'XCNT') then continue;
+            if ElementExists(r, 'XHLT') then continue;
+            if ElementExists(r, 'Patrol') then continue;
+            if ElementExists(r, 'XACT') then continue;
+            if ElementExists(r, 'XHTW') then continue;
+            if ElementExists(r, 'XFVC') then continue;
+            if ElementExists(r, 'ONAM') then continue;
+            if ElementExists(r, 'Map Marker') then continue;
+            if ElementExists(r, 'XATR') then continue;
+            if ElementExists(r, 'Spline Connection') then continue;
+            if ElementExists(r, 'Power Grid') then continue;
+            if ElementExists(r, 'XCVL') then continue;
+            if ElementExists(r, 'XCVR') then continue;
+            if ElementExists(r, 'Water Current Data') then continue;
+            if ElementExists(r, 'XLOD') then continue;
+            if ElementExists(r, 'XMPO') then continue;
+            if ElementExists(r, 'XRGD') then continue;
+            if ElementExists(r, 'XMCN') then continue;
+            if ElementExists(r, 'XMCU') then continue;
+
             tlStolenForms.Add(r);
             Result := r;
+            rWrld := LinksTo(ElementByIndex(rCell, 0));
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
+            //persistent refs always point to 0,0
+            cellX := '0';
+            cellY := '0';
+            recordId := RecordFormIdFileId(r);
+            iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(stolen, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+            pluginFileNameHere := GetFileName(iCurrentPlugin);
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Set Is Persistent'] := 1;
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['File'] := pluginFileNameHere;
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := IntToHex(GetLoadOrderFormID(stolen), 8);
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+            if ElementExists(r, 'XSCL - Scale') then
+                joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+            if ElementExists(r, 'XMSP') then
+                joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(r, 'XMSP'))), 8);
             Exit;
         end;
     end;
