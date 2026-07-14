@@ -1411,7 +1411,7 @@ begin
                         end;
                         if bPersistent
                         then
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, pCell)
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, FindChildGroup(ChildGroup(pCell), 8, pCell))
                         else
                             ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, nCell);
                     end;
@@ -1596,7 +1596,7 @@ begin
     end;
 end;
 
-procedure ProcessNewReference(placedReference: TJsonObject; fileHere: string; bPersistent: boolean; nCell: IwbMainRecord);
+procedure ProcessNewReference(placedReference: TJsonObject; fileHere: string; bPersistent: boolean; nCell: IwbElement);
 {
     Add a placed reference.
 }
