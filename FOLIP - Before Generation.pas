@@ -18,7 +18,7 @@ var
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
-    slMainMasters, slFakeStatics, slAddedTexGenTextures, slMissingGrayscaleMaterials: TStringList;
+    slMainMasters, slFakeStatics, slAddedTexGenTextures: TStringList;
 
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
     flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
@@ -161,10 +161,6 @@ begin
         slOutsideUVRange := TStringList.Create;
         slOutsideUVRange.Sorted := True;
         slOutsideUVRange.Duplicates := dupIgnore;
-
-        slMissingGrayscaleMaterials :=TStringList.Create;
-        slMissingGrayscaleMaterials.Sorted := True;
-        slMissingGrayscaleMaterials.Duplicates := dupIgnore;
 
         slFullLODMessages := TStringList.Create;
         slFullLODMessages.Sorted := True;
@@ -315,7 +311,6 @@ begin
         slPatchMasters.Free;
         slMainMasters.Free;
         slAddedTexGenTextures.Free;
-        slMissingGrayscaleMaterials.Free;
 
         joRules.Free;
         joMswpMap.Free;
@@ -390,7 +385,6 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
-    ListStringsInStringList(slMissingGrayscaleMaterials);
 
     if bSkip then Exit;
 
@@ -1164,6 +1158,11 @@ begin
     if HasGroup(iFolipMasterFile, 'WRLD') then begin
         RemoveNode(GroupBySignature(iFolipMasterFile, 'WRLD'));
     end;
+    if HasGroup(iFolipMasterFile, 'FLST') then begin
+        RemoveNode(GroupBySignature(iFolipMasterFile, 'FLST'));
+    end;
+    CleanMasters(iFolipMasterFile);
+    CleanMasters(iFolipPluginFile);
 
 
     flstGroup := Add(iFolipPluginFile, 'FLST', True);
@@ -3660,11 +3659,15 @@ begin
 
                     fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
                     if (slVanilla.IndexOf(LowerCase(fNoLod)) > -1) and (slModded.IndexOf(LowerCase(fNoLod)) > -1) then begin
-                        if ((not ContainsText(LowerCase(fNoLod),'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then CompareModdedMaterialToVanilla(fNoLod, f);
-                        //since we opened the files in CompareModdedMaterialToVanilla we took advantage and checked for rasterizing grayscale to palette then.
-                        bRasterized := true;
+                        if ((not ContainsText(LowerCase(fNoLod),'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then begin
+                            CompareModdedMaterialToVanilla(fNoLod, f);
+                            bRasterized := true;
+                        end;
                     end;
-                    if (bMakeMissingMaterials and (not bRasterized)) then CheckIfGrayscaleToPaletteMaterial(fNoLod, f);
+                    if (bMakeMissingMaterials and (not bRasterized)) then begin
+                        //if f = 'materials\dlc04\lod\setdressing\zootreehouse\dlc04treehero.bgsm' then AddMessage('found');
+                        CheckIfGrayscaleToPaletteMaterial(fNoLod, f);
+                    end;
 
                     if not bReportNonLODMaterials then continue;
                     if MatHasNonLodTexture(f, tp) then AddMessage('Warning: ' + f + ' appears to be using a non-LOD texture.' + #13#10 + #9 + tp);
@@ -3899,6 +3902,7 @@ begin
             correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
             bLODMaterialNeedsFixed := (not SameText(lodTexture, correctLodTexture));
             if bLodUsesGrayscaleToPalette then if bLODMaterialNeedsFixed then begin
+                AddMessage(#9 + 'Warning: ' + f + ' does not appear to be using the correct rasterized grayscale to palette texture.');
                 Result := True;
             end;
             bRuleExists := true;
@@ -3913,8 +3917,13 @@ begin
             if (not bForceRasterize) then begin
                 diffuseTexture := wbNormalizeResourceName(diffuseTexture, resTexture);
                 paletteTexture := wbNormalizeResourceName(paletteTexture, resTexture);
-                if (not GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture)) then Result := True;
-            end else Result := True;
+                if (not GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture)) then begin
+                    AddMessage(#9 + 'Warning: ' + f + ' has modified grayscale to palette textures.');
+                    Result := True;
+                end;
+            end else begin
+                Result := True;
+            end;
         end;
         if Result then begin
             CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
@@ -3924,7 +3933,7 @@ begin
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
             then begin
-                slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+                AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
                 CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
             end;
         end else if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
@@ -3934,9 +3943,8 @@ begin
 
             if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe))
             then begin
-                slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+                AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
                 CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
-                AddMessage('Compare ' + whatItShouldBe);
             end;
         end;
     finally
@@ -3960,6 +3968,7 @@ begin
     bLODMaterialNeedsFixed := False;
     bgsm := TwbBGSMFile.Create;
     bgsmLOD := TwbBGSMFile.Create;
+
     try
         try
             bgsmLOD.LoadFromResource(LODMaterial);
@@ -3971,13 +3980,15 @@ begin
             bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
             paletteScale := Fallback(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'], paletteScale);
             f := LowerCase(joRasterizeMaterials.O[LODMaterial].S['Full Material']);
-            lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['RasterizedDiffusePath'], resTexture));
+            lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['Textures\Diffuse'], resTexture));
             correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
 
-            if lodTexture = correctLodTexture then bLODMaterialNeedsFixed := True;
+            if not SameText(lodTexture, correctLodTexture) then bLODMaterialNeedsFixed := True;
+
             if bLODMaterialNeedsFixed then begin
-                AddMessage(lodTexture);
-                AddMessage(correctLodTexture);
+                AddMessage('Warning: LOD material does not point to expected rasterized diffuse texture. ' + #9 + LODMaterial);
+                AddMessage(#9 + 'Current:' + #9 + lodTexture);
+                AddMessage(#9 + 'Expected:' + #9 + correctLodTexture);
             end;
         end;
         if not bLodUsesGrayscaleToPalette then Exit;
@@ -4021,7 +4032,7 @@ begin
         if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
         if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
         if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe)) then begin
-            slMissingGrayscaleMaterials.Add('Creating missing Grayscale to Palette material:' + #9 + whatItShouldBe);
+            AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
             CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
         end;
     end;
