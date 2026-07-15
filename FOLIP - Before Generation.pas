@@ -438,6 +438,7 @@ begin
 
     EnsureDirectoryExists(sOutputDir +'\');
     joElements.SaveToFile(sOutputDir + '\joElements.json', False, TEncoding.UTF8, True);
+    joWinningCells.SaveToFile(sOutputDir + '\joWinningCells.json', False, TEncoding.UTF8, True);
 
     //Save the plugin.
     fs := TFileStream.Create(sOutputDir + '\' + sFolipMasterFileName, fmCreate);
@@ -1254,7 +1255,7 @@ var
     f, i, w, x, y, r: integer;
     recordId, wrldEdid, wrldRecordId, cellRecordId, ref, cellX, cellY, fileHere, messageHere: string;
     bFolipMaster, bInterior, bPersistent, bAddedPersistentWorldspaceCell: boolean;
-    rWrld, rCell, nCell, pCell: IwbMainRecord;
+    rWrld, rCell, nCell, pCell, rNew: IwbMainRecord;
 begin
     AddMessage('Processing elements...');
     {
@@ -1356,29 +1357,32 @@ begin
                         //Add cell
                         cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
                         //It is possible for a world to not have a cell at 0,0, but have persistent references that indicate this cell. Fall back to persistent worldspace cell in this case.
-                        if (((cellX = '0') and (cellY = '0')) and SameText(cellRecordID, '')) then cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+                        if (((cellX = '0') and (cellY = '0')) and SameText(cellRecordID, '')) then begin
+                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+                            bAddedPersistentWorldspaceCell := true;
+                        end;
                         if bFolipMaster then
                             rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                         else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
                         if IsInIgnoredPlugin(MasterOrSelf((rCell))) then continue;
                         if Assigned(rCell) then nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        //Add persistent worldspace cell
+                        if not bAddedPersistentWorldspaceCell then begin
+                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+                            if bFolipMaster then
+                                rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
+                            else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
+                            if Assigned(rCell) then pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                            bAddedPersistentWorldspaceCell := True;
+                        end;
                     end;
 
 
                     //Process Overrides
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Count) downto 0 do begin
-                        bInterior := False;
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Names[r];
 
                         bPersistent := (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref].S['Set Is Persistent'] = '1');
-                        if (bPersistent and (cellX = '0') and (cellY = '0') and (not bAddedPersistentWorldspaceCell)) then begin
-                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
-                            if bFolipMaster then
-                                rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
-                            else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                            pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                            bAddedPersistentWorldspaceCell := True;
-                        end;
 
                         if bInterior then begin
                             cellRecordId := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref].S['cellRecordId'];
@@ -1397,23 +1401,23 @@ begin
 
                     //Process New References
                     for r := Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Count) downto 0 do begin
+                        rNew := nil;
                         ref := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Names[r];
                         AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
 
                         bPersistent := (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref].S['Set Is Persistent'] = '1');
-                        if (bPersistent and (cellX = '0') and (cellY = '0') and (not bAddedPersistentWorldspaceCell)) then begin
-                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
-                            if bFolipMaster then
-                                rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
-                            else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                            pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                            bAddedPersistentWorldspaceCell := True;
+                        if bPersistent then AddMessage('persistent!');
+                        if (bPersistent and bAddedPersistentWorldspaceCell)
+                        then begin
+                            rNew := Add(pCell, 'REFR', True);
+                            if not Assigned(rNew) then AddMessage('ERROR ADDING REFR TO PERSISTENT CELL');
+                            SetIsPersistent(rNew, bPersistent);
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, rNew);
+                        end
+                        else begin
+                            rNew := Add(nCell, 'REFR', True);
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, rNew);
                         end;
-                        if bPersistent
-                        then
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, FindChildGroup(ChildGroup(pCell), 8, pCell))
-                        else
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, bPersistent, nCell);
                     end;
                 end;
             end;
@@ -1596,7 +1600,7 @@ begin
     end;
 end;
 
-procedure ProcessNewReference(placedReference: TJsonObject; fileHere: string; bPersistent: boolean; nCell: IwbElement);
+procedure ProcessNewReference(placedReference: TJsonObject; const fileHere: string; var rNew: IwbMainRecord);
 {
     Add a placed reference.
 }
@@ -1604,7 +1608,6 @@ var
     cellRecordId, wrldRecordId, fakeStatic, baseFormId, fakeStaticFormId, scale, ms: string;
     bPersistent, bXesp: boolean;
     i, flst: integer;
-    rWrld, rCell, rNew: IwbMainRecord;
     xesp: IwbElement;
 begin
     {
@@ -1632,11 +1635,8 @@ begin
 
     placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
     }
-
-    rNew := Add(nCell, 'REFR', True);
     SetIsVisibleWhenDistant(rNew, (placedReference.S['Visible When Distant'] = '1'));
     SetIsInitiallyDisabled(rNew, (placedReference.S['Initially Disabled'] = '1'));
-    SetIsPersistent(rNew, bPersistent);
 
     fakeStatic := placedReference.S['fakeStatic'];
     baseFormId := placedReference.S['NAME'];
@@ -2239,7 +2239,6 @@ begin
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
             pluginFileNameHere := GetFileName(iCurrentPlugin);
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := IntToHex(GetLoadOrderFormID(stolen), 8);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
@@ -3541,14 +3540,14 @@ procedure CollectRecords;
 }
 var
     i, j, idx, blockidx, subblockidx, cellidx: integer;
-    recordId, wrldEdid, cellX, cellY: string;
+    recordId, wrldEdid, cellX, cellY, cellRecordId: string;
     r, rCell, rWrld: IwbMainRecord;
     block, subblock: IwbElement;
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
 begin
     //Iterate over all files.
-    for i := 0 to Pred(FileCount) do begin
+    for i := Pred(FileCount) downto 0 do begin
         f := FileByIndex(i);
         if i = 0 then begin
             g := GroupBySignature(f, 'TXST');
@@ -3643,11 +3642,12 @@ begin
 
             for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
                 block := ElementByIndex(wrldgroup, blockidx);
-                if Signature(block) = 'CELL' then begin
+                if SameText(Signature(block), 'CELL') then begin
                     //Found persistent worldspace cell
-                    rCell := block;
-                    if not IsWinningOverride(rCell) then continue;
-                    joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'] := RecordFormIdFileId(rCell);
+                    if not IsWinningOverride(block) then continue;
+                    cellRecordId := RecordFormIdFileId(block);
+                    joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'] := cellRecordId;
+                    AddMessage('Found Persistent Worldspace Cell: ' + cellRecordId);
                     continue;
                 end;
                 for subblockidx := 0 to Pred(ElementCount(block)) do begin
