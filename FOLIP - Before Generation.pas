@@ -18,7 +18,7 @@ var
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
-    slMainMasters, slFakeStatics, slAddedTexGenTextures: TStringList;
+    slMainMasters, slFakeStatics, slAddedTexGenTextures, slRasterizedDiffuses: TStringList;
 
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
     flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
@@ -175,6 +175,7 @@ begin
         slTexgen_alpha := TStringList.Create;
         slTexgen_noalpha := TStringList.Create;
         slAddedTexGenTextures := TStringList.Create;
+        slRasterizedDiffuses := TStringList.Create;
 
         //TJsonObjects
         joRules := TJsonObject.Create;
@@ -311,6 +312,7 @@ begin
         slPatchMasters.Free;
         slMainMasters.Free;
         slAddedTexGenTextures.Free;
+        slRasterizedDiffuses.Free;
 
         joRules.Free;
         joMswpMap.Free;
@@ -2899,8 +2901,10 @@ begin
     diffuseNew := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], diffuseNew);
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
+    if slRasterizedDiffuses.IndexOf(outputTexture) <> -1 then Exit;
     if FileExists(outputTexture) then Exit;
     if not bForceRasterize then if ResourceExists(diffuseNew) then if GrayscalePaletteTexturesVanilla(paletteTexture, replacementDiffuseNormalized) then Exit;
+    slRasterizedDiffuses.Add(outputTexture);
     AddMessage('Creating Rasterized Diffuse Texture: ' + #9 + diffuseNew);
     EnsureDirectoryExists(ExtractFilePath(outputTexture));
     cmdline := '"' + texconv + '" "' + diffuse + '" "' + palette + '" ' + paletteScale + ' "' + outputTexture + '" 1024 BC3_UNORM';
