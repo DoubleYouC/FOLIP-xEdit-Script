@@ -33,7 +33,7 @@ var
     bIgnoreNoLOD, bLightPlugin, bRemoveVWD, bLimitedHasDistantLODRemoval, bAddVWD, bSkipPrecombined, bRemoveBeforeGeneration, bMakeMissingMaterials,
     bPreviousBeforeGenerationPresent, bDeepScan, bForceRasterize: Boolean;
 
-    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements, joWinningCells, joRasterizeMaterials: TJsonObject;
+    joRules, joMswpMap, joUserRules, joMultiRefLOD, joUserSettings, joModelMatch, joElements, joWinningCells, joRasterizeMaterials, joLODMaterialGroup: TJsonObject;
 
     lvRules: TListView;
 
@@ -186,6 +186,7 @@ begin
         joElements := TJsonObject.Create;
         joWinningCells := TJsonObject.Create;
         joRasterizeMaterials := TJsonObject.Create;
+        joLODMaterialGroup := TJsonObject.Create;
 
         bLoadDefaults := True;
         bDeepScan := False;
@@ -330,8 +331,10 @@ begin
         EnsureDirectoryExists(sOutputDir +'\');
         joElements.Free;
 
-        joRasterizeMaterials.SaveToFile(sOutputDir + '\RasterizeMaterials.json', False, TEncoding.UTF8, True);
+        joRasterizeMaterials.SaveToFile(wbScriptsPath + 'FOLIP\RasterizeMaterials.json', False, TEncoding.UTF8, True);
         joRasterizeMaterials.Free;
+        joLODMaterialGroup.SaveToFile(wbScriptsPath + 'FOLIP\joLODMaterialGroup.json', False, TEncoding.UTF8, True);
+        joLODMaterialGroup.Free;
 
         //Save user settings
         AddMessage('Saving user settings to ' + wbDataPath + sUserSettingsFileName);
@@ -439,8 +442,8 @@ begin
     DeleteDirectory(FOLIPTempPath);
 
     EnsureDirectoryExists(sOutputDir +'\');
-    joElements.SaveToFile(sOutputDir + '\joElements.json', False, TEncoding.UTF8, True);
-    joWinningCells.SaveToFile(sOutputDir + '\joWinningCells.json', False, TEncoding.UTF8, True);
+    joElements.SaveToFile(wbScriptsPath + 'FOLIP\joElements.json', False, TEncoding.UTF8, True);
+    joWinningCells.SaveToFile(wbScriptsPath + 'FOLIP\joWinningCells.json', False, TEncoding.UTF8, True);
 
     //Save the plugin.
     fs := TFileStream.Create(sOutputDir + '\' + sFolipMasterFileName, fmCreate);
@@ -1408,7 +1411,6 @@ begin
                         AddMessage('Adding placed reference: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
 
                         bPersistent := (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref].S['Set Is Persistent'] = '1');
-                        if bPersistent then AddMessage('persistent!');
                         if (bPersistent and bAddedPersistentWorldspaceCell)
                         then begin
                             rNew := Add(pCell, 'REFR', True);
@@ -4140,11 +4142,21 @@ function MatHasNonLodTexture(const f: string; var tp: string): Boolean;
 }
 var
     bgsm: TwbBGSMFile;
+    TwoSided, AlphaTest, AlphaTestRef, BackLightPower: string;
 begin
     Result := False;
     bgsm := TwbBGSMFile.Create;
     try
         bgsm.LoadFromResource(f);
+
+        TwoSided := 'Two-sided - ' + bgsm.EditValues['TwoSided'];
+        AlphaTest := 'Alpha-test - ' + bgsm.EditValues['AlphaTest'];
+        BackLightPower := FloatToStr(StrToFloatDef(bgsm.EditValues['BackLightPower'], 0));
+        if SameText(AlphaTest, 'Alpha-test - yes') then begin
+            AlphaTestRef := bgsm.EditValues['AlphaTestRef'];
+            joLODMaterialGroup.O[TwoSided].O[AlphaTest].O['Threshold - ' + AlphaTestRef].A['Backlight - ' + BackLightPower].Add(f);
+        end else
+            joLODMaterialGroup.O[TwoSided].O[AlphaTest].A['Backlight - ' + BackLightPower].Add(f);
 
         tp := bgsm.EditValues['Textures\Diffuse'];
         if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
