@@ -3118,24 +3118,28 @@ begin
     end;
 end;
 
-function ProcessTexgenFile(slTexGen_file: TStringList; omDiffuseNormalized, replacementDiffuseNormalized: string; var slNew_lines: TStringList;): Boolean;
+function ProcessTexgenFile(slTexGen_file: TStringList; omDiffuseNormalized, replacementDiffuseNormalized: string; var slNew_lines: TStringList): Boolean;
 {
     Adds texgen rules to create the new lod replacement textures.
     Returns true if successful, false otherwise.
 }
 var
-    slTextureList, slLine: TStringList;
-    i, c, t: integer;
+    slTextureList, slLine, slTempLines, slTempLineHere: TStringList;
+    i, c, t, j: integer;
     bTextureMatch: boolean;
-    new_line, lodDiffuse: string;
+    divisor: double;
+    new_line, lodDiffuse, line5, line6, line7, line8, line10, line11: string;
 begin
     Result := False;
-    slTextureList := TStringList.Create;
+
     lodDiffuse := ChangeFullToLodDirectory(replacementDiffuseNormalized);
     //In case the diffuse texture doesn't follow proper naming convention of ending in _d.dds
     if RightStr(LowerCase(lodDiffuse), 6) <> '_d.dds' then begin
         lodDiffuse := TrimLeftChars(lodDiffuse, 4) + '_d.dds';
     end;
+
+    slTextureList := TStringList.Create;
+    slTempLines := TStringList.Create;
     try
         slTextureList.Add(omDiffuseNormalized);
         AddMessage(#9 + 'Checking TexGen file for texture: ' + omDiffuseNormalized);
@@ -3174,14 +3178,55 @@ begin
                     end;
 
                     if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin
-                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture. It is possible that auto-generating the texture based off this may not produce the expected appearance.');
+                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture. It is possible that auto-generating the texture based off this may not produce the expected appearance. hheejkjkjrfakjrjfa kljweklj klajelkrjkilajwraj;rjewalk;jr');
                         slTextureList.Add(slLine[9]); // Add the texture to the match list
+
+                        //This is creating a temporary texture, generally of only a portion of the main texture.
+                        //We will recreate this.
+                        AddMessage(slLine);
+
+                        new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
+                                + replacementDiffuseNormalized
+                                + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
+                                + lodDiffuse
+                                + #9 + slLine[10] + #9 + slLine[11];
+                        AddMessage(#9 + 'Adding new temp TexGen line: ' + new_line);
+                        slTempLines.Add(new_line);
+
                         continue;
                     end;
 
                     if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
                         AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture.  It is possible that auto-generating the texture based off this may not produce the expected appearance.');
-                        //Don't skip this line, as this is likely the main rule.
+                        //The real rule.
+                        //So the temp lines are going to have their numbers changed so that it works for the real rule.
+                        //Typically the temp rule is upscaled vs the real rule, so we will downscale the temp rule to match the real rule.
+                        for j := 0 to Pred(slTempLines.Count) do begin
+                            slTempLineHere := TStringList.Create;
+                            try
+                                slTempLineHere.Delimiter := #9; // Set delimiter to tab character
+                                slTempLineHere.DelimitedText := slTempLines[j];
+                                divisor := StrToFloatDef(slLine[10], 1) / StrToFloatDef(slTempLineHere[10], 1);
+
+                                line5 := FloatToStr(StrToFloatDef(slTempLineHere[5], 1) * divisor);
+                                line6 := FloatToStr(StrToFloatDef(slTempLineHere[6], 1) * divisor);
+                                line7 := FloatToStr(StrToFloatDef(slTempLineHere[7], 1) * divisor);
+                                line8 := FloatToStr(StrToFloatDef(slTempLineHere[8], 1) * divisor);
+                                line10 := slLine[10];
+                                line11 := slLine[11];
+                                new_line := slTempLineHere[0] + #9 + slTempLineHere[1] + #9 + slTempLineHere[2] + #9 + slTempLineHere[3] + #9
+                                            + replacementDiffuseNormalized
+                                            + #9 + line5 + #9 + line6 + #9 + line7 + #9 + line8 + #9
+                                            + lodDiffuse
+                                            + #9 + line10 + #9 + line11;
+                                AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
+                                slNew_lines.Add(new_line);
+                                Result := True;
+                            finally
+                                slTempLineHere.Free;
+                            end;
+                        end;
+                        continue;
                     end;
 
                     new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
@@ -3195,6 +3240,7 @@ begin
 
                 finally
                     slLine.Free;
+                    slTempLines.Free;
                 end;
             end;
         end;
@@ -4047,6 +4093,7 @@ begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Specular texture.');
             Result := True;
         end;
+
         paletteTexture := bgsmModded.EditValues['Textures\Grayscale'];
         if bgsmVanilla.EditValues['Textures\Grayscale'] <> paletteTexture then begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Grayscale palette texture.');
@@ -4226,6 +4273,10 @@ begin
             joLODMaterialGroup.O[TwoSided].O[AlphaTest].A['Backlight - ' + BackLightPower].Add(f);
 
         if bgsm.EditValues['SpecularEnabled'] <> 'yes' then AddMessage('Warning! LOD material does not have specular enabled!' + #9 + f);
+
+        // if not SameText(FloatToStr(StrToFloatDef(bgsm.EditValues['SpecularMult'], 1)), '1') then begin
+        //     AddMessage('Warning: ' + f + #9 + 'has specular of ' + FloatToStr(StrToFloatDef(bgsm.EditValues['SpecularMult'], 1)));
+        // end;
 
         tp := bgsm.EditValues['Textures\Diffuse'];
         if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
