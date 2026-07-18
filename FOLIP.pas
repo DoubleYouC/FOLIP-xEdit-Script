@@ -187,6 +187,7 @@ begin
         joWinningCells := TJsonObject.Create;
         joRasterizeMaterials := TJsonObject.Create;
         joLODMaterialGroup := TJsonObject.Create;
+        joUserRules := TJsonObject.Create;
 
         bLoadDefaults := True;
         bDeepScan := False;
@@ -5207,7 +5208,6 @@ begin
     j := 'FOLIP\UserRules.json';
     if ResourceExists(j) then begin
         AddMessage('Loaded LOD Rule File: ' + j);
-        joUserRules := TJsonObject.Create;
         joUserRules.LoadFromResource(j);
         for c := 0 to Pred(joUserRules.Count) do begin
             key := joUserRules.Names[c];
