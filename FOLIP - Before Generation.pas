@@ -439,6 +439,8 @@ begin
     end;
     SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
+    RemoveITPOCells;
+
     DeleteDirectory(FOLIPTempPath);
 
     EnsureDirectoryExists(sOutputDir +'\');
@@ -1601,6 +1603,57 @@ begin
         flst := StrToInt(placedReferenceOverride.A['AddRefToMyFormlist'].S[i]);
         if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
         AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[flst]));
+    end;
+end;
+
+procedure RemoveITPOCells;
+{
+    Removes ITPO cells from the plugins (this is necessary due to changing persistent state of references).
+}
+var
+    i, j, blockidx, subblockidx, cellidx: integer;
+    rCell, rWrld: IwbMainRecord;
+    block, subblock: IwbElement;
+    f: IwbFile;
+    g, wrldgroup: IwbGroupRecord;
+begin
+    for i := 0 to 1 do begin
+        if i = 0 then f := iFolipMasterFile else f := iFolipPluginFile;
+        AddMessage('Removing unnecessary cells from ' + #9 + GetFileName(f));
+
+        g := GroupBySignature(f, 'WRLD');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            rWrld := ElementByIndex(g, j);
+            wrldgroup := ChildGroup(rWrld);
+
+            for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
+                block := ElementByIndex(wrldgroup, blockidx);
+                if SameText(Signature(block), 'CELL') then begin
+                    //Found persistent worldspace cell
+                    //check to see if we can remove the cell or not
+
+                    //If the cell has refs, skip it.
+                    if ElementCount(ChildGroup(block)) <> 0 then continue;
+                    AddMessage('Removed' + #9 + ShortName(block));
+                    RemoveNode(block);
+                    continue;
+                end;
+                for subblockidx := 0 to Pred(ElementCount(block)) do begin
+                    subblock := ElementByIndex(block, subblockidx);
+                    for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                        rCell := ElementByIndex(subblock, cellidx);
+                        if (Signature(rCell) <> 'CELL') then continue;
+                        //check to see if we can remove the cell or not
+
+                        //If the cell has refs, skip it. Now in a possible scenario, it may be necessary to check to ensure the cell was copied from the correct override.
+                        //Currently we are able to handle this perfectly via the cellX and cellY parts of the json, and ensuring the normal cell is copied prior to attempting to add references.
+                        if ElementCount(ChildGroup(rCell)) <> 0 then continue;
+                        AddMessage('Removed' + #9 + ShortName(rCell));
+                        RemoveNode(rCell);
+                    end;
+                end;
+            end;
+        end;
     end;
 end;
 
@@ -4158,6 +4211,8 @@ begin
             joLODMaterialGroup.O[TwoSided].O[AlphaTest].O['Threshold - ' + AlphaTestRef].A['Backlight - ' + BackLightPower].Add(f);
         end else
             joLODMaterialGroup.O[TwoSided].O[AlphaTest].A['Backlight - ' + BackLightPower].Add(f);
+
+        if bgsm.EditValues['SpecularEnabled'] <> 'yes' then AddMessage('Warning! LOD material does not have specular enabled!' + #9 + f);
 
         tp := bgsm.EditValues['Textures\Diffuse'];
         if not (ContainsText(tp, 'lod/') or ContainsText(tp, 'lod\')) then begin
