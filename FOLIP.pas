@@ -440,7 +440,9 @@ begin
     SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
     bRemovedITPO := True;
-    while bRemovedITPO do bRemovedITPO := RemoveITPOCells;
+    //while bRemovedITPO do bRemovedITPO := RemoveITPOCells;
+    RemoveITPOCells;
+    RemoveITPOCells;
 
     DeleteDirectory(FOLIPTempPath);
 
@@ -1607,7 +1609,7 @@ begin
     end;
 end;
 
-function RemoveITPOCells: boolean;
+procedure RemoveITPOCells;
 {
     Removes ITPO cells from the plugins (this is necessary due to changing persistent state of references).
     Returns true if removed anything.
@@ -1620,7 +1622,6 @@ var
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
 begin
-    Result := False;
     for i := 0 to 1 do begin
         if i = 0 then f := iFolipMasterFile else f := iFolipPluginFile;
         fileName := GetFileName(f);
@@ -1641,7 +1642,6 @@ begin
                     if ElementCount(ChildGroup(block)) <> 0 then continue;
                     AddMessage('Removed cell from' + #9 + fileName + #9 + Name(block));
                     RemoveNode(block);
-                    Result := True;
                     continue;
                 end;
                 for subblockidx := 0 to Pred(ElementCount(block)) do begin
@@ -1656,7 +1656,6 @@ begin
                         if ElementCount(ChildGroup(rCell)) <> 0 then continue;
                         AddMessage('Removed cell from' + #9 + fileName + #9 + Name(rCell));
                         RemoveNode(rCell);
-                        Result := True;
                     end;
                 end;
             end;
