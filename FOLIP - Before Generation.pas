@@ -2845,6 +2845,7 @@ begin
         replacementMatbgsm.EditValues['Textures\Grayscale'] := '';
         replacementMatbgsm.EditValues['SpecularEnabled'] := 'yes';
         replacementMatbgsm.NativeValues['AlphaTest'] := ombgsm.NativeValues['AlphaTest'];
+        replacementMatbgsm.EditValues['TwoSided'] := ombgsm.EditValues['TwoSided'];
 
         replacementMatbgsm.EditValues['ScreenSpaceReflections'] := 'no';
         replacementMatbgsm.EditValues['WetnessControlScreenSpaceReflections'] := 'no';
