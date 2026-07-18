@@ -3138,13 +3138,18 @@ begin
         lodDiffuse := TrimLeftChars(lodDiffuse, 4) + '_d.dds';
     end;
 
+    //First we need to scan and see if the matches has a temp file specified. If it does, we need to add those to the slTextureList before actually generating the lines.
+    //So we basically need to do this twice.
+    //First pass: find all relevant lines.
+    //Second pass: acutlly generate the lines needed.
+
     slTextureList := TStringList.Create;
-    slTempLines := TStringList.Create;
     try
+        //First pass: populate the slTextureList
+
         slTextureList.Add(omDiffuseNormalized);
         AddMessage(#9 + 'Checking TexGen file for texture: ' + omDiffuseNormalized);
 
-        //Check noalpha
         for i := 0 to Pred(slTexGen_file.Count) do begin
             bTextureMatch := False;
             if slTexGen_file[i] = '' then continue; // Skip empty lines
@@ -3158,8 +3163,6 @@ begin
             end;
 
             if bTextureMatch then begin
-                AddMessage(#9 + 'Match found: ' + slTexGen_file[i]);
-
                 slLine := TStringList.Create;
                 try
                     slLine.Delimiter := #9; // Set delimiter to tab character
@@ -3178,71 +3181,114 @@ begin
                     end;
 
                     if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin
-                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture. It is possible that auto-generating the texture based off this may not produce the expected appearance. hheejkjkjrfakjrjfa kljweklj klajelkrjkilajwraj;rjewalk;jr');
-                        slTextureList.Add(slLine[9]); // Add the texture to the match list
-
-                        //This is creating a temporary texture, generally of only a portion of the main texture.
-                        //We will recreate this.
-                        AddMessage(slLine);
-
-                        new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
-                                + replacementDiffuseNormalized
-                                + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
-                                + lodDiffuse
-                                + #9 + slLine[10] + #9 + slLine[11];
-                        AddMessage(#9 + 'Adding new temp TexGen line: ' + new_line);
-                        slTempLines.Add(new_line);
-
+                        AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture. It is possible that auto-generating the texture based off this may not produce the expected appearance.');
+                        slTextureList.Add(slLine[9]);
                         continue;
                     end;
 
                     if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
                         AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture.  It is possible that auto-generating the texture based off this may not produce the expected appearance.');
-                        //The real rule.
-                        //So the temp lines are going to have their numbers changed so that it works for the real rule.
-                        //Typically the temp rule is upscaled vs the real rule, so we will downscale the temp rule to match the real rule.
-                        for j := 0 to Pred(slTempLines.Count) do begin
-                            slTempLineHere := TStringList.Create;
-                            try
-                                slTempLineHere.Delimiter := #9; // Set delimiter to tab character
-                                slTempLineHere.DelimitedText := slTempLines[j];
-                                divisor := StrToFloatDef(slLine[10], 1) / StrToFloatDef(slTempLineHere[10], 1);
-
-                                line5 := FloatToStr(StrToFloatDef(slTempLineHere[5], 1) * divisor);
-                                line6 := FloatToStr(StrToFloatDef(slTempLineHere[6], 1) * divisor);
-                                line7 := FloatToStr(StrToFloatDef(slTempLineHere[7], 1) * divisor);
-                                line8 := FloatToStr(StrToFloatDef(slTempLineHere[8], 1) * divisor);
-                                line10 := slLine[10];
-                                line11 := slLine[11];
-                                new_line := slTempLineHere[0] + #9 + slTempLineHere[1] + #9 + slTempLineHere[2] + #9 + slTempLineHere[3] + #9
-                                            + replacementDiffuseNormalized
-                                            + #9 + line5 + #9 + line6 + #9 + line7 + #9 + line8 + #9
-                                            + lodDiffuse
-                                            + #9 + line10 + #9 + line11;
-                                AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
-                                slNew_lines.Add(new_line);
-                                Result := True;
-                            finally
-                                slTempLineHere.Free;
-                            end;
-                        end;
+                        slTextureList.Add(slLine[4]);
                         continue;
                     end;
-
-                    new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
-                                + replacementDiffuseNormalized
-                                + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
-                                + lodDiffuse
-                                + #9 + slLine[10] + #9 + slLine[11];
-                    AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
-                    slNew_lines.Add(new_line);
-                    Result := True;
-
                 finally
                     slLine.Free;
-                    slTempLines.Free;
                 end;
             end;
+        end;
+
+        //Second pass: generate the lines.
+        slTempLines := TStringList.Create;
+        try
+            for i := 0 to Pred(slTexGen_file.Count) do begin
+                bTextureMatch := False;
+                if slTexGen_file[i] = '' then continue; // Skip empty lines
+
+                for t := 0 to Pred(slTextureList.Count) do begin
+                    if ContainsText(slTexGen_file[i], slTextureList[t]) then begin
+
+                        bTextureMatch := True;
+                        Break; // Exit the inner loop if a match is found
+                    end;
+                end;
+
+                if bTextureMatch then begin
+                    AddMessage(#9 + 'Match found: ' + slTexGen_file[i]);
+
+                    slLine := TStringList.Create;
+                    try
+                        slLine.Delimiter := #9; // Set delimiter to tab character
+                        slLine.DelimitedText := slTexGen_file[i];
+
+                        if ContainsText(slLine[0], '//') then begin // skip comment lines
+                            continue;
+                        end else if slLine[5] = 'x' then begin // skip x lines (temporary texture setup for mipmaps, typically for adjusting specular, which we should do automatically)
+                            continue;
+                        end;
+
+                        if ContainsText(slLine[9], 'DynDOLOD-Temp') then begin
+                            //This is creating a temporary texture, generally of only a portion of the main texture.
+                            //We will recreate this.
+
+                            new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
+                                    + replacementDiffuseNormalized
+                                    + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
+                                    + lodDiffuse
+                                    + #9 + slLine[10] + #9 + slLine[11];
+                            AddMessage(#9 + 'Adding new temp TexGen line: ' + new_line);
+                            slTempLines.Add(new_line);
+
+                            continue;
+                        end;
+
+                        if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
+                            //The real rule.
+                            //So the temp lines are going to have their numbers changed so that it works for the real rule.
+                            //Typically the temp rule is upscaled vs the real rule, so we will downscale the temp rule to match the real rule.
+                            for j := 0 to Pred(slTempLines.Count) do begin
+                                slTempLineHere := TStringList.Create;
+                                try
+                                    slTempLineHere.Delimiter := #9; // Set delimiter to tab character
+                                    slTempLineHere.DelimitedText := slTempLines[j];
+                                    divisor := StrToFloatDef(slLine[10], 1) / StrToFloatDef(slTempLineHere[10], 1);
+
+                                    line5 := FloatToStr(StrToFloatDef(slTempLineHere[5], 1) * divisor);
+                                    line6 := FloatToStr(StrToFloatDef(slTempLineHere[6], 1) * divisor);
+                                    line7 := FloatToStr(StrToFloatDef(slTempLineHere[7], 1) * divisor);
+                                    line8 := FloatToStr(StrToFloatDef(slTempLineHere[8], 1) * divisor);
+                                    line10 := slLine[10];
+                                    line11 := slLine[11];
+                                    new_line := slTempLineHere[0] + #9 + slTempLineHere[1] + #9 + slTempLineHere[2] + #9 + slTempLineHere[3] + #9
+                                                + replacementDiffuseNormalized
+                                                + #9 + line5 + #9 + line6 + #9 + line7 + #9 + line8 + #9
+                                                + lodDiffuse
+                                                + #9 + line10 + #9 + line11;
+                                    AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
+                                    slNew_lines.Add(new_line);
+                                    Result := True;
+                                finally
+                                    slTempLineHere.Free;
+                                end;
+                            end;
+                            continue;
+                        end;
+
+                        new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
+                                    + replacementDiffuseNormalized
+                                    + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
+                                    + lodDiffuse
+                                    + #9 + slLine[10] + #9 + slLine[11];
+                        AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
+                        slNew_lines.Add(new_line);
+                        Result := True;
+
+                    finally
+                        slLine.Free;
+                    end;
+                end;
+            end;
+        finally
+            slTempLines.Free;
         end;
     finally
         slTextureList.Free;
