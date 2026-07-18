@@ -3568,7 +3568,7 @@ begin
 
     if bAddHasDistantLOD then
         joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod']
-    else if (GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD') <> 0)
+    else if (GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD') <> 0) then
         joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 1
     else
         joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 0;
