@@ -1783,7 +1783,7 @@ begin
         AddMessage('Respect Enable Parents: Processing ' + Name(p));
 
         //Parents can only be reliably respected if they are from the first master file (Fallout4.esm) and are not initially disabled (not always a problem but sometimes is).
-        if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p)) and (Pos(Signature(BaseRecord(s)), sRespectableBases) <> 0)) then bCanBeRespected := True;
+        if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p)) and (Pos(Signature(BaseRecord(p)), sRespectableBases) <> 0)) then bCanBeRespected := True;
 
         if bCanBeRespected and (GetElementEditValues(p, 'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             //If the parent can be respected but is not respected, set the LOD Respects Enable State flag on the parenet.
@@ -3188,7 +3188,7 @@ begin
                         continue;
                     end;
 
-                    if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
+                    if (ContainsText(slLine[4], 'DynDOLOD-Temp') and SameText(LowerCase(slLine[9]), LowerCase(omDiffuseNormalized))) then begin
                         AddMessage(#9#9 + 'Warning: Original LOD texture has a TexGen rule that uses a temporary texture.  It is possible that auto-generating the texture based off this may not produce the expected appearance.');
                         slTextureList.Add(slLine[4]);
                         continue;
@@ -3243,7 +3243,7 @@ begin
                             continue;
                         end;
 
-                        if ContainsText(slLine[4], 'DynDOLOD-Temp') then begin
+                        if (ContainsText(slLine[4], 'DynDOLOD-Temp') and (slTempLines.Count > 0)) then begin
                             //The real rule.
                             //So the temp lines are going to have their numbers changed so that it works for the real rule.
                             //Typically the temp rule is upscaled vs the real rule, so we will downscale the temp rule to match the real rule.
