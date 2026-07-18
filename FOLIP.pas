@@ -1765,6 +1765,8 @@ var
     c: TwbGridCell;
 
     tlOppositeEnableRefs, tlEnableRefs: TList;
+const
+    sRespectableBases = 'STAT,ACTI,TXST';
 begin
     for i := Pred(tlEnableParents.Count) downto 0 do begin
         // This iterates over the actual Parents
@@ -1781,7 +1783,7 @@ begin
         AddMessage('Respect Enable Parents: Processing ' + Name(p));
 
         //Parents can only be reliably respected if they are from the first master file (Fallout4.esm) and are not initially disabled (not always a problem but sometimes is).
-        if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p))) then bCanBeRespected := True;
+        if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p)) and (Pos(Signature(BaseRecord(s)), sRespectableBases) <> 0)) then bCanBeRespected := True;
 
         if bCanBeRespected and (GetElementEditValues(p, 'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
             //If the parent can be respected but is not respected, set the LOD Respects Enable State flag on the parenet.
@@ -1826,7 +1828,7 @@ begin
             if not bBaseHasLOD then begin
                 // If the base does not have LOD, we will consider it for a suitable opposite enable parent replacer.
                 if bHasPersistentReplacer then continue; //Already have a persistent replacer, no need to look for more.
-                if Pos(Signature(base), 'STAT,ACTI,TXST') = 0 then continue; //Only consider static, activator, and texture set for opposite enable parent replacer.
+                if Pos(Signature(base), sRespectableBases) = 0 then continue; //Only consider static, activator, and texture set for opposite enable parent replacer.
                 if LeftStr(IntToHex(GetLoadOrderFormID(r), 8), 2) <> '00' then continue; //Only consider references from the first master file (Fallout4.esm) for opposite enable parent replacer.
                 if (GetElementNativeValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') <> 0)
                 then bHasOppositeEnableParent := True else bHasOppositeEnableParent := False;
