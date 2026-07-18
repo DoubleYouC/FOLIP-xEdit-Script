@@ -366,7 +366,7 @@ end;
 
 procedure BeforeGeneration;
 var
-    bSkip: Boolean;
+    bSkip, bRemovedITPO: Boolean;
     sFolipPluginFileNameSanitized, cmdline: string;
     fs: TFileStream;
     diamondCityWrld, goodneighborWrld: IwbMainRecord;
@@ -439,9 +439,8 @@ begin
     end;
     SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
-    RemoveITPOCells;
-    AddMessage('second pass');
-    RemoveITPOCells;
+    bRemovedITPO := True;
+    while bRemovedITPO do bRemovedITPO := RemoveITPOCells;
 
     DeleteDirectory(FOLIPTempPath);
 
@@ -1608,9 +1607,10 @@ begin
     end;
 end;
 
-procedure RemoveITPOCells;
+function RemoveITPOCells: boolean;
 {
     Removes ITPO cells from the plugins (this is necessary due to changing persistent state of references).
+    Returns true if removed anything.
 }
 var
     i, j, blockidx, subblockidx, cellidx: integer;
@@ -1620,10 +1620,11 @@ var
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
 begin
+    Result := False;
     for i := 0 to 1 do begin
         if i = 0 then f := iFolipMasterFile else f := iFolipPluginFile;
         fileName := GetFileName(f);
-        AddMessage('Removing unnecessary cells from ' + #9 + GetFileName(f));
+        //AddMessage('Removing unnecessary cells from ' + #9 + GetFileName(f));
 
         g := GroupBySignature(f, 'WRLD');
         for j := 0 to Pred(ElementCount(g)) do begin
@@ -1640,6 +1641,7 @@ begin
                     if ElementCount(ChildGroup(block)) <> 0 then continue;
                     AddMessage('Removed cell from' + #9 + fileName + #9 + Name(block));
                     RemoveNode(block);
+                    Result := True;
                     continue;
                 end;
                 for subblockidx := 0 to Pred(ElementCount(block)) do begin
@@ -1654,6 +1656,7 @@ begin
                         if ElementCount(ChildGroup(rCell)) <> 0 then continue;
                         AddMessage('Removed cell from' + #9 + fileName + #9 + Name(rCell));
                         RemoveNode(rCell);
+                        Result := True;
                     end;
                 end;
             end;
