@@ -440,6 +440,8 @@ begin
     SetElementEditValues(goodneighborWrld, 'NAMA', '0.25');
 
     RemoveITPOCells;
+    AddMessage('second pass');
+    RemoveITPOCells;
 
     DeleteDirectory(FOLIPTempPath);
 
@@ -1612,6 +1614,7 @@ procedure RemoveITPOCells;
 }
 var
     i, j, blockidx, subblockidx, cellidx: integer;
+    fileName: string;
     rCell, rWrld: IwbMainRecord;
     block, subblock: IwbElement;
     f: IwbFile;
@@ -1619,6 +1622,7 @@ var
 begin
     for i := 0 to 1 do begin
         if i = 0 then f := iFolipMasterFile else f := iFolipPluginFile;
+        fileName := GetFileName(f);
         AddMessage('Removing unnecessary cells from ' + #9 + GetFileName(f));
 
         g := GroupBySignature(f, 'WRLD');
@@ -1634,7 +1638,7 @@ begin
 
                     //If the cell has refs, skip it.
                     if ElementCount(ChildGroup(block)) <> 0 then continue;
-                    AddMessage('Removed' + #9 + Name(block));
+                    AddMessage('Removed cell from' + #9 + fileName + #9 + Name(block));
                     RemoveNode(block);
                     continue;
                 end;
@@ -1642,12 +1646,13 @@ begin
                     subblock := ElementByIndex(block, subblockidx);
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
                         rCell := ElementByIndex(subblock, cellidx);
+                        if SameText(Signature(rCell), 'CELL') then continue;
                         //check to see if we can remove the cell or not
 
                         //If the cell has refs, skip it. Now in a possible scenario, it may be necessary to check to ensure the cell was copied from the correct override.
                         //Currently we are able to handle this perfectly via the cellX and cellY parts of the json, and ensuring the normal cell is copied prior to attempting to add references.
                         if ElementCount(ChildGroup(rCell)) <> 0 then continue;
-                        AddMessage('Removed' + #9 + Name(rCell));
+                        AddMessage('Removed cell from' + #9 + fileName + #9 + Name(rCell));
                         RemoveNode(rCell);
                     end;
                 end;
@@ -3555,12 +3560,18 @@ begin
     recordId := RecordFormIdFileId(s);
 
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
-    joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod'];
+
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 0'] := joLOD.S['level0'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 1'] := joLOD.S['level1'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 2'] := joLOD.S['level2'];
     joElements.O['STAT'].O[OverOrNew].O[recordId].S['Level 3'] := joLOD.S['level3'];
 
+    if bAddHasDistantLOD then
+        joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := joLOD.I['hasdistantlod']
+    else if (GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD') <> 0)
+        joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 1
+    else
+        joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 0;
     {
     n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
 
