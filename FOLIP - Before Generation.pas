@@ -1634,7 +1634,7 @@ begin
 
                     //If the cell has refs, skip it.
                     if ElementCount(ChildGroup(block)) <> 0 then continue;
-                    AddMessage('Removed' + #9 + ShortName(block));
+                    AddMessage('Removed' + #9 + Name(block));
                     RemoveNode(block);
                     continue;
                 end;
@@ -1642,13 +1642,12 @@ begin
                     subblock := ElementByIndex(block, subblockidx);
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
                         rCell := ElementByIndex(subblock, cellidx);
-                        if (Signature(rCell) <> 'CELL') then continue;
                         //check to see if we can remove the cell or not
 
                         //If the cell has refs, skip it. Now in a possible scenario, it may be necessary to check to ensure the cell was copied from the correct override.
                         //Currently we are able to handle this perfectly via the cellX and cellY parts of the json, and ensuring the normal cell is copied prior to attempting to add references.
                         if ElementCount(ChildGroup(rCell)) <> 0 then continue;
-                        AddMessage('Removed' + #9 + ShortName(rCell));
+                        AddMessage('Removed' + #9 + Name(rCell));
                         RemoveNode(rCell);
                     end;
                 end;
