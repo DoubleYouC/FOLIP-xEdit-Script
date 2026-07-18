@@ -1646,7 +1646,7 @@ begin
                     subblock := ElementByIndex(block, subblockidx);
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
                         rCell := ElementByIndex(subblock, cellidx);
-                        if SameText(Signature(rCell), 'CELL') then continue;
+                        if not SameText(Signature(rCell), 'CELL') then continue;
                         //check to see if we can remove the cell or not
 
                         //If the cell has refs, skip it. Now in a possible scenario, it may be necessary to check to ensure the cell was copied from the correct override.
