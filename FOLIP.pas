@@ -3243,7 +3243,7 @@ begin
                             continue;
                         end;
 
-                        if (ContainsText(slLine[4], 'DynDOLOD-Temp') and (slTempLines.Count > 0)) then begin
+                        if (ContainsText(slLine[4], 'DynDOLOD-Temp') and (slTempLines.Count > 0) and SameText(LowerCase(slLine[9]), LowerCase(omDiffuseNormalized))) then begin
                             //The real rule.
                             //So the temp lines are going to have their numbers changed so that it works for the real rule.
                             //Typically the temp rule is upscaled vs the real rule, so we will downscale the temp rule to match the real rule.
@@ -3275,14 +3275,17 @@ begin
                             continue;
                         end;
 
-                        new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
-                                    + replacementDiffuseNormalized
-                                    + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
-                                    + lodDiffuse
-                                    + #9 + slLine[10] + #9 + slLine[11];
-                        AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
-                        slNew_lines.Add(new_line);
-                        Result := True;
+                        if SameText(LowerCase(slLine[9]), LowerCase(omDiffuseNormalized)) then begin
+
+                            new_line := slLine[0] + #9 + slLine[1] + #9 + slLine[2] + #9 + slLine[3] + #9
+                                        + replacementDiffuseNormalized
+                                        + #9 + slLine[5] + #9 + slLine[6] + #9 + slLine[7] + #9 + slLine[8] + #9
+                                        + lodDiffuse
+                                        + #9 + slLine[10] + #9 + slLine[11];
+                            AddMessage(#9 + 'Adding new TexGen line: ' + new_line);
+                            slNew_lines.Add(new_line);
+                            Result := True;
+                        end;
 
                     finally
                         slLine.Free;
