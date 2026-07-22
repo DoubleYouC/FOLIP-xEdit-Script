@@ -192,6 +192,7 @@ begin
         bLoadDefaults := True;
         bDeepScan := False;
         bPreviousBeforeGenerationPresent := False;
+        SetJDOLineBreak(#13#10);
         if ResourceExists(sUserSettingsFileName) then begin
             AddMessage('Loading user settings from ' + sUserSettingsFileName);
             joUserSettings.LoadFromResource(sUserSettingsFileName);
@@ -1427,11 +1428,11 @@ begin
                             rNew := Add(pCell, 'REFR', True);
                             if not Assigned(rNew) then AddMessage('ERROR ADDING REFR TO PERSISTENT CELL');
                             SetIsPersistent(rNew, bPersistent);
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, rNew);
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], ref, pluginFileNameHere, rNew);
                         end
                         else begin
                             rNew := Add(nCell, 'REFR', True);
-                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], pluginFileNameHere, rNew);
+                            ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], ref, pluginFileNameHere, rNew);
                         end;
                     end;
                 end;
@@ -1617,14 +1618,14 @@ begin
     except on E: Exception do
         begin
             AddMessage(E.Message);
-            AddMessage('An error was encountered with the following object:');
+            AddMessage('An error was encountered with the following object:' + #9 + ref);
             AddMessage(placedReferenceOverride.ToJSON({Compact:=}False));
             raise Exception.Create('FATAL ERROR');
         end;
     end;
 end;
 
-procedure ProcessNewReference(placedReference: TJsonObject; const fileHere: string; var rNew: IwbMainRecord);
+procedure ProcessNewReference(placedReference: TJsonObject; const ref, fileHere: string; var rNew: IwbMainRecord);
 {
     Add a placed reference.
 }
@@ -1710,7 +1711,7 @@ begin
     except on E: Exception do
         begin
             AddMessage(E.Message);
-            AddMessage('An error was encountered with the following object:');
+            AddMessage('An error was encountered with the following object:' + #9 + ref);
             AddMessage(placedReference.ToJSON({Compact:=}False));
             raise Exception.Create('FATAL ERROR');
         end;
