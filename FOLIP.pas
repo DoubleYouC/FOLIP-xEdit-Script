@@ -319,6 +319,7 @@ begin
         joRules.Free;
         joMswpMap.Free;
         joModelMatch.Free;
+        joWinningCells.SaveToFile(wbScriptsPath + 'FOLIP\joWinningCells.json', False, TEncoding.UTF8, True);
         joWinningCells.Free;
 
 
@@ -330,6 +331,7 @@ begin
         joUserRules.Free;
 
         EnsureDirectoryExists(sOutputDir +'\');
+        joElements.SaveToFile(wbScriptsPath + 'FOLIP\joElements.json', False, TEncoding.UTF8, True);
         joElements.Free;
 
         joRasterizeMaterials.SaveToFile(wbScriptsPath + 'FOLIP\RasterizeMaterials.json', False, TEncoding.UTF8, True);
@@ -448,8 +450,6 @@ begin
     DeleteDirectory(FOLIPTempPath);
 
     EnsureDirectoryExists(sOutputDir +'\');
-    joElements.SaveToFile(wbScriptsPath + 'FOLIP\joElements.json', False, TEncoding.UTF8, True);
-    joWinningCells.SaveToFile(wbScriptsPath + 'FOLIP\joWinningCells.json', False, TEncoding.UTF8, True);
 
     //Save the plugin.
     fs := TFileStream.Create(sOutputDir + '\' + sFolipMasterFileName, fmCreate);
@@ -1246,13 +1246,18 @@ procedure AddMastersForRecords;
 }
 var
     i: integer;
+    f: string;
 begin
     for i := 0 to Pred(slMainMasters.Count) do begin
-        AddMasterIfMissing(iFolipMasterFile, slMainMasters[i]);
-        AddMasterIfMissing(iFolipPluginFile, slMainMasters[i]);
+        f := slMainMasters[i];
+        if (Pos(f, sIgnoredPlugins) <> 0) then continue;
+        AddMasterIfMissing(iFolipMasterFile, f);
+        AddMasterIfMissing(iFolipPluginFile, f);
     end;
     for i := 0 to Pred(slPatchMasters.Count) do begin
-        AddMasterIfMissing(iFolipPluginFile, slPatchMasters[i]);
+        f := slPatchMasters[i];
+        if (Pos(f, sIgnoredPlugins) <> 0) then continue;
+        AddMasterIfMissing(iFolipPluginFile, f);
     end;
     SortMasters(iFolipMasterFile);
     SortMasters(iFolipPluginFile);
