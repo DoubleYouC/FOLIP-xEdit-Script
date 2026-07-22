@@ -1575,43 +1575,145 @@ begin
     placedReferenceOverride.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
     }
 
-    rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
-    if IsInIgnoredPlugin(rOriginal) then Exit;
-    rOverride := CopyElementToFileWithVC(rOriginal, iCurrentPlugin);
-    SetIsPersistent(rOverride, bPersistent);
-    SetIsVisibleWhenDistant(rOverride, (placedReferenceOverride.S['Visible When Distant'] = '1'));
-    SetElementNativeValues(rOverride, 'Record Header\Record Flags\Is Full LOD', (placedReferenceOverride.S['Is Full LOD'] = '1'));
-    SetElementNativeValues(rOverride, 'Record Header\Record Flags\LOD Respects Enable State', (placedReferenceOverride.S['LOD Respects Enable State'] = '1'));
-    baseFormId := placedReferenceOverride.S['NAME'];
-    if baseFormId <> '' then begin
-        SetElementEditValues(rOverride, 'NAME', baseFormId);
-    end;
-
-    linkedRefRemove := placedReferenceOverride.S['RemoveLinkedReference'];
-    if linkedRefRemove <> '' then RemoveLinkedReferenceByKeyword(rOverride, linkedRefRemove);
-    linkedRefAdd := placedReferenceOverride.S['AddLinkedReference'];
-    if linkedRefAdd <> '' then begin
-        tsLinkedRef := SplitString(linkedRefAdd, '|');
-        keyword := tsLinkedRef[0];
-        linkedRef := tsLinkedRef[1];
-        AddLinkedReference(rOverride, keyword, linkedRef);
-    end;
-
-    bXesp := (placedReferenceOverride.S['XESP'] = '1');
-    if bXesp then begin
-        xesp := ElementByPath(rOverride, 'XESP');
-        if not Assigned(xesp) then begin
-            xesp := Add(rOverride, 'XESP', True);
-            ElementAssign(xesp, 0, nil, False);
+    try
+        rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
+        if IsInIgnoredPlugin(rOriginal) then Exit;
+        rOverride := CopyElementToFileWithVC(rOriginal, iCurrentPlugin);
+        SetIsPersistent(rOverride, bPersistent);
+        SetIsVisibleWhenDistant(rOverride, (placedReferenceOverride.S['Visible When Distant'] = '1'));
+        SetElementNativeValues(rOverride, 'Record Header\Record Flags\Is Full LOD', (placedReferenceOverride.S['Is Full LOD'] = '1'));
+        SetElementNativeValues(rOverride, 'Record Header\Record Flags\LOD Respects Enable State', (placedReferenceOverride.S['LOD Respects Enable State'] = '1'));
+        baseFormId := placedReferenceOverride.S['NAME'];
+        if baseFormId <> '' then begin
+            SetElementEditValues(rOverride, 'NAME', baseFormId);
         end;
-        SetElementEditValues(xesp, 'Reference', placedReferenceOverride.S['XESP Reference']);
-        SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReferenceOverride.S['Opposite Enable Parent'] = '1'));
-    end;
 
-    for i := 0 to Pred(placedReferenceOverride.A['AddRefToMyFormlist'].Count) do begin
-        flst := StrToInt(placedReferenceOverride.A['AddRefToMyFormlist'].S[i]);
-        if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
-        AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[flst]));
+        linkedRefRemove := placedReferenceOverride.S['RemoveLinkedReference'];
+        if linkedRefRemove <> '' then RemoveLinkedReferenceByKeyword(rOverride, linkedRefRemove);
+        linkedRefAdd := placedReferenceOverride.S['AddLinkedReference'];
+        if linkedRefAdd <> '' then begin
+            tsLinkedRef := SplitString(linkedRefAdd, '|');
+            keyword := tsLinkedRef[0];
+            linkedRef := tsLinkedRef[1];
+            AddLinkedReference(rOverride, keyword, linkedRef);
+        end;
+
+        bXesp := (placedReferenceOverride.S['XESP'] = '1');
+        if bXesp then begin
+            xesp := ElementByPath(rOverride, 'XESP');
+            if not Assigned(xesp) then begin
+                xesp := Add(rOverride, 'XESP', True);
+                ElementAssign(xesp, 0, nil, False);
+            end;
+            SetElementEditValues(xesp, 'Reference', placedReferenceOverride.S['XESP Reference']);
+            SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReferenceOverride.S['Opposite Enable Parent'] = '1'));
+        end;
+
+        for i := 0 to Pred(placedReferenceOverride.A['AddRefToMyFormlist'].Count) do begin
+            flst := StrToInt(placedReferenceOverride.A['AddRefToMyFormlist'].S[i]);
+            if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
+            AddRefToMyFormlist(rOverride, ObjectToElement(tlFlst[flst]));
+        end;
+    except on E: Exception do
+        begin
+            AddMessage(E.Message);
+            AddMessage('An error was encountered with the following object:');
+            AddMessage(placedReferenceOverride.ToJSON({Compact:=}False));
+            raise Exception.Create('FATAL ERROR');
+        end;
+    end;
+end;
+
+procedure ProcessNewReference(placedReference: TJsonObject; const fileHere: string; var rNew: IwbMainRecord);
+{
+    Add a placed reference.
+}
+var
+    cellRecordId, wrldRecordId, fakeStatic, baseFormId, fakeStaticFormId, scale, ms: string;
+    bPersistent, bXesp: boolean;
+    i, flst: integer;
+    xesp: IwbElement;
+begin
+    {
+    placedReference.S['Visible When Distant'] := 1;
+    placedReference.S['Visible When Distant'] := 1;
+    placedReference.S['Initially Disabled'] := 1;
+    placedReference.S['Set Is Persistent'] := 0;
+
+    placedReference.S['fakeStatic'] := fakeStatic;
+    placedReference.S['NAME'] := '000e4610'; //Enable Marker
+
+    placedReference.S['XESP'] := 1;
+    placedReference.S['XESP Reference'] := parentFormid;
+    placedReference.S['Opposite Enable Parent'] := 1;
+
+    placedReference.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
+
+    placedReference.O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
+    placedReference.O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
+    placedReference.O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
+    placedReference.O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
+    placedReference.O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
+    placedReference.O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+    placedReference.S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+
+    placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
+    }
+    try
+        SetIsVisibleWhenDistant(rNew, (placedReference.S['Visible When Distant'] = '1'));
+        SetIsInitiallyDisabled(rNew, (placedReference.S['Initially Disabled'] = '1'));
+
+        fakeStatic := placedReference.S['fakeStatic'];
+        baseFormId := placedReference.S['NAME'];
+        if fakeStatic <> '' then begin
+            fakeStaticFormId := joElements.O['STAT'].O['New'].O[fakeStatic].O[fileHere].S['fakeStaticFormId'];
+            SetElementEditValues(rNew, 'NAME', fakeStaticFormId);
+        end
+        else if baseFormId <> '' then begin
+            SetElementEditValues(rNew, 'NAME', baseFormId);
+        end;
+
+        bXesp := (placedReference.S['XESP'] = '1');
+        if bXesp then begin
+            xesp := ElementByPath(rNew, 'XESP');
+            if not Assigned(xesp) then begin
+                xesp := Add(rNew, 'XESP', True);
+                ElementAssign(xesp, 0, nil, False);
+            end;
+            SetElementEditValues(xesp, 'Reference', placedReference.S['XESP Reference']);
+            SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReference.S['Opposite Enable Parent'] = '1'));
+        end;
+
+        SetElementNativeValues(rNew, 'DATA\Position\X', placedReference.O['pos'].S['x']);
+        SetElementNativeValues(rNew, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
+        SetElementNativeValues(rNew, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
+        SetElementNativeValues(rNew, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
+        SetElementNativeValues(rNew, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
+        SetElementNativeValues(rNew, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
+        scale := placedReference.S['XSCL - Scale'];
+        if scale <> '' then begin
+            Add(rNew, 'XSCL', True);
+            SetElementNativeValues(rNew, 'XSCL - Scale', scale);
+        end;
+
+        ms := placedReference.S['XMSP - Material Swap'];
+        if ms <> '' then begin
+            Add(rNew, 'XMSP', True);
+            SetElementEditValues(rNew, 'XMSP - Material Swap', ms);
+        end;
+
+        for i := 0 to Pred(placedReference.A['AddRefToMyFormlist'].Count) do begin
+            flst := StrToInt(placedReference.A['AddRefToMyFormlist'].S[i]);
+            if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
+            AddRefToMyFormlist(rNew, ObjectToElement(tlFlst[flst]));
+        end;
+    except on E: Exception do
+        begin
+            AddMessage(E.Message);
+            AddMessage('An error was encountered with the following object:');
+            AddMessage(placedReference.ToJSON({Compact:=}False));
+            raise Exception.Create('FATAL ERROR');
+        end;
     end;
 end;
 
@@ -1666,90 +1768,6 @@ begin
                 end;
             end;
         end;
-    end;
-end;
-
-procedure ProcessNewReference(placedReference: TJsonObject; const fileHere: string; var rNew: IwbMainRecord);
-{
-    Add a placed reference.
-}
-var
-    cellRecordId, wrldRecordId, fakeStatic, baseFormId, fakeStaticFormId, scale, ms: string;
-    bPersistent, bXesp: boolean;
-    i, flst: integer;
-    xesp: IwbElement;
-begin
-    {
-    placedReference.S['Visible When Distant'] := 1;
-    placedReference.S['Visible When Distant'] := 1;
-    placedReference.S['Initially Disabled'] := 1;
-    placedReference.S['Set Is Persistent'] := 0;
-
-    placedReference.S['fakeStatic'] := fakeStatic;
-    placedReference.S['NAME'] := '000e4610'; //Enable Marker
-
-    placedReference.S['XESP'] := 1;
-    placedReference.S['XESP Reference'] := parentFormid;
-    placedReference.S['Opposite Enable Parent'] := 1;
-
-    placedReference.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
-
-    placedReference.O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
-    placedReference.O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
-    placedReference.O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
-    placedReference.O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
-    placedReference.O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
-    placedReference.O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
-    placedReference.S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
-
-    placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
-    }
-    SetIsVisibleWhenDistant(rNew, (placedReference.S['Visible When Distant'] = '1'));
-    SetIsInitiallyDisabled(rNew, (placedReference.S['Initially Disabled'] = '1'));
-
-    fakeStatic := placedReference.S['fakeStatic'];
-    baseFormId := placedReference.S['NAME'];
-    if fakeStatic <> '' then begin
-        fakeStaticFormId := joElements.O['STAT'].O['New'].O[fakeStatic].O[fileHere].S['fakeStaticFormId'];
-        SetElementEditValues(rNew, 'NAME', fakeStaticFormId);
-    end
-    else if baseFormId <> '' then begin
-        SetElementEditValues(rNew, 'NAME', baseFormId);
-    end;
-
-    bXesp := (placedReference.S['XESP'] = '1');
-    if bXesp then begin
-        xesp := ElementByPath(rNew, 'XESP');
-        if not Assigned(xesp) then begin
-            xesp := Add(rNew, 'XESP', True);
-            ElementAssign(xesp, 0, nil, False);
-        end;
-        SetElementEditValues(xesp, 'Reference', placedReference.S['XESP Reference']);
-        SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReference.S['Opposite Enable Parent'] = '1'));
-    end;
-
-    SetElementNativeValues(rNew, 'DATA\Position\X', placedReference.O['pos'].S['x']);
-    SetElementNativeValues(rNew, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
-    SetElementNativeValues(rNew, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
-    SetElementNativeValues(rNew, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
-    SetElementNativeValues(rNew, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
-    SetElementNativeValues(rNew, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
-    scale := placedReference.S['XSCL - Scale'];
-    if scale <> '' then begin
-        Add(rNew, 'XSCL', True);
-        SetElementNativeValues(rNew, 'XSCL - Scale', scale);
-    end;
-
-    ms := placedReference.S['XMSP - Material Swap'];
-    if ms <> '' then begin
-        Add(rNew, 'XMSP', True);
-        SetElementEditValues(rNew, 'XMSP - Material Swap', ms);
-    end;
-
-    for i := 0 to Pred(placedReference.A['AddRefToMyFormlist'].Count) do begin
-        flst := StrToInt(placedReference.A['AddRefToMyFormlist'].S[i]);
-        if SameText(fileHere, sFolipMasterFileName) then flst := flst + 7;
-        AddRefToMyFormlist(rNew, ObjectToElement(tlFlst[flst]));
     end;
 end;
 
