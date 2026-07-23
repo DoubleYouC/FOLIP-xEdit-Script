@@ -1451,17 +1451,25 @@ var
     i: integer;
     tsMS: TStrings;
     original, replacement: string;
+    slSwaps: TStringList;
 begin
     {joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
     joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);}
-    e := WinningOverride(GetRecordFromFormIdFileId(recordId));
-    iCurrentPlugin := FileByName(joElements.O['MSWP'].O['Overrides'].O[recordId].S['File']);
-    n := wbCopyElementToFile(e, iCurrentPlugin, False, True);
-    for i := 0 to Pred(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Count) do begin
-        tsMS := SplitString(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].S[i], '|');
-        original := tsMS[0];
-        replacement := tsMS[1];
-        AddMaterialSwap(n, original, replacement);
+    slSwaps := TStringList.Create;
+    try
+        e := WinningOverride(GetRecordFromFormIdFileId(recordId));
+        iCurrentPlugin := FileByName(joElements.O['MSWP'].O['Overrides'].O[recordId].S['File']);
+        n := wbCopyElementToFile(e, iCurrentPlugin, False, True);
+        for i := 0 to Pred(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Count) do begin
+            tsMS := SplitString(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].S[i], '|');
+            original := tsMS[0];
+            if slSwaps.IndexOf(original) <> -1 then continue;
+            replacement := tsMS[1];
+            AddMaterialSwap(n, original, replacement);
+            slSwaps.Add(original);
+        end;
+    finally
+        slSwaps.Free;
     end;
 end;
 
