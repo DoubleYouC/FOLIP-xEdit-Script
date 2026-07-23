@@ -2660,6 +2660,7 @@ begin
         for i := 0 to Pred(tlMswp.Count) do begin
             m := WinningOverride(ObjectToElement(tlMswp[i]));
 
+
             slLODSubOriginal := TStringList.Create;
             slLODSubReplacement := TStringList.Create;
 
@@ -2777,10 +2778,12 @@ begin
             iCurrentPlugin := CanOverrideDeterminesPlugin(m, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(m, iCurrentPlugin);
             recordId := RecordFormIdFileId(m);
+            AddMessage(Name(m));
             joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
             for n := 0 to Pred(cnt) do begin
                 //AddMessage(ShortName(m) + #9 + slLODSubOriginal[n] + #9 + slLODSubReplacement[n]);
                 joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Add(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);
+                AddMessage(slLODSubOriginal[n] + '|' + slLODSubReplacement[n]);
             end;
             slLODSubOriginal.Free;
             slLODSubReplacement.Free;
