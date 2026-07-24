@@ -12,13 +12,13 @@ unit FOLIP;
 //Create variables that will need to be used accross multiple functions/procedures.
 // ----------------------------------------------------
 var
-    tlStats, tlActiFurnMstt, tlMswp, tlEnableParents, tlStolenForms, tlTxst, tlFlst: TList;
+    tlStats, tlActiFurnMstt, tlEnableParents, tlStolenForms, tlTxst, tlFlst: TList;
 
     slNifFiles, slUsedLODNifFiles, slMatFiles, slCheckedModels, slMeshCheckMissingMaterials, slMeshCheckNonLODMaterials,
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
-    slMainMasters, slFakeStatics, slAddedTexGenTextures, slRasterizedDiffuses: TStringList;
+    slMainMasters, slFakeStatics, slAddedTexGenTextures, slRasterizedDiffuses, slMswp: TStringList;
 
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
     flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
@@ -97,7 +97,6 @@ begin
         //TLists
         tlStats := TList.Create;
         tlActiFurnMstt := TList.Create;
-        tlMswp := TList.Create;
         tlEnableParents := TList.Create;
         tlStolenForms := TList.Create;
         tlTxst := TList.Create;
@@ -176,6 +175,7 @@ begin
         slTexgen_noalpha := TStringList.Create;
         slAddedTexGenTextures := TStringList.Create;
         slRasterizedDiffuses := TStringList.Create;
+        slMswp := TStringList.Create;
 
         //TJsonObjects
         joRules := TJsonObject.Create;
@@ -281,7 +281,6 @@ begin
     finally
         tlStats.Free;
         tlActiFurnMstt.Free;
-        tlMswp.Free;
         tlEnableParents.Free;
         tlStolenForms.Free;
         tlTxst.Free;
@@ -316,6 +315,7 @@ begin
         slMainMasters.Free;
         slAddedTexGenTextures.Free;
         slRasterizedDiffuses.Free;
+        slMswp.Free;
 
         joRules.Free;
         joMswpMap.Free;
@@ -420,7 +420,7 @@ begin
     end;
 
     //Apply lod material swaps.
-    AddMessage('Assigning LOD materials to ' + IntToStr(tlMswp.Count) + ' material swaps.');
+    AddMessage('Assigning LOD materials to ' + IntToStr(slMswp.Count) + ' material swaps.');
     AssignLODMaterialsList;
     AddMessage('=======================================================================================');
 
@@ -2454,7 +2454,7 @@ var
     r, s, ms, rCell, rWrld: IwbMainRecord;
     HasLOD, bFullLOD: Boolean;
     joLOD: TJsonObject;
-    fakeStaticFormID, sMissingLodMessage, fakeStatic: string;
+    fakeStaticFormID, sMissingLodMessage, fakeStatic, msRecordId: string;
 begin
     for i := 0 to Pred(tlActiFurnMstt.Count) do begin
         sMissingLodMessage := '';
@@ -2502,7 +2502,8 @@ begin
                 //Add mat swap if it exists to list to check.
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
                 ms := LinksTo(ElementByPath(r, 'XMSP'));
-                if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+                msRecordId := RecordFormIdFileId(ms);
+                if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
             end;
         end
         else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
@@ -2618,12 +2619,13 @@ var
     ms: IwbMainRecord;
     patchStatGroup: IwbGroupRecord;
     HasMS: Boolean;
-    fakeStaticEditorId, recordId, msFormid: string;
+    fakeStaticEditorId, recordId, msFormid, msRecordId: string;
 begin
     HasMS := ElementExists(s, 'Model\MODS - Material Swap');
     if HasMS then begin
         ms := LinksTo(ElementByPath(s, 'Model\MODS'));
-        if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+        msRecordId := RecordFormIdFileId(ms);
+        if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
         iCurrentPlugin := RefMastersDeterminePlugin(ms, iFolipMasterFile);
     end
     else iCurrentPlugin := iFolipMasterFile;
@@ -2665,8 +2667,8 @@ begin
     slMismatchedMaterials.Sorted := True;
     slMismatchedMaterials.Duplicates := dupIgnore;
     try
-        for i := 0 to Pred(tlMswp.Count) do begin
-            m := WinningOverride(ObjectToElement(tlMswp[i]));
+        for i := 0 to Pred(slMswp.Count) do begin
+            m := WinningOverride(GetRecordFromFormIdFileId(slMswp[i]));
 
 
             slLODSubOriginal := TStringList.Create;
@@ -3492,7 +3494,7 @@ var
     HasLOD, bHasEnableParent, bHasSCOLNeedingLOD: Boolean;
     ms, s: IwbMainRecord;
     joLOD: TJsonObject;
-    sMissingLodMessage: string;
+    sMissingLodMessage, msRecordId: string;
 begin
     for i := 0 to Pred(tlStats.Count) do begin
         bHasEnableParent := False;
@@ -3514,7 +3516,8 @@ begin
                 //check for base material swap
                 if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
                     ms := LinksTo(ElementByPath(s, 'Model\MODS'));
-                    if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+                    msRecordId := RecordFormIdFileId(ms);
+                    if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
                 end;
                 if ((cnt > 0) and (joLOD.Count > 0)) then begin
                     AssignLODToStat(s, joLOD, false, 'Overrides');
@@ -3580,7 +3583,7 @@ var
     si, cnt: integer;
     ms, r, rCell, rWrld, parentRef, base: IwbMainRecord;
     xesp: IwbElement;
-    parent, wrldEdid, cellX, cellY, recordId: string;
+    parent, wrldEdid, cellX, cellY, recordId, msRecordId: string;
 begin
     cnt := 0;
     for si := Pred(ReferencedByCount(s)) downto 0 do begin
@@ -3627,7 +3630,8 @@ begin
         // Add any material swap to list of used material swaps to check.
         if ElementExists(r, 'XMSP - Material Swap') then begin
             ms := LinksTo(ElementByPath(r, 'XMSP'));
-            if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+            msRecordId := RecordFormIdFileId(ms);
+            if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
         end;
 
         // check for enable parent
@@ -3681,7 +3685,8 @@ begin
         //check for base material swap on the SCOL record
         if ElementExists(r, 'Model\MODS - Material Swap') then begin
             ms := LinksTo(ElementByPath(r, 'Model\MODS'));
-            if tlMswp.IndexOf(ms) = -1 then tlMswp.Add(ms);
+            msRecordId := RecordFormIdFileId(ms);
+            if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
         end;
     end;
     Result := cnt;
