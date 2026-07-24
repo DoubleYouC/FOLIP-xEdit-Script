@@ -1483,17 +1483,17 @@ begin
     iCurrentPlugin := FileByName(joElements.O['STAT'].O['Overrides'].O[recordId].S['File']);
     n := wbCopyElementToFile(e, iCurrentPlugin, False, True);
     Add(n, 'MNAM', True);
-    SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joElements.O['STAT'].O['Overrides'].O[recordId].S['Has Distant LOD']);
+    SetElementEditValues(n, 'Record Header\Record Flags\Has Distant LOD', joElements.O['STAT'].O['Overrides'].O[recordId].S['Has Distant LOD']);
     if ElementExists(n, 'MNAM\Level 0') then begin
-        SetElementNativeValues(n, 'MNAM\Level 0', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0']);
-        SetElementNativeValues(n, 'MNAM\Level 1', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1']);
-        SetElementNativeValues(n, 'MNAM\Level 2', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2']);
-        SetElementNativeValues(n, 'MNAM\Level 3', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3']);
+        SetElementEditValues(n, 'MNAM\Level 0', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0']);
+        SetElementEditValues(n, 'MNAM\Level 1', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1']);
+        SetElementEditValues(n, 'MNAM\Level 2', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2']);
+        SetElementEditValues(n, 'MNAM\Level 3', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3']);
     end else begin
-        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0']);
-        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1']);
-        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2']);
-        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3']);
+        SetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 0']);
+        SetElementEditValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 1']);
+        SetElementEditValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 2']);
+        SetElementEditValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['Overrides'].O[recordId].S['Level 3']);
     end;
 end;
 
@@ -1524,7 +1524,7 @@ begin
     n := Add(statGroup, 'STAT', True);
     CopyObjectBounds(e, n);
     SetEditorID(n, joElements.O['STAT'].O['New'].O[recordId].S['EDID']);
-    SetElementNativeValues(n, 'Record Header\Record Flags\Is Marker', joElements.O['STAT'].O['New'].O[recordId].S['Is Marker']);
+    SetElementEditValues(n, 'Record Header\Record Flags\Is Marker', joElements.O['STAT'].O['New'].O[recordId].S['Is Marker']);
 
     mods := joElements.O['STAT'].O['New'].O[recordId].S['MODS'];
     if mods <> '' then begin
@@ -1532,17 +1532,17 @@ begin
         SetElementEditValues(n, 'Model\MODS', mods);
     end;
     Add(n, 'MNAM', True);
-    SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joElements.O['STAT'].O['New'].O[recordId].S['Has Distant LOD']);
+    SetElementEditValues(n, 'Record Header\Record Flags\Has Distant LOD', joElements.O['STAT'].O['New'].O[recordId].S['Has Distant LOD']);
     if ElementExists(n, 'MNAM\Level 0') then begin
-        SetElementNativeValues(n, 'MNAM\Level 0', joElements.O['STAT'].O['New'].O[recordId].S['Level 0']);
-        SetElementNativeValues(n, 'MNAM\Level 1', joElements.O['STAT'].O['New'].O[recordId].S['Level 1']);
-        SetElementNativeValues(n, 'MNAM\Level 2', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
-        SetElementNativeValues(n, 'MNAM\Level 3', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
+        SetElementEditValues(n, 'MNAM\Level 0', joElements.O['STAT'].O['New'].O[recordId].S['Level 0']);
+        SetElementEditValues(n, 'MNAM\Level 1', joElements.O['STAT'].O['New'].O[recordId].S['Level 1']);
+        SetElementEditValues(n, 'MNAM\Level 2', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
+        SetElementEditValues(n, 'MNAM\Level 3', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
     end else begin
-        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 0']);
-        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 1']);
-        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
-        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
+        SetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 0']);
+        SetElementEditValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 1']);
+        SetElementEditValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 2']);
+        SetElementEditValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joElements.O['STAT'].O['New'].O[recordId].S['Level 3']);
     end;
     joElements.O['STAT'].O['New'].O[recordId].O[fileHere].S['fakeStaticFormId'] := IntToHex(GetLoadOrderFormID(n), 8);
 end;
@@ -1694,7 +1694,7 @@ begin
         scale := placedReference.S['XSCL - Scale'];
         if scale <> '' then begin
             Add(rNew, 'XSCL', True);
-            SetElementNativeValues(rNew, 'XSCL - Scale', scale);
+            SetElementEditValues(rNew, 'XSCL - Scale', scale);
         end;
 
         ms := placedReference.S['XMSP - Material Swap'];
@@ -3389,8 +3389,8 @@ var
 begin
     substitutions := ElementByPath(e, 'Material Substitutions');
     ms := ElementAssign(substitutions, HighInteger, nil, False);
-    SetElementNativeValues(ms, 'BNAM - Original Material', om);
-    SetElementNativeValues(ms, 'SNAM - Replacement Material', rm);
+    SetElementEditValues(ms, 'BNAM - Original Material', om);
+    SetElementEditValues(ms, 'SNAM - Replacement Material', rm);
 end;
 
 procedure CompareMaterialSwaps(slMismatchedMaterials: TStringList; om, rm: String);
