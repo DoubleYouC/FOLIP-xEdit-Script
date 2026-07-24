@@ -1291,12 +1291,12 @@ begin
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['XESP'] := 1;
 
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flFakeStatics));
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementEditValues(r, 'DATA\Position\X');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementEditValues(r, 'DATA\Position\Y');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementEditValues(r, 'DATA\Position\Z');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementEditValues(r, 'DATA\Rotation\X');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementEditValues(r, 'DATA\Rotation\Y');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementEditValues(r, 'DATA\Rotation\Z');
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['fakeStatic'] := fakeStatic;
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := '000e4610'; //Enable Marker
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Initially Disabled'] := 1;
@@ -1305,7 +1305,7 @@ begin
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP Reference'] := parentFormid;
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XESP'] := 1;
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementEditValues(r, 'XSCL - Scale');
 
     joElements.O['STAT'].O['New'].O[fakeStatic].S['Copy Object Bounds'] := True;
     joElements.O['STAT'].O['New'].O[fakeStatic].S['EDID'] := fakeStaticEditorId;
@@ -1650,13 +1650,13 @@ begin
 
     placedReference.A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flDecals));
 
-    placedReference.O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
-    placedReference.O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
-    placedReference.O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
-    placedReference.O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
-    placedReference.O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
-    placedReference.O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
-    placedReference.S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+    placedReference.O['pos'].S['x'] := GetElementEditValues(r, 'DATA\Position\X');
+    placedReference.O['pos'].S['y'] := GetElementEditValues(r, 'DATA\Position\Y');
+    placedReference.O['pos'].S['z'] := GetElementEditValues(r, 'DATA\Position\Z');
+    placedReference.O['rot'].S['x'] := GetElementEditValues(r, 'DATA\Rotation\X');
+    placedReference.O['rot'].S['y'] := GetElementEditValues(r, 'DATA\Rotation\Y');
+    placedReference.O['rot'].S['z'] := GetElementEditValues(r, 'DATA\Rotation\Z');
+    placedReference.S['XSCL - Scale'] := GetElementEditValues(r, 'XSCL - Scale');
 
     placedReference.S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(ms), 8);
     }
@@ -2333,14 +2333,14 @@ begin
             pluginFileNameHere := GetFileName(iCurrentPlugin);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := IntToHex(GetLoadOrderFormID(stolen), 8);
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
-            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementEditValues(r, 'DATA\Position\X');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementEditValues(r, 'DATA\Position\Y');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementEditValues(r, 'DATA\Position\Z');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementEditValues(r, 'DATA\Rotation\X');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementEditValues(r, 'DATA\Rotation\Y');
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementEditValues(r, 'DATA\Rotation\Z');
             if ElementExists(r, 'XSCL - Scale') then
-                joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+                joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementEditValues(r, 'XSCL - Scale');
             if ElementExists(r, 'XMSP') then
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XMSP - Material Swap'] := IntToHex(GetLoadOrderFormID(LinksTo(ElementByPath(r, 'XMSP'))), 8);
             Exit;
@@ -2422,8 +2422,8 @@ begin
         iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
-        cellX := GetElementNativeValues(rCell, 'XCLC\X');
-        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+        cellX := GetElementEditValues(rCell, 'XCLC\X');
+        cellY := GetElementEditValues(rCell, 'XCLC\Y');
         recordId := RecordFormIdFileId(r);
 
         pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -2578,14 +2578,14 @@ begin
 
     //  Set scale
     if ElementExists(r, 'XSCL - Scale') then
-        joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementNativeValues(r, 'XSCL - Scale');
+        joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['XSCL - Scale'] := GetElementEditValues(r, 'XSCL - Scale');
 
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementNativeValues(r, 'DATA\Position\X');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementNativeValues(r, 'DATA\Position\Y');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementNativeValues(r, 'DATA\Position\Z');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementNativeValues(r, 'DATA\Rotation\X');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementNativeValues(r, 'DATA\Rotation\Y');
-    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementNativeValues(r, 'DATA\Rotation\Z');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['x'] := GetElementEditValues(r, 'DATA\Position\X');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['y'] := GetElementEditValues(r, 'DATA\Position\Y');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['pos'].S['z'] := GetElementEditValues(r, 'DATA\Position\Z');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['x'] := GetElementEditValues(r, 'DATA\Rotation\X');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['y'] := GetElementEditValues(r, 'DATA\Rotation\Y');
+    joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].O['rot'].S['z'] := GetElementEditValues(r, 'DATA\Rotation\Z');
 
     joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flFakeStatics));
 end;
@@ -3714,32 +3714,6 @@ begin
         joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 1
     else
         joElements.O['STAT'].O[OverOrNew].O[recordId].S['Has Distant LOD'] := 0;
-    {
-    n := wbCopyElementToFile(s, iCurrentPlugin, False, True);
-
-    if bAddHasDistantLOD then SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', joLOD.I['hasdistantlod'])
-    else SetElementNativeValues(n, 'Record Header\Record Flags\Has Distant LOD', GetElementNativeValues(MasterOrSelf(s), 'Record Header\Record Flags\Has Distant LOD'));
-    Add(n, 'MNAM', True);
-    if ElementExists(n, 'MNAM\Level 0') then begin
-        SetElementNativeValues(n, 'MNAM\Level 0', joLOD.S['level0']);
-        SetElementNativeValues(n, 'MNAM\Level 1', joLOD.S['level1']);
-        SetElementNativeValues(n, 'MNAM\Level 2', joLOD.S['level2']);
-        SetElementNativeValues(n, 'MNAM\Level 3', joLOD.S['level3']);
-    end else begin
-        SetElementNativeValues(n, 'MNAM\LOD #0 (Level 0)\Mesh', joLOD.S['level0']);
-        SetElementNativeValues(n, 'MNAM\LOD #1 (Level 1)\Mesh', joLOD.S['level1']);
-        SetElementNativeValues(n, 'MNAM\LOD #2 (Level 2)\Mesh', joLOD.S['level2']);
-        SetElementNativeValues(n, 'MNAM\LOD #3 (Level 3)\Mesh', joLOD.S['level3']);
-    end;}
-
-    // if Equals(GetFile(s), GetFile(n)) then Exit;
-    // if GetElementEditValues(s, 'MNAM\LOD #0 (Level 0)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #0 (Level 0)\Mesh') then Exit;
-    // if GetElementEditValues(s, 'MNAM\LOD #1 (Level 1)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #1 (Level 1)\Mesh') then Exit;
-    // if GetElementEditValues(s, 'MNAM\LOD #2 (Level 2)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #2 (Level 2)\Mesh') then Exit;
-    // if GetElementEditValues(s, 'MNAM\LOD #3 (Level 3)\Mesh') <> GetElementEditValues(n, 'MNAM\LOD #3 (Level 3)\Mesh') then Exit;
-    // if GetElementEditValues(s, 'Record Header\Record Flags\Has Distant LOD') <> GetElementEditValues(n, 'Record Header\Record Flags\Has Distant LOD') then Exit;
-    // AddMessage('Removing ITM: ' + ShortName(s));
-    // Remove(n);
 end;
 
 procedure CollectRecords;
@@ -3868,8 +3842,8 @@ begin
                         rCell := ElementByIndex(subblock, cellidx);
                         if (Signature(rCell) <> 'CELL') then continue;
                         if not IsWinningOverride(rCell) then continue;
-                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
-                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+                        cellX := GetElementEditValues(rCell, 'XCLC\X');
+                        cellY := GetElementEditValues(rCell, 'XCLC\Y');
 
                         joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'] := RecordFormIdFileId(rCell);
                     end;
@@ -4572,15 +4546,15 @@ begin
     //Only STAT records have these. We use this function on other signatures that don't have these fields.
     if Signature(s) = 'STAT' then begin
         if ElementExists(s, 'MNAM\Level 0') then begin
-            olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 0'));
-            olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 1'));
-            olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 2'));
-            olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\Level 3'));
+            olod4 := LowerCase(GetElementEditValues(s, 'MNAM\Level 0'));
+            olod8 := LowerCase(GetElementEditValues(s, 'MNAM\Level 1'));
+            olod16 := LowerCase(GetElementEditValues(s, 'MNAM\Level 2'));
+            olod32 := LowerCase(GetElementEditValues(s, 'MNAM\Level 3'));
         end else begin
-            olod4 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
-            olod8 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
-            olod16 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
-            olod32 := LowerCase(GetElementNativeValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
+            olod4 := LowerCase(GetElementEditValues(s, 'MNAM\LOD #0 (Level 0)\Mesh'));
+            olod8 := LowerCase(GetElementEditValues(s, 'MNAM\LOD #1 (Level 1)\Mesh'));
+            olod16 := LowerCase(GetElementEditValues(s, 'MNAM\LOD #2 (Level 2)\Mesh'));
+            olod32 := LowerCase(GetElementEditValues(s, 'MNAM\LOD #3 (Level 3)\Mesh'));
         end;
         if (GetElementNativeValues(s, 'Record Header\Record Flags\Has Distant LOD') <> 0) then hasDistantLOD := 1;
     end;
