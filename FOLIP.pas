@@ -479,7 +479,7 @@ begin
 
     //Zip up output for easy installation
     AddMessage('Zipping up output for easy installation...');
-    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Before Generation Output.zip''"';
+    cmdline := '-Command "Compress-Archive -Path (Get-ChildItem ''' + wbScriptsPath + 'FOLIP\output'').FullName -DestinationPath ''' + wbScriptsPath + 'FOLIP\output\FOLIP Output.zip''"';
     AddMessage(cmdline);
     AddMessage('Exit Code: ' + IntToStr(ShellExecuteWait(0, 'open', 'Powershell', cmdline, '', SW_SHOWNORMAL)));
 
@@ -487,7 +487,7 @@ begin
     cmdline := '"'+ wbScriptsPath + 'FOLIP\output"';
     ShellExecute(0, 'open', 'explorer', cmdline, '', SW_SHOWNORMAL);
 
-    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Install the FOLIP Before Generation Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
+    MessageDlg('Patch generated successfully!' + #13#10#13#10 + 'Install the FOLIP Output.zip file in your mod manager.', mtInformation, [mbOk], 0);
 end;
 
 // ----------------------------------------------------
@@ -537,7 +537,7 @@ begin
         gbOptions.Left := 6;
         gbOptions.Top := fImage.Top + fImage.Height + 24;
         gbOptions.Width := frm.Width - 30;
-        gbOptions.Caption := 'FOLIP - Before Generation';
+        gbOptions.Caption := 'FOLIP';
         gbOptions.Height := 164;
 
         btnRuleEditor := TButton.Create(frm);
@@ -1141,7 +1141,7 @@ procedure SpecificRecordEdits;
 var
     flstGroup, flstGroupMaster: IwbGroupRecord;
 begin
-    //Purge FOLIP - Before Generation.esp
+    //Purge FOLIP - Patch.esp
     if HasGroup(iFolipPluginFile, 'STAT') then begin
         RemoveNode(GroupBySignature(iFolipPluginFile, 'STAT'));
     end;
