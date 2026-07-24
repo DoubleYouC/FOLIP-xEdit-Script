@@ -1693,12 +1693,12 @@ begin
             SetElementNativeValues(xesp, 'Flags\Set Enable State to Opposite of Parent', (placedReference.S['Opposite Enable Parent'] = '1'));
         end;
 
-        SetElementNativeValues(rNew, 'DATA\Position\X', placedReference.O['pos'].S['x']);
-        SetElementNativeValues(rNew, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
-        SetElementNativeValues(rNew, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
-        SetElementNativeValues(rNew, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
-        SetElementNativeValues(rNew, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
-        SetElementNativeValues(rNew, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
+        SetElementEditValues(rNew, 'DATA\Position\X', placedReference.O['pos'].S['x']);
+        SetElementEditValues(rNew, 'DATA\Position\Y', placedReference.O['pos'].S['y']);
+        SetElementEditValues(rNew, 'DATA\Position\Z', placedReference.O['pos'].S['z']);
+        SetElementEditValues(rNew, 'DATA\Rotation\X', placedReference.O['rot'].S['x']);
+        SetElementEditValues(rNew, 'DATA\Rotation\Y', placedReference.O['rot'].S['y']);
+        SetElementEditValues(rNew, 'DATA\Rotation\Z', placedReference.O['rot'].S['z']);
         scale := placedReference.S['XSCL - Scale'];
         if scale <> '' then begin
             Add(rNew, 'XSCL', True);
