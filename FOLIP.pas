@@ -1463,10 +1463,10 @@ begin
         for i := 0 to Pred(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].Count) do begin
             tsMS := SplitString(joElements.O['MSWP'].O['Overrides'].O[recordId].A['AddMaterialSwap'].S[i], '|');
             original := tsMS[0];
-            if slSwaps.IndexOf(original) <> -1 then continue;
+            //if slSwaps.IndexOf(original) <> -1 then continue;
             replacement := tsMS[1];
             AddMaterialSwap(n, original, replacement);
-            slSwaps.Add(original);
+            //slSwaps.Add(original);
         end;
     finally
         slSwaps.Free;
