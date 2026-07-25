@@ -25,7 +25,7 @@ var
 
     iFolipMasterFile, iFolipPluginFile, iCurrentPlugin: IwbFile;
 
-    uiScale, iSleepTime: integer;
+    uiScale, iSleepTime, dummyIndex: integer;
 
     sFolipPluginFileName, sFolipAfterGenerationPluginFileName, sEnableParentFormidExclusions, sIgnoredWorldspaces, sIgnoredPlugins, pluginFileNameHere: string;
 
@@ -93,95 +93,99 @@ function Initialize:integer;
 var
     bLoadDefaults: Boolean;
 begin
+    //TLists
+    tlStats := TList.Create;
+    tlActiFurnMstt := TList.Create;
+    tlEnableParents := TList.Create;
+    tlStolenForms := TList.Create;
+    tlTxst := TList.Create;
+    tlFlst := TList.Create;
+
+
+    //TStringLists
+    slPluginFiles := TStringList.Create;
+    slVerifyLODModels := TStringList.Create;
+    slVerifyLODModels.Sorted := True;
+
+    slMatFiles := TStringList.Create;
+    slMatFiles.Sorted := True;
+
+    slNifFiles := TStringList.Create;
+    slNifFiles.Sorted := True;
+
+    slUsedLODNifFiles := TStringList.Create;
+    slUsedLODNifFiles.Sorted := True;
+
+    slMeshCheckMissingMaterials := TStringList.Create;
+    slMeshCheckMissingMaterials.Sorted := True;
+
+    slMeshCheckNonLODMaterials := TStringList.Create;
+    slMeshCheckNonLODMaterials.Sorted := True;
+
+    slMeshCheckNoMaterialSpecified := TStringList.Create;
+    slMeshCheckNoMaterialSpecified.Sorted := True;
+
+    slMismatchedFullModelToLODMaterials  := TStringList.Create;
+    slMismatchedFullModelToLODMaterials.Sorted := True;
+
+    slPatchMasters := TStringList.Create;
+    slPatchMasters.Sorted := True;
+
+    slMainMasters := TStringList.Create;
+    slMainMasters.Sorted := True;
+
+    slMasterableMasters := TStringList.Create;
+
+    slCheckedModels := TStringList.Create;
+    slHasLOD := TStringList.Create;
+    slFakeStatics := TStringList.Create;
+
+    slTopLevelModPatternPaths := TStringList.Create;
+    slMessages := TStringList.Create;
+    slMessages.Sorted := True;
+    slMissingLODMessages := TStringList.Create;
+    slMissingLODMessages.Sorted := True;
+
+    slOutsideUVRange := TStringList.Create;
+    slOutsideUVRange.Sorted := True;
+
+    slFullLODMessages := TStringList.Create;
+    slFullLODMessages.Sorted := True;
+
+    slMissingColorRemaps := TStringList.Create;
+    slMissingColorRemaps.Sorted := True;
+
+    slMswp := TStringList.Create;
+    slMswp.Sorted := True;
+
+    slFOLIPTexgen_noalpha := TStringList.Create;
+    slFOLIPTexgen_copy := TStringList.Create;
+    slFOLIPTexgen_alpha := TStringList.Create;
+    slTexgen_copy := TStringList.Create;
+    slTexgen_alpha := TStringList.Create;
+    slTexgen_noalpha := TStringList.Create;
+    slAddedTexGenTextures := TStringList.Create;
+    slRasterizedDiffuses := TStringList.Create;
+
+
+    //TJsonObjects
+    joRules := TJsonObject.Create;
+    joMswpMap := TJsonObject.Create;
+    joMultiRefLOD := TJsonObject.Create;
+    joUserSettings := TJsonObject.Create;
+    joModelMatch := TJsonObject.Create;
+    joElements := TJsonObject.Create;
+    joWinningCells := TJsonObject.Create;
+    joRasterizeMaterials := TJsonObject.Create;
+    joLODMaterialGroup := TJsonObject.Create;
+    joUserRules := TJsonObject.Create;
     try
-        //TLists
-        tlStats := TList.Create;
-        tlActiFurnMstt := TList.Create;
-        tlEnableParents := TList.Create;
-        tlStolenForms := TList.Create;
-        tlTxst := TList.Create;
-        tlFlst := TList.Create;
-
-
-        //TStringLists
-        slPluginFiles := TStringList.Create;
-        slVerifyLODModels := TStringList.Create;
-        slVerifyLODModels.Sorted := True;
-
-        slMatFiles := TStringList.Create;
-        slMatFiles.Sorted := True;
-
-        slNifFiles := TStringList.Create;
-        slNifFiles.Sorted := True;
-
-        slUsedLODNifFiles := TStringList.Create;
-        slUsedLODNifFiles.Sorted := True;
-
-        slMeshCheckMissingMaterials := TStringList.Create;
-        slMeshCheckMissingMaterials.Sorted := True;
-
-        slMeshCheckNonLODMaterials := TStringList.Create;
-        slMeshCheckNonLODMaterials.Sorted := True;
-
-        slMeshCheckNoMaterialSpecified := TStringList.Create;
-        slMeshCheckNoMaterialSpecified.Sorted := True;
-
-        slMismatchedFullModelToLODMaterials  := TStringList.Create;
-        slMismatchedFullModelToLODMaterials.Sorted := True;
-
-        slPatchMasters := TStringList.Create;
-        slPatchMasters.Sorted := True;
-
-        slMainMasters := TStringList.Create;
-        slMainMasters.Sorted := True;
-
-        slMasterableMasters := TStringList.Create;
-
-        slCheckedModels := TStringList.Create;
-        slHasLOD := TStringList.Create;
-        slFakeStatics := TStringList.Create;
-
-        slTopLevelModPatternPaths := TStringList.Create;
-        slMessages := TStringList.Create;
-        slMessages.Sorted := True;
-        slMissingLODMessages := TStringList.Create;
-        slMissingLODMessages.Sorted := True;
-
-        slOutsideUVRange := TStringList.Create;
-        slOutsideUVRange.Sorted := True;
-
-        slFullLODMessages := TStringList.Create;
-        slFullLODMessages.Sorted := True;
-
-        slMissingColorRemaps := TStringList.Create;
-        slMissingColorRemaps.Sorted := True;
-
-        slFOLIPTexgen_noalpha := TStringList.Create;
-        slFOLIPTexgen_copy := TStringList.Create;
-        slFOLIPTexgen_alpha := TStringList.Create;
-        slTexgen_copy := TStringList.Create;
-        slTexgen_alpha := TStringList.Create;
-        slTexgen_noalpha := TStringList.Create;
-        slAddedTexGenTextures := TStringList.Create;
-        slRasterizedDiffuses := TStringList.Create;
-        slMswp := TStringList.Create;
-
-        //TJsonObjects
-        joRules := TJsonObject.Create;
-        joMswpMap := TJsonObject.Create;
-        joMultiRefLOD := TJsonObject.Create;
-        joUserSettings := TJsonObject.Create;
-        joModelMatch := TJsonObject.Create;
-        joElements := TJsonObject.Create;
-        joWinningCells := TJsonObject.Create;
-        joRasterizeMaterials := TJsonObject.Create;
-        joLODMaterialGroup := TJsonObject.Create;
-        joUserRules := TJsonObject.Create;
-
         bLoadDefaults := True;
         bDeepScan := False;
         bPreviousBeforeGenerationPresent := False;
         SetJDOLineBreak(#13#10);
+        dummyIndex := 0;
+
         if ResourceExists(sUserSettingsFileName) then begin
             AddMessage('Loading user settings from ' + sUserSettingsFileName);
             joUserSettings.LoadFromResource(sUserSettingsFileName);
@@ -1848,7 +1852,7 @@ begin
             if GetIsCleanDeleted(r) then continue;
 
             base := WinningOverride(BaseRecord(r));
-            if (slHasLOD.IndexOf(RecordFormIdFileId(base)) <> -1) then bBaseHasLOD := True;
+            bBaseHasLOD := slHasLOD.Find(RecordFormIdFileId(base), dummyIndex);
 
             //Split between refs with LOD and not having LOD
             if not bBaseHasLOD then begin
@@ -1935,7 +1939,7 @@ begin
                 r := ObjectToElement(tlOppositeEnableRefs[oi]);
 
                 OverOrNew := 'Overrides';
-                if (slFakeStatics.IndexOf(RecordFormIdFileId(LinksTo(ElementByPath(r, 'NAME')))) <> -1) then OverOrNew := 'New';
+                if slFakeStatics.Find(RecordFormIdFileId(BaseRecord(r)), dummyIndex) then OverOrNew := 'New';
 
                 rCell := LinksTo(ElementByIndex(r, 0));
                 if IsInteriorCell(rCell) then continue;
@@ -2036,7 +2040,7 @@ begin
                 then bIsFullLOD := true else bIsFullLOD := false;
 
                 OverOrNew := 'Overrides';
-                if (slFakeStatics.IndexOf(RecordFormIdFileId(LinksTo(ElementByPath(r, 'NAME')))) <> -1) then OverOrNew := 'New';
+                if slFakeStatics.Find(RecordFormIdFileId(BaseRecord(r)), dummyIndex) then OverOrNew := 'New';
 
 
                 if (not bCanBeRespected) or (not GetIsVisibleWhenDistant(r)) or bIsFullLOD then begin
@@ -2508,7 +2512,7 @@ begin
                 if not ElementExists(r, 'XMSP - Material Swap') then continue;
                 ms := LinksTo(ElementByPath(r, 'XMSP'));
                 msRecordId := RecordFormIdFileId(ms);
-                if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
+                slMswp.Add(msRecordId);
             end;
         end
         else if bReportMissingLOD and (sMissingLodMessage <> '') then begin
@@ -2632,7 +2636,7 @@ begin
     if HasMS then begin
         ms := LinksTo(ElementByPath(s, 'Model\MODS'));
         msRecordId := RecordFormIdFileId(ms);
-        if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
+        slMswp.Add(msRecordId);
         iCurrentPlugin := RefMastersDeterminePlugin(ms, iFolipMasterFile);
     end
     else iCurrentPlugin := iFolipMasterFile;
@@ -2779,8 +2783,8 @@ begin
 
                         for oms := 0 to Pred(slLODOriginals.Count) do begin
                             om := slLODOriginals[oms];
-                            if slLODSubOriginal.IndexOf(om) > -1 then continue;
-                            if slExistingSubstitutions.IndexOf('materials\' + om) > -1 then continue;
+                            if slLODSubOriginal.Find(om, dummyIndex) then continue;
+                            if slExistingSubstitutions.Find('materials\' + om, dummyIndex) then continue;
                             rm := slLODReplacements[0];
                             if om = rm then continue;
                             slLODSubOriginal.Add(om);
@@ -2940,7 +2944,7 @@ begin
 
         //Check if the replacementDiffuse already has a lod texture being created by TexGen.
         if not bForceTexGenRedo then bLodTextureExists := DoesTexGenAlreadyHaveTexture(replacementLodDiffuse) else bLodTextureExists := False;
-        bLodTextureExists := (slAddedTexGenTextures.IndexOf(replacementDiffuseNormalized) <> -1);
+        bLodTextureExists := slAddedTexGenTextures.Find(replacementDiffuseNormalized, dummyIndex);
 
         //Attempt to add texgen rules to create the new lod replacement textures.
         if not bLodTextureExists then begin
@@ -3019,7 +3023,7 @@ begin
     diffuseNew := Fallback(joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'], diffuseNew);
     Result := diffuseNew;
     outputTexture := sOutputDir + '\' + TrimLeftChars(diffuseNew, 4) + '.dds';
-    if slRasterizedDiffuses.IndexOf(outputTexture) <> -1 then Exit;
+    if slRasterizedDiffuses.Find(outputTexture, dummyIndex) then Exit;
     if FileExists(outputTexture) then Exit;
     if not bForceRasterize then if ResourceExists(diffuseNew) then if GrayscalePaletteTexturesVanilla(paletteTexture, replacementDiffuseNormalized) then Exit;
     slRasterizedDiffuses.Add(outputTexture);
@@ -3531,7 +3535,7 @@ begin
                 if (cnt > 0) and (ElementExists(s, 'Model\MODS - Material Swap')) then begin
                     ms := LinksTo(ElementByPath(s, 'Model\MODS'));
                     msRecordId := RecordFormIdFileId(ms);
-                    if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
+                    slMswp.Add(msRecordId);
                 end;
                 if ((cnt > 0) and (joLOD.Count > 0)) then begin
                     AssignLODToStat(s, joLOD, false, 'Overrides');
@@ -3645,7 +3649,7 @@ begin
         if ElementExists(r, 'XMSP - Material Swap') then begin
             ms := LinksTo(ElementByPath(r, 'XMSP'));
             msRecordId := RecordFormIdFileId(ms);
-            if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
+            slMswp.Add(msRecordId);
         end;
 
         // check for enable parent
@@ -3699,12 +3703,13 @@ begin
     end;
     if (Signature(s) = 'SCOL') and (cnt > 0) then begin
         bHasSCOLNeedingLOD := true;
-        if (slHasLOD.IndexOf(RecordFormIdFileId(s)) = -1) then slHasLOD.Add(RecordFormIdFileId(s));
+        recordId := RecordFormIdFileId(s);
+        if not slHasLOD.Find(recordId, dummyIndex) then slHasLOD.Add(recordId);
         //check for base material swap on the SCOL record
         if ElementExists(r, 'Model\MODS - Material Swap') then begin
             ms := LinksTo(ElementByPath(r, 'Model\MODS'));
             msRecordId := RecordFormIdFileId(ms);
-            if slMswp.IndexOf(msRecordId) = -1 then slMswp.Add(msRecordId);
+            slMswp.Add(msRecordId);
         end;
     end;
     Result := cnt;
@@ -3953,7 +3958,7 @@ begin
                     slMatFiles.Add(LowerCase(f));
 
                     fNoLod := StringReplace(f, '\lod\', '\', [rfReplaceAll, rfIgnoreCase]);
-                    if (slVanilla.IndexOf(LowerCase(fNoLod)) > -1) and (slModded.IndexOf(LowerCase(fNoLod)) > -1) then begin
+                    if (slVanilla.Find(LowerCase(fNoLod), dummyIndex) and slModded.Find(LowerCase(fNoLod), dummyIndex)) then begin
                         if ((not ContainsText(LowerCase(fNoLod),'materials\architecture\shacks\shacklod01.bgsm')) and bMakeMissingMaterials) then begin
                             CompareModdedMaterialToVanilla(fNoLod, f);
                             bRasterized := true;
@@ -4033,7 +4038,7 @@ begin
         ResourceCount(f, slCurrentContainers);
         for i := Pred(slCurrentContainers.Count) downto 0 do begin
             currentContainer := slCurrentContainers[i];
-            if slVanillaContainers.IndexOf(currentContainer) > -1 then begin
+            if slVanillaContainers.Find(currentContainer, dummyIndex) then begin
                 Result := currentContainer;
                 break;
             end;
@@ -4638,7 +4643,7 @@ begin
     if ruleOverride then hasDistantLOD := 0;
 
     model := LowerCase(wbNormalizeResourceName(model, resMesh));
-    if ((hasDistantLOD <> 0) and (slCheckedModels.IndexOf(model) = -1)) then begin
+    if ((hasDistantLOD <> 0) and (not slCheckedModels.Find(model, dummyIndex))) then begin
         slCheckedModels.Add(model);
 
         slMaterialsFromFullModel := TStringList.Create;
@@ -4683,7 +4688,7 @@ begin
 
     slPossibleLODPaths := TStringList.Create;
     try
-        if (slUsedLODNifFiles.IndexOf(LODModel) = -1) then begin
+        if not slUsedLODNifFiles.Find(LODModel, dummyIndex) then begin
             slUsedLODNifFiles.Add(LODModel);
             if bReportNonLODMaterials or bReportUVs then begin
                 if MeshCheck(LODModel, slMaterialsFromLODModel) then slOutsideUVRange.Add('Warning: ' + LODModel + #9 + ' has UVs outside the 0 to 1 range.');
@@ -4708,7 +4713,7 @@ begin
                 //Check the LOD materials for matches in slPossibleLODPaths and warn if any are not matches.
                 for c := 0 to Pred(slMaterialsFromLODModel.Count) do begin
                     material := TrimRightChars(slMaterialsFromLODModel[c], 10);
-                    if slPossibleLODPaths.IndexOf(material) = -1 then begin
+                    if not slPossibleLODPaths.Find(material, dummyIndex) then begin
                         slMismatchedFullModelToLODMaterials.Add('Warning: ' + LODModel + #9 + ' has a LOD material that does not match the known full model materials: ' + #9 + material);
                     end;
                 end;
@@ -4924,7 +4929,7 @@ begin
         if bColorRemap then begin
             //p3 is for specific color remap level lod like 'model_0.5_lod_1.nif'
             p3 := searchModel + colorRemap + '_lod_' + level + '.nif';
-            if slNifFiles.IndexOf(p3) > -1 then begin
+            if slNifFiles.Find(p3, dummyIndex) then begin
                 Result := TrimRightChars(p3, 7);
                 Exit;
             end;
@@ -4932,7 +4937,7 @@ begin
 
         //p1 is for specific level lod like 'model_lod_1.nif'
         p1 := searchModel + '_lod_' + level + '.nif';
-        if slNifFiles.IndexOf(p1) > -1 then begin
+        if slNifFiles.Find(p1, dummyIndex) then begin
             if bColorRemap then begin
                 if bMakeMissingMaterials then begin
                     if not AttemptCreateColorRemapLODModel(p1, p3, colorRemap)
@@ -4954,7 +4959,7 @@ begin
 
         //p2 is for non-specific level lod like 'model_lod.nif'
         p2 := searchModel + '_lod.nif';
-        if ((level = '0') and (slNifFiles.IndexOf(p2) > -1)) then begin
+        if (SameText(level, '0') and slNifFiles.Find(p2, dummyIndex)) then begin
             Result := TrimRightChars(p2, 7);
             joModelMatch.O[fileNameStripped].S['lod' + level] := Result;
             Exit;
@@ -5013,7 +5018,7 @@ begin
                     GetBaseNameFromModel('meshes\' + Result, slLodModelNames);
                     c := 0;
                     for i := 0 to Pred(slLodModelNames.Count) do begin
-                        if slModelNames.IndexOf(slLodModelNames[i]) = -1 then continue;
+                        if not slModelNames.Find(slLodModelNames[i], dummyIndex) then continue;
                         Inc(c);
                     end;
                     if c = 0 then begin
@@ -5171,15 +5176,15 @@ begin
         searchMaterial := StringReplace(material, 'materials\' + slTopPaths[i], 'materials\' + slTopPaths[i] + 'lod\', [rfReplaceAll, rfIgnoreCase]);
         p1 := TrimLeftChars(searchMaterial, 5) + colorRemap + '.bgsm';
         //if Result = '' then Result := p1;
-        if ((slMatFiles.IndexOf(p1) > -1) and (slExistingSubstitutions.IndexOf(p1) = -1)) then begin
+        if (slMatFiles.Find(p1, dummyIndex) and not slExistingSubstitutions.Find(p1, dummyIndex)) then begin
             //sanity check
             //AddMessage(TrimRightChars(p1, 10));
             slPossibleLODPaths.Add(TrimRightChars(p1, 10));
         end;
         p2 := TrimLeftChars(searchMaterial, 5) + 'lod.bgsm';
-        if ((slMatFiles.IndexOf(p2) > -1) and (slExistingSubstitutions.IndexOf(p2) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
+        if (slMatFiles.Find(p2, dummyIndex) and not slExistingSubstitutions.Find(p2, dummyIndex)) then slPossibleLODPaths.Add(TrimRightChars(p2, 10));
         p3 := TrimLeftChars(searchMaterial, 5) + '_lod.bgsm';
-        if ((slMatFiles.IndexOf(p3) > -1) and (slExistingSubstitutions.IndexOf(p3) = -1)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
+        if (slMatFiles.Find(p3, dummyIndex) and not slExistingSubstitutions.Find(p3, dummyIndex)) then slPossibleLODPaths.Add(TrimRightChars(p3, 10));
     end;
 
     //Material Swap Map Rules
@@ -5187,7 +5192,7 @@ begin
     if joMswpMap.Contains(searchMaterial) then begin
         for a := 0 to Pred(joMswpMap.A[searchMaterial].Count) do begin
             p4 := joMswpMap.A[searchMaterial].S[a];
-            if slExistingSubstitutions.IndexOf('materials\' + p4) = -1 then slPossibleLODPaths.Add(p4);
+            if not slExistingSubstitutions.Find('materials\' + p4, dummyIndex) then slPossibleLODPaths.Add(p4);
         end;
     end;
 end;
@@ -5207,7 +5212,7 @@ begin
 
         for i := 0 to Pred(slMasters.Count) do begin
             if SameText(sFolipMasterFileName, slMasters[i]) then continue;
-            if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
+            if not slMasterableMasters.Find(slMasters[i], dummyIndex) then begin
                 Result := iFolipPluginFile;
                 break;
             end;
@@ -5350,7 +5355,7 @@ begin
                 Result := True;
                 if i = 2 then begin
                     between := LowerCase(parts[1]) + '\';
-                    if slTopLevelModPatternPaths.IndexOf(between) = -1 then begin
+                    if not slTopLevelModPatternPaths.Find(between, dummyIndex) then begin
                         AddMessage('Added sub path: ' + between);
                         slTopLevelModPatternPaths.Add(between);
                     end;
@@ -5380,11 +5385,11 @@ begin
         //meshes\ to meshes\lod
         Result := StringReplace(f, parts[0], parts[0] + '\lod', [rfIgnoreCase]);
     end
-    else if (slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1])) <> -1) then begin
+    else if slTopLevelModPatternPaths.Find(LowerCase(parts[1]), dummyIndex) then begin
         //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
         Result := StringReplace(f, parts[1], parts[1] + '\lod', [rfIgnoreCase]);
     end
-    else if (slTopLevelModPatternPaths.IndexOf(LowerCase(parts[1]) + '\') <> -1) then begin
+    else if slTopLevelModPatternPaths.Find(LowerCase(parts[1]) + '\', dummyIndex) then begin
         //meshes\dlc03\path\to\model.nif to meshes\dlc03\lod\path\to\model.nif
         Result := StringReplace(f, parts[1] + '\', parts[1] + '\lod\', [rfIgnoreCase]);
     end
@@ -5645,7 +5650,7 @@ begin
             o := OverrideByIndex(masterRecord, i);
             f := GetFile(o);
             overrideFileName := GetFileName(f);
-            if (slMasterableMasters.IndexOf(overrideFileName) <> -1) then begin
+            if slMasterableMasters.Find(overrideFileName, dummyIndex) then begin
                 Result := o;
                 Exit;
             end;
@@ -5654,7 +5659,7 @@ begin
     //If we got this far, this means the record either 1) Only exists in the master file or 2) None of the overrides are able to be placed in the inputFile.
     f := GetFile(masterRecord);
     masterFileName := GetFileName(f);
-    if (slMasterableMasters.IndexOf(masterFileName) <> -1) then begin
+    if slMasterableMasters.Find(masterFileName, dummyIndex) then begin
         Result := masterRecord;
         Exit;
     end;
@@ -5694,7 +5699,7 @@ var
 begin
     Result := False;
     fileName := GetFileName(GetFile(WinningOverride(r)));
-    if (slMasterableMasters.IndexOf(fileName) <> -1) then Result := True;
+    if slMasterableMasters.Find(fileName, dummyIndex) then Result := True;
 end;
 
 function CanOverrideDeterminesPlugin(r: IwbMainRecord; inputFile: IwbFile): IwbFile;
@@ -5720,7 +5725,7 @@ begin
     try
         for i := 0 to Pred(slMasterList.Count) do begin
             pluginFile := slMasterList[i];
-            if (slListToSort.IndexOf(pluginFile) <> -1) then temp.Add(pluginFile);
+            if slListToSort.Find(pluginFile, dummyIndex) then temp.Add(pluginFile);
         end;
 
         slListToSort.Assign(temp);
