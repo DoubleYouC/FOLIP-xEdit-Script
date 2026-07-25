@@ -1271,7 +1271,7 @@ procedure ProcessElements;
 var
     f, i, w, x, y, r: integer;
     recordId, wrldEdid, wrldRecordId, cellRecordId, ref, cellX, cellY, fileHere, messageHere: string;
-    bFolipMaster, bInterior, bPersistent, bAddedPersistentWorldspaceCell: boolean;
+    bFolipMaster, bInterior, bPersistent, bAddedPersistentWorldspaceCell, bNoCell: boolean;
     rWrld, rCell, nCell, pCell, rNew: IwbMainRecord;
 begin
     AddMessage('Processing elements...');
@@ -1362,6 +1362,7 @@ begin
                 cellX := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].Names[x];
                 for y := 0 to Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].Count) do begin
                     cellY := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].Names[y];
+                    bNoCell := false;
 
                     if not bInterior then begin
                         //Add wrld
@@ -1373,25 +1374,28 @@ begin
 
                         //Add cell
                         cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
-                        //It is possible for a world to not have a cell at 0,0, but have persistent references that indicate this cell. Fall back to persistent worldspace cell in this case.
-                        if (((cellX = '0') and (cellY = '0')) and SameText(cellRecordID, '')) then begin
-                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
-                            bAddedPersistentWorldspaceCell := true;
-                        end;
-                        if bFolipMaster then
-                            rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
-                        else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                        if IsInIgnoredPlugin(MasterOrSelf((rCell))) then continue;
-                        if Assigned(rCell) then nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                        //Add persistent worldspace cell
-                        if not bAddedPersistentWorldspaceCell then begin
-                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+
+                        if not SameText(cellRecordID, '') then begin
                             if bFolipMaster then
                                 rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
                             else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
-                            if Assigned(rCell) then pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
-                            bAddedPersistentWorldspaceCell := True;
+                            if IsInIgnoredPlugin(MasterOrSelf((rCell))) then continue;
+                            if Assigned(rCell) then nCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                        end else bNoCell := True;
+
+                        //Add persistent worldspace cell
+                        if not bAddedPersistentWorldspaceCell then begin
+                            cellRecordId := joWinningCells.O[wrldEdid].O['PersistentWorldspaceCell'].S['RecordID'];
+                            if not SameText(cellRecordID, '') then begin
+                                if bFolipMaster then
+                                    rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), iCurrentPlugin)
+                                else rCell := WinningOverrideIgnoringThisFile(GetRecordFromFormIdFileId(cellRecordId), sFolipMasterFileName);
+                                if Assigned(rCell) then pCell := wbCopyElementToFile(rCell, iCurrentPlugin, False, True);
+                                bAddedPersistentWorldspaceCell := True;
+                            end;
                         end;
+                        //Fall back to persistent worldspace cell if this cell doesn't exist.
+                        if (bNoCell and bAddedPersistentWorldspaceCell) then nCell := pCell;
                     end;
 
 
@@ -1426,7 +1430,6 @@ begin
                         if (bPersistent and bAddedPersistentWorldspaceCell)
                         then begin
                             rNew := Add(pCell, 'REFR', True);
-                            if not Assigned(rNew) then AddMessage('ERROR ADDING REFR TO PERSISTENT CELL');
                             SetIsPersistent(rNew, bPersistent);
                             ProcessNewReference(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[ref], ref, pluginFileNameHere, rNew);
                         end
