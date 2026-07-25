@@ -1822,8 +1822,10 @@ begin
 
             iCurrentPlugin := CanOverrideDeterminesPlugin(p, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+            rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+            rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
             recordId := RecordFormIdFileId(p);
             pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -1911,9 +1913,10 @@ begin
             iCurrentPlugin := CanOverrideDeterminesPlugin(oppositeEnableParentReplacer, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
-
+            rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+            rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
             recordId := RecordFormIdFileId(oppositeEnableParentReplacer);
             pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -1972,8 +1975,10 @@ begin
 
                 iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
 
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -2010,8 +2015,10 @@ begin
                 iCurrentPlugin := CanOverrideDeterminesPlugin(enableParentReplacer, iFolipMasterFile);
                 iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(enableParentReplacer, iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
 
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -2074,8 +2081,10 @@ begin
 
                     iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
                     iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-                    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                    rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                    rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                    iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
                     pluginFileNameHere := GetFileName(iCurrentPlugin);
                     if ((not SameText(pluginFileNameOriginal, pluginFileNameHere)) and SameText(OverOrNew, 'New')) then begin
@@ -2178,8 +2187,10 @@ begin
                 iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(MultiRefLODElement, iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
 
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
@@ -2331,8 +2342,10 @@ begin
             iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(stolen, iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+            rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+            rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
             pluginFileNameHere := GetFileName(iCurrentPlugin);
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].O[recordId].S['NAME'] := IntToHex(GetLoadOrderFormID(stolen), 8);
@@ -2421,8 +2434,10 @@ begin
 
         iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
         iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-        iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-        iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+        rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+        rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+        iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+        iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementEditValues(rCell, 'XCLC\X');
@@ -2537,8 +2552,10 @@ begin
         cellX := GetElementEditValues(rCell, 'XCLC\X');
         cellY := GetElementEditValues(rCell, 'XCLC\Y');
     end;
-    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-    iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+    rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+    rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+    iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+    iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
     if ElementExists(r, 'XMSP - Material Swap') then begin
         bMswp := true;
@@ -3659,8 +3676,10 @@ begin
 
                 iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['RemoveLinkedReference'] := '00195411';
@@ -3672,8 +3691,10 @@ begin
                 //Remove Is Full LOD flag from objects that will have Object LOD added.
                 iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
                 iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin), iCurrentPlugin);
-                iCurrentPlugin := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin), iCurrentPlugin);
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
                 pluginFileNameHere := GetFileName(iCurrentPlugin);
                 joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 0;
@@ -5613,7 +5634,7 @@ begin
     Result := newf;
 end;
 
-function GetHighestPossibleOverrideForFile(r: IwbMainRecord; inputFile: IwbFile): IwbMainRecord;
+function GetHighestPossibleOverrideForFile(r: IwbMainRecord; var inputFile: IwbFile): IwbMainRecord;
 {
     Gets the highest possible override desired for the given reference and plugin.
 }
@@ -5628,6 +5649,7 @@ begin
         Result := WinningOverride(r);
         Exit;
     end;
+    //This only runs on the master file.
     masterRecord := MasterOrSelf(r);
     iNumOverrides := OverrideCount(masterRecord);
     if iNumOverrides > 0 then begin
@@ -5641,7 +5663,16 @@ begin
             end;
         end;
         //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
+    end else begin // record only exists in master
+        f := GetFile(masterRecord);
+        overrideFileName := GetFileName(f);
+        if (slMasterableMasters.IndexOf(overrideFileName) <> -1) then begin
+            Result := masterRecord;
+            Exit;
+        end;
     end;
+    //If we got this far, the record cannot be mastered in the master file, so change the file to the plugin and use the winning override.
+    inputFile := iFolipPluginFile;
     Result := WinningOverride(r);
 end;
 
