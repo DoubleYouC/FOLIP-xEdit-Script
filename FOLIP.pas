@@ -107,43 +107,33 @@ begin
         slPluginFiles := TStringList.Create;
         slVerifyLODModels := TStringList.Create;
         slVerifyLODModels.Sorted := True;
-        slVerifyLODModels.Duplicates := dupIgnore;
 
         slMatFiles := TStringList.Create;
         slMatFiles.Sorted := True;
-        slMatFiles.Duplicates := dupIgnore;
 
         slNifFiles := TStringList.Create;
         slNifFiles.Sorted := True;
-        slNifFiles.Duplicates := dupIgnore;
 
         slUsedLODNifFiles := TStringList.Create;
         slUsedLODNifFiles.Sorted := True;
-        slUsedLODNifFiles.Duplicates := dupIgnore;
 
         slMeshCheckMissingMaterials := TStringList.Create;
         slMeshCheckMissingMaterials.Sorted := True;
-        slMeshCheckMissingMaterials.Duplicates := dupIgnore;
 
         slMeshCheckNonLODMaterials := TStringList.Create;
         slMeshCheckNonLODMaterials.Sorted := True;
-        slMeshCheckNonLODMaterials.Duplicates := dupIgnore;
 
         slMeshCheckNoMaterialSpecified := TStringList.Create;
         slMeshCheckNoMaterialSpecified.Sorted := True;
-        slMeshCheckNoMaterialSpecified.Duplicates := dupIgnore;
 
         slMismatchedFullModelToLODMaterials  := TStringList.Create;
         slMismatchedFullModelToLODMaterials.Sorted := True;
-        slMismatchedFullModelToLODMaterials.Duplicates := dupIgnore;
 
         slPatchMasters := TStringList.Create;
         slPatchMasters.Sorted := True;
-        slPatchMasters.Duplicates := dupIgnore;
 
         slMainMasters := TStringList.Create;
         slMainMasters.Sorted := True;
-        slMainMasters.Duplicates := dupIgnore;
 
         slMasterableMasters := TStringList.Create;
 
@@ -159,7 +149,6 @@ begin
 
         slOutsideUVRange := TStringList.Create;
         slOutsideUVRange.Sorted := True;
-        slOutsideUVRange.Duplicates := dupIgnore;
 
         slFullLODMessages := TStringList.Create;
         slFullLODMessages.Sorted := True;
@@ -2683,7 +2672,6 @@ begin
     slMissingMaterials := TStringList.Create;
     slMismatchedMaterials := TStringList.Create;
     slMismatchedMaterials.Sorted := True;
-    slMismatchedMaterials.Duplicates := dupIgnore;
     try
         for i := 0 to Pred(slMswp.Count) do begin
             m := WinningOverride(GetRecordFromFormIdFileId(slMswp[i]));
@@ -3897,7 +3885,6 @@ var
 begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
-    slArchivedFiles.Duplicates := dupIgnore;
     slVanilla := TStringList.Create;
     slModded := TStringList.Create;
     try
@@ -4656,7 +4643,6 @@ begin
 
         slMaterialsFromFullModel := TStringList.Create;
         slMaterialsFromFullModel.Sorted := True;
-        slMaterialsFromFullModel.Duplicates := dupIgnore;
         try
             AddMessage(ShortName(s) + #9 + model + #9 + lod4 + #9 + lod8 + #9 + lod16 + #9 + lod32);
             if ((model <> '') and bReportNonLODMaterials) then AddMaterialsFromModel(model, slMaterialsFromFullModel);
@@ -4694,7 +4680,6 @@ begin
 
     slMaterialsFromLODModel := TStringList.Create;
     slMaterialsFromLODModel.Sorted := True;
-    slMaterialsFromLODModel.Duplicates := dupIgnore;
 
     slPossibleLODPaths := TStringList.Create;
     try
@@ -4878,15 +4863,12 @@ var
 begin
     slMissingLODNifFiles := TStringList.Create;
     slMissingLODNifFiles.Sorted := True;
-    slMissingLODNifFiles.Duplicates := dupIgnore;
 
     slNotInLODDirectory := TStringList.Create;
     slNotInLODDirectory.Sorted := True;
-    slNotInLODDirectory.Duplicates := dupIgnore;
 
     slDoesNotFollowLODNamingConvention := TStringList.Create;
     slDoesNotFollowLODNamingConvention.Sorted := True;
-    slDoesNotFollowLODNamingConvention.Duplicates := dupIgnore;
     try
         for i := 0 to Pred(slUsedLODNifFiles.Count) do begin
             f := slUsedLODNifFiles[i];
