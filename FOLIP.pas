@@ -5640,7 +5640,7 @@ function GetHighestPossibleOverrideForFile(r: IwbMainRecord; var inputFile: IwbF
 }
 var
     i, iNumOverrides: integer;
-    PluginHereFileName, overrideFileName: string;
+    PluginHereFileName, overrideFileName, masterFileName: string;
     o, masterRecord: IwbMainRecord;
     f: IwbFile;
 begin
@@ -5662,16 +5662,15 @@ begin
                 Exit;
             end;
         end;
-        //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
-    end else begin // record only exists in master
-        f := GetFile(masterRecord);
-        overrideFileName := GetFileName(f);
-        if (slMasterableMasters.IndexOf(overrideFileName) <> -1) then begin
-            Result := masterRecord;
-            Exit;
-        end;
     end;
-    //If we got this far, the record cannot be mastered in the master file, so change the file to the plugin and use the winning override.
+    //If we got this far, this means the record either 1) Only exists in the master file or 2) None of the overrides are able to be placed in the inputFile.
+    f := GetFile(masterRecord);
+    masterFileName := GetFileName(f);
+    if (slMasterableMasters.IndexOf(masterFileName) <> -1) then begin
+        Result := masterRecord;
+        Exit;
+    end;
+    //If we got this far, the record cannot be mastered in the inputFile, so change the file to the plugin and use the winning override.
     inputFile := iFolipPluginFile;
     Result := WinningOverride(r);
 end;
