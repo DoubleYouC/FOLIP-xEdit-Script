@@ -1362,6 +1362,12 @@ begin
                 cellX := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].Names[x];
                 for y := 0 to Pred(joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].Count) do begin
                     cellY := joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].Names[y];
+                    if (joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Count +
+                       joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['New'].Count = 0)
+                    then begin
+                        AddMessage('Skipped processing for cell with no changes: ' + #9 + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                        continue;
+                    end;
                     bNoCell := false;
 
                     if not bInterior then begin
