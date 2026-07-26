@@ -70,3 +70,6 @@ modules/
 /.vs
 *.zip
 *.7z
+GPATH
+GRTAGS
+GTAGS
