@@ -3114,6 +3114,7 @@ begin
     for i := 0 to Pred(joRasterizeMaterials.Count) do begin
         rm := joRasterizeMaterials.Names[i];
         if not StrToBool(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor']) then continue;
+<<<<<<< HEAD
         fm := joRasterizeMaterials.O[rm].S['Full Material'];
         if fm = '' then continue;
         paletteScale := joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'];
@@ -3128,6 +3129,18 @@ begin
         end;
         if not ResourceExists(paletteTexture) then continue;
         if not ResourceExists(replacementDiffuseNormalized) then continue;
+=======
+        replacementDiffuseNormalized := joRasterizeMaterials.O[rm].S['RasterizedDiffusePath'];
+        fm := joRasterizeMaterials.O[rm].S['Full Material'];
+        if not ResourceExists(fm) then continue;
+        bgsm := TwbBGSMFile.Create;
+        try
+            paletteTexture := bgsm.EditValues['Textures\Grayscale'];
+        finally
+            bgsm.Free;
+        end;
+        paletteScale := joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'];
+>>>>>>> f032e5181d7c614c2ebf2bc14466e408aa3861c8
         CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
     end;
 end;
