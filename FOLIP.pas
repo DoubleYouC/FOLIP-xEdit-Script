@@ -389,6 +389,7 @@ begin
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
 
     if bSkip then Exit;
+    if bForceRasterize then ForceRasterizeAll;
 
     AddMessage('Collecting records...');
     CollectRecords;
@@ -1464,6 +1465,40 @@ begin
         original := tsMS[0];
         replacement := tsMS[1];
         AddMaterialSwap(n, original, replacement);
+    end;
+    if joElements.O['MSWP'].O['Overrides'].O[recordId].S['FixDuplicates'] = '1' then FixDuplicateMaterialSwaps(n, recordId);
+end;
+
+procedure FixDuplicateMaterialSwaps(n: IwbMainRecord; const recordId: string);
+var
+    substitutions, sub: IwbElement;
+    si, count: integer;
+    originalMat: string;
+    slSubstitutions: TStringList;
+begin
+    count := 0;
+    substitutions := ElementByName(n, 'Material Substitutions');
+    slSubstitutions := TStringList.Create;
+    try
+        //foreach substitution in substitutions
+        for si := 0 to Pred(ElementCount(substitutions)) do begin
+            //the substitution
+            sub := ElementByIndex(substitutions, si - count);
+            if not ElementExists(sub, 'BNAM - Original Material') then continue;
+            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+            if originalMat = '' then continue;
+            if slSubstitutions.Find(originalMat, dummyIndex) then begin
+                //duplicate found
+                Remove(sub);
+                Inc(count);
+                AddMessage('Removed duplicate substitution from: ' + #9 + recordId + #9 + originalMat);
+                continue;
+            end;
+            AddMessage(originalMat);
+            slSubstitutions.Add(originalMat);
+        end;
+    finally
+        slSubstitutions.Free;
     end;
 end;
 
@@ -2679,6 +2714,7 @@ begin
     try
         for i := 0 to Pred(slMswp.Count) do begin
             m := WinningOverride(GetRecordFromFormIdFileId(slMswp[i]));
+            CheckForDuplicateMaterialSwaps(m);
 
             slLODSubOriginal := TStringList.Create;
             slLODSubReplacement := TStringList.Create;
@@ -2823,6 +2859,39 @@ begin
         slMissingMaterials.Free;
         slMismatchedMaterials.Free;
         slDummy.Free;
+    end;
+end;
+
+procedure CheckForDuplicateMaterialSwaps(m: IwbMainRecord);
+var
+    substitutions, sub: IwbElement;
+    si: integer;
+    originalMat, recordId: string;
+    slSubstitutions: TStringList;
+begin
+    substitutions := ElementByName(m, 'Material Substitutions');
+    slSubstitutions := TStringList.Create;
+    try
+        //foreach substitution in substitutions
+        for si := 0 to Pred(ElementCount(substitutions)) do begin
+            //the substitution
+            sub := ElementByIndex(substitutions, si);
+            if not ElementExists(sub, 'BNAM - Original Material') then continue;
+            originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
+            if originalMat = '' then continue;
+            if slSubstitutions.Find(originalMat, dummyIndex) then begin
+                iCurrentPlugin := CanOverrideDeterminesPlugin(m, iFolipMasterFile);
+                iCurrentPlugin := RefMastersDeterminePlugin(m, iCurrentPlugin);
+                recordId := RecordFormIdFileId(m);
+                joElements.O['MSWP'].O['Overrides'].O[recordId].S['File'] := GetFileName(iCurrentPlugin);
+                joElements.O['MSWP'].O['Overrides'].O[recordId].S['FixDuplicates'] := 1;
+                AddMessage(Name(m) + #9 + 'Warning: This Material Swap has duplicate swaps.');
+                break;
+            end;
+            slSubstitutions.Add(originalMat);
+        end;
+    finally
+        slSubstitutions.Free;
     end;
 end;
 
@@ -3033,6 +3102,34 @@ begin
     AddMessage(cmdline);
     ShellExecute(0, 'open', sRasterizeGrayScaleToPalette, cmdline, '', SW_SHOWNORMAL);
     Sleep(iSleepTime);
+end;
+
+procedure ForceRasterizeAll;
+var
+    i: integer;
+    replacementDiffuseNormalized, paletteTexture, paletteScale, rm, fm: string;
+    bgsm: TwbBGSMFile;
+begin
+    AddMessage('Verifying all rasterized grayscale were made.');
+    for i := 0 to Pred(joRasterizeMaterials.Count) do begin
+        rm := joRasterizeMaterials.Names[i];
+        if not StrToBool(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor']) then continue;
+        fm := joRasterizeMaterials.O[rm].S['Full Material'];
+        if fm = '' then continue;
+        paletteScale := joRasterizeMaterials.O[rm].S['GrayscaleToPaletteScale'];
+        if paletteScale = '' then continue;
+        if not ResourceExists(fm) then continue;
+        bgsm := TwbBGSMFile.Create;
+        try
+            paletteTexture := wbNormalizeResourceName(bgsm.EditValues['Textures\Grayscale'], resTexture);
+            replacementDiffuseNormalized := wbNormalizeResourceName(bgsm.EditValues['Textures\Diffuse'], resTexture);
+        finally
+            bgsm.Free;
+        end;
+        if not ResourceExists(paletteTexture) then continue;
+        if not ResourceExists(replacementDiffuseNormalized) then continue;
+        CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
+    end;
 end;
 
 function AddTexgenRules(omDiffuseNormalized, replacementDiffuseNormalized, replacementNormalNormalized, replacementSpecularNormalized: string; specularMult: float): Boolean;
@@ -4091,6 +4188,7 @@ begin
             container := FetchCurrentContainer(f);
             EnsureDirectoryExists(FOLIPTempPath + '\' + folder);
             ResourceCopy(container, f, outfile);
+            AddMessage(f + #9 + 'Container: ' + container + #9 + 'extracted to' + #9 + outfile);
             //end;
         end;
     except on E: Exception do AddMessage(#9 + 'Error accessing resource ' + f + #9 + E.Message);
@@ -4197,10 +4295,10 @@ begin
             Result := True;
         end;
         bLodUsesGrayscaleToPalette := (bgsmLOD.EditValues['GrayscaleToPaletteColor'] = 'yes');
-        if joRasterizeMaterials.Contains(LODMaterial) then begin
-            bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor']);
+        if joRasterizeMaterials.Contains(lodMaterial) then begin
+            bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[lodMaterial].S['GrayscaleToPaletteColor']);
             lodTexture := LowerCase(wbNormalizeResourceName(bgsmLOD.EditValues['Textures\Diffuse'], resTexture));
-            correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[LODMaterial].S['RasterizedDiffusePath']));
+            correctLodTexture := ChangeFullToLodDirectory(LowerCase(joRasterizeMaterials.O[lodMaterial].S['RasterizedDiffusePath']));
             bLODMaterialNeedsFixed := (not SameText(lodTexture, correctLodTexture));
             if bLodUsesGrayscaleToPalette then if bLODMaterialNeedsFixed then begin
                 AddMessage(#9 + 'Warning: ' + f + ' does not appear to be using the correct rasterized grayscale to palette texture.');
@@ -4208,11 +4306,13 @@ begin
             end;
             bRuleExists := true;
         end;
+        if bLodUsesGrayscaleToPalette then AddMessage(#9 + 'Note: ' + lodMaterial + ' is a grayscale to palette lod material.');
         bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        if bGrayscaleToPalette then AddMessage(#9 + 'Note: ' + f + ' is a grayscale to palette full material.');
         if (bGrayscaleToPalette and (not bLodUsesGrayscaleToPalette) and (not bRuleExists)) then begin
-            joRasterizeMaterials.O[LODMaterial].S['Full Material'] := f;
-            joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
-            joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
+            joRasterizeMaterials.O[lodMaterial].S['Full Material'] := f;
+            joRasterizeMaterials.O[lodMaterial].S['GrayscaleToPaletteColor'] := true;
+            joRasterizeMaterials.O[lodMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
         end;
         if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
             if (not bForceRasterize) then begin
@@ -4235,7 +4335,7 @@ begin
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
             then begin
                 AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
-                CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, True);
             end;
         end else if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
@@ -4245,7 +4345,7 @@ begin
             if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe))
             then begin
                 AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
-                CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, True);
             end;
         end;
     finally
@@ -4293,6 +4393,7 @@ begin
             end;
         end;
         if not bLodUsesGrayscaleToPalette then Exit;
+        AddMessage(#9 + 'Note: ' + LODMaterial + ' is a grayscale to palette lod material.');
 
         if not ResourceExists(f) then begin
             stringToReplace := '_' + paletteScale + '.bgsm';
@@ -4301,6 +4402,7 @@ begin
                 joRasterizeMaterials.O[LODMaterial].S['Full Material'] := '';
                 joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteColor'] := true;
                 joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
+                AddMessage('Warning: Could not locate full material for grayscale to palette LOD material: ' + #9 + LODMaterial);
                 Exit;
             end;
         end;
@@ -4309,6 +4411,7 @@ begin
         except on E: Exception do AddMessage(#9 + 'Error loading resource ' + f + #9 + E.Message);
         end;
         bGrayscaleToPalette := (bgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        AddMessage(#9 + 'Note: ' + f + ' is a grayscale to palette full material.');
         paletteScale := FloatToStr(StrToFloatDef(bgsm.EditValues['GrayscaleToPaletteScale'], paletteScale));
         if not bForceRasterize then begin
             paletteTexture := bgsm.EditValues['Textures\Grayscale'];
