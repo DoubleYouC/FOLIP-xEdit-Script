@@ -3121,6 +3121,7 @@ begin
         if not ResourceExists(fm) then continue;
         bgsm := TwbBGSMFile.Create;
         try
+            bgsm.LoadFromResource(fm);
             paletteTexture := wbNormalizeResourceName(bgsm.EditValues['Textures\Grayscale'], resTexture);
             replacementDiffuseNormalized := wbNormalizeResourceName(bgsm.EditValues['Textures\Diffuse'], resTexture);
         finally
