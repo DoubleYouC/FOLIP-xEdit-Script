@@ -3128,7 +3128,7 @@ begin
         end;
         if not ResourceExists(paletteTexture) then continue;
         if not ResourceExists(replacementDiffuseNormalized) then continue;
-        if not bForceRasterize then if GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture) then continue;
+        if not bForceRasterize then if GrayscalePaletteTexturesVanilla(paletteTexture, replacementDiffuseNormalized) then continue;
         CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
     end;
 end;
