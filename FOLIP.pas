@@ -135,23 +135,14 @@ begin
     slMainMasters.Sorted := True;
 
     slMasterableMasters := TStringList.Create;
-    slMasterableMasters.Sorted := True;
 
     slCheckedModels := TStringList.Create;
-    slCheckedModels.Sorted := True;
-
     slHasLOD := TStringList.Create;
-    slHasLOD.Sorted := True;
-
     slFakeStatics := TStringList.Create;
-    slFakeStatics.Sorted := True;
 
     slTopLevelModPatternPaths := TStringList.Create;
-    slTopLevelModPatternPaths.Sorted := True;
-
     slMessages := TStringList.Create;
     slMessages.Sorted := True;
-
     slMissingLODMessages := TStringList.Create;
     slMissingLODMessages.Sorted := True;
 
@@ -173,12 +164,8 @@ begin
     slTexgen_copy := TStringList.Create;
     slTexgen_alpha := TStringList.Create;
     slTexgen_noalpha := TStringList.Create;
-
     slAddedTexGenTextures := TStringList.Create;
-    slAddedTexGenTextures.Sorted := True;
-
     slRasterizedDiffuses := TStringList.Create;
-    slRasterizedDiffuses.Sorted := True;
 
 
     //TJsonObjects
@@ -1485,24 +1472,25 @@ end;
 procedure FixDuplicateMaterialSwaps(n: IwbMainRecord; const recordId: string);
 var
     substitutions, sub: IwbElement;
-    si: integer;
+    si, count: integer;
     originalMat: string;
     slSubstitutions: TStringList;
 begin
+    count := 0;
     substitutions := ElementByName(n, 'Material Substitutions');
     slSubstitutions := TStringList.Create;
-    slSubstitutions.Sorted := True;
     try
         //foreach substitution in substitutions
-        for si := Pred(ElementCount(substitutions)) downto 0 do begin
+        for si := 0 to Pred(ElementCount(substitutions)) do begin
             //the substitution
-            sub := ElementByIndex(substitutions, si);
+            sub := ElementByIndex(substitutions, si - count);
             if not ElementExists(sub, 'BNAM - Original Material') then continue;
             originalMat := LowerCase(GetElementEditValues(sub, 'BNAM - Original Material'));
             if originalMat = '' then continue;
             if slSubstitutions.Find(originalMat, dummyIndex) then begin
                 //duplicate found
                 Remove(sub);
+                Inc(count);
                 AddMessage('Removed duplicate substitution from: ' + #9 + recordId + #9 + originalMat);
                 continue;
             end;
@@ -2731,7 +2719,6 @@ begin
             slLODSubOriginal := TStringList.Create;
             slLODSubReplacement := TStringList.Create;
             slExistingSubstitutions := TStringList.Create;
-            slExistingSubstitutions.Sorted := True;
             try
                 //make a list of existing substitutions, which we will need to then check to make sure we don't add a duplicate substitution.
 
@@ -2832,7 +2819,7 @@ begin
 
                         for oms := 0 to Pred(slLODOriginals.Count) do begin
                             om := slLODOriginals[oms];
-                            if slLODSubOriginal.IndexOf(om) <> -1 then continue;
+                            if slLODSubOriginal.Find(om, dummyIndex) then continue;
                             if slExistingSubstitutions.Find('materials\' + om, dummyIndex) then continue;
                             rm := slLODReplacements[0];
                             if om = rm then continue;
@@ -2884,7 +2871,6 @@ var
 begin
     substitutions := ElementByName(m, 'Material Substitutions');
     slSubstitutions := TStringList.Create;
-    slSubstitutions.Sorted := True;
     try
         //foreach substitution in substitutions
         for si := 0 to Pred(ElementCount(substitutions)) do begin
@@ -4003,9 +3989,7 @@ begin
     slArchivedFiles := TStringList.Create;
     slArchivedFiles.Sorted := True;
     slVanilla := TStringList.Create;
-    slVanilla.Sorted := True;
     slModded := TStringList.Create;
-    slModded.Sorted := True;
     try
         for i := 0 to Pred(containers.Count) do begin
             archive := TrimRightChars(containers[i], Length(wbDataPath));
@@ -4142,7 +4126,6 @@ begin
     Result := '';
     slCurrentContainers := TStringList.Create;
     slVanillaContainers := TStringList.Create;
-    slVanillaContainers.Sorted := True;
     try
         slVanillaContainers.Add(wbDataPath + 'Fallout4 - Materials.ba2');
         slVanillaContainers.Add(wbDataPath + 'DLCworkshop01 - Main.ba2');
@@ -4808,7 +4791,6 @@ begin
     slMaterialsFromLODModel.Sorted := True;
 
     slPossibleLODPaths := TStringList.Create;
-    slPossibleLODPaths.Sorted := True;
     try
         if not slUsedLODNifFiles.Find(LODModel, dummyIndex) then begin
             slUsedLODNifFiles.Add(LODModel);
@@ -5092,7 +5074,6 @@ begin
 
     if bDeepScan then begin
         slModelNames := TStringList.Create;
-        slModelNames.Sorted := True;
         slLodModelNames := TStringList.Create;
         try
             if (joModelMatch.O[fileNameStripped].S['lod' + level] <> '') then begin
@@ -5848,7 +5829,7 @@ begin
     try
         for i := 0 to Pred(slMasterList.Count) do begin
             pluginFile := slMasterList[i];
-            if slListToSort.IndexOf(pluginFile) <> -1 then temp.Add(pluginFile);
+            if slListToSort.Find(pluginFile, dummyIndex) then temp.Add(pluginFile);
         end;
 
         slListToSort.Assign(temp);
