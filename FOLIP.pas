@@ -388,7 +388,7 @@ begin
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
 
     if bSkip then Exit;
-    if bForceRasterize then ForceRasterizeAll;
+    RasterizeAll;
 
     AddMessage('Collecting records...');
     CollectRecords;
@@ -3103,7 +3103,7 @@ begin
     Sleep(iSleepTime);
 end;
 
-procedure ForceRasterizeAll;
+procedure RasterizeAll;
 var
     i: integer;
     replacementDiffuseNormalized, paletteTexture, paletteScale, rm, fm: string;
@@ -3128,6 +3128,7 @@ begin
         end;
         if not ResourceExists(paletteTexture) then continue;
         if not ResourceExists(replacementDiffuseNormalized) then continue;
+        if not bForceRasterize then if GrayscalePaletteTexturesVanilla(paletteTexture, diffuseTexture) then continue;
         CreateRasterizedFullDiffuseTexture(replacementDiffuseNormalized, paletteTexture, paletteScale, rm);
     end;
 end;
