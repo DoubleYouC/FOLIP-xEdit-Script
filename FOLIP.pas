@@ -1820,7 +1820,7 @@ var
     parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid, OverOrNew, pluginFileNameOriginal: string;
 
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent,
-    bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD: boolean;
+    bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD, bInterior: boolean;
 
     c: TwbGridCell;
 
@@ -1850,14 +1850,19 @@ begin
             rCell := LinksTo(ElementByIndex(p, 0));
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
-            rWrld := LinksTo(ElementByIndex(rCell, 0));
-            wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
             iCurrentPlugin := CanOverrideDeterminesPlugin(p, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
-            rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
             rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            bInterior := IsInteriorCell(rCell);
+
+            if not bInterior then begin
+                rWrld := LinksTo(ElementByIndex(rCell, 0));
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            end else wrldEdid := '';
+            
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
             recordId := RecordFormIdFileId(p);
@@ -1866,7 +1871,6 @@ begin
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flParents));
-
         end;
 
         {
