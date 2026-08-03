@@ -1820,7 +1820,7 @@ var
     parentFormid, wrldEdid, cellX, cellY, recordId, oreplacerFormid, ereplacerFormid, OverOrNew, pluginFileNameOriginal: string;
 
     bCanBeRespected, bHasOppositeEnableParent, bHasSuitableReplacer, bHasPersistentReplacer, bIsPersistent,
-    bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD, bInterior: boolean;
+    bHasOppositeEnableRefs, bHasEnableRefs, bBaseHasLOD, bIsFullLOD, bInterior, bRespectsEnableStateFlagSet: boolean;
 
     c: TwbGridCell;
 
@@ -1844,9 +1844,10 @@ begin
 
         //Parents can only be reliably respected if they are from the first master file (Fallout4.esm) and are not initially disabled (not always a problem but sometimes is).
         if ((LeftStr(IntToHex(GetLoadOrderFormID(p), 8), 2) = '00') and (not GetIsInitiallyDisabled(p)) and (Pos(Signature(BaseRecord(p)), sRespectableBases) <> 0)) then bCanBeRespected := True;
+        bRespectsEnableStateFlagSet := GetElementNativeValues(p, 'Record Header\Record Flags\LOD Respects Enable State') <> 0;
 
-        if bCanBeRespected and (GetElementEditValues(p, 'Record Header\Record Flags\LOD Respects Enable State') <> '1') then begin
-            //If the parent can be respected but is not respected, set the LOD Respects Enable State flag on the parenet.
+        if (bCanBeRespected and (not bRespectsEnableStateFlagSet)) then begin
+            //If the parent can be respected but is not respected, set the LOD Respects Enable State flag on the parent.
             rCell := LinksTo(ElementByIndex(p, 0));
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
@@ -1862,7 +1863,7 @@ begin
                 rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
                 iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
             end else wrldEdid := '';
-            
+
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
             recordId := RecordFormIdFileId(p);
@@ -1871,6 +1872,32 @@ begin
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
             joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flParents));
+        end else if (bRespectsEnableStateFlagSet and (not bCanBeRespected)) then begin
+            // Reference cannot be respected but has LOD Respects Enable State flag. Unset the flag.
+            rCell := LinksTo(ElementByIndex(p, 0));
+            cellX := GetElementEditValues(rCell, 'XCLC\X');
+            cellY := GetElementEditValues(rCell, 'XCLC\Y');
+
+            iCurrentPlugin := CanOverrideDeterminesPlugin(p, iFolipMasterFile);
+            iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
+            rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+            bInterior := IsInteriorCell(rCell);
+
+            if not bInterior then begin
+                rWrld := LinksTo(ElementByIndex(rCell, 0));
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            end else wrldEdid := '';
+
+            iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
+
+            recordId := RecordFormIdFileId(p);
+            pluginFileNameHere := GetFileName(iCurrentPlugin);
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['cellRecordId'] := RecordFormIdFileId(rCell);
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 0;
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
+            joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
         end;
 
         {
@@ -1944,15 +1971,19 @@ begin
             cellX := GetElementEditValues(rCell, 'XCLC\X');
             cellY := GetElementEditValues(rCell, 'XCLC\Y');
 
-            rWrld := LinksTo(ElementByIndex(rCell, 0));
-            wrldEdid := GetElementEditValues(rWrld, 'EDID');
-
             iCurrentPlugin := CanOverrideDeterminesPlugin(oppositeEnableParentReplacer, iFolipMasterFile);
             iCurrentPlugin := RefMastersDeterminePlugin(p, iCurrentPlugin);
             iCurrentPlugin := RefMastersDeterminePlugin(oppositeEnableParentReplacer, iCurrentPlugin);
-            rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
             rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
-            iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            bInterior := IsInteriorCell(rCell);
+
+            if not bInterior then begin
+                rWrld := LinksTo(ElementByIndex(rCell, 0));
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+                iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+            end else wrldEdid := '';
+
             iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
             recordId := RecordFormIdFileId(oppositeEnableParentReplacer);
