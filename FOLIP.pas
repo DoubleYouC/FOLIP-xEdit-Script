@@ -2831,7 +2831,7 @@ begin
                             if ResourceExists(replacementMat) then begin
                                 if colorRemap = '' then begin
                                     if bMakeMissingMaterials then AddMessage(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
-                                    if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat, False) then begin
+                                    if not CreateLODMaterialReplacement('materials\' + slLODOriginals[0], rm, replacementMat, '', False) then begin
                                         slMissingMaterials.Add(Name(m) + #9 + 'Missing LOD replacement material: ' + rm + #9 + ' from ' + #9 + om);
                                         continue;
                                     end else begin
@@ -2929,7 +2929,7 @@ begin
     end;
 end;
 
-function CreateLODMaterialReplacement(om, rm, replacementMat: string; bForceTexGenRedo: Boolean): Boolean;
+function CreateLODMaterialReplacement(om, rm, replacementMat, overridePaletteScale: string; bForceTexGenRedo: Boolean): Boolean;
 {
     Creates a LOD material replacement if it does not already exist.
     om is the path to the original lod material.
@@ -3012,6 +3012,7 @@ begin
             if (SameText(om, rm) and (ombgsm.EditValues['GrayscaleToPaletteColor'] = 'yes'))
             then paletteScale := FloatToStr(StrToFloatDef(ombgsm.EditValues['GrayscaleToPaletteScale'], '0'))
             else paletteScale := FloatToStr(StrToFloatDef(replacementMatbgsm.EditValues['GrayscaleToPaletteScale'], '0'));
+            if overridePaletteScale <> '' then paletteScale := overridePaletteScale;
             bLodUsesGrayscaleToPalette := true;
             if joRasterizeMaterials.Contains(rm) then begin
                 bLodUsesGrayscaleToPalette := StrToBool(joRasterizeMaterials.O[rm].S['GrayscaleToPaletteColor']);
@@ -3734,7 +3735,8 @@ var
     si, cnt: integer;
     ms, r, rCell, rWrld, parentRef, base: IwbMainRecord;
     xesp: IwbElement;
-    parent, wrldEdid, cellX, cellY, recordId, msRecordId: string;
+    parent, wrldEdid, cellX, cellY, recordId, msRecordId, refFormId: string;
+    bCanBeRespected, bVisibleWhenDistant, bRespectsEnableStateFlagSet: boolean;
 begin
     cnt := 0;
     for si := Pred(ReferencedByCount(s)) downto 0 do begin
@@ -3785,6 +3787,8 @@ begin
             slMswp.Add(msRecordId);
         end;
 
+        base := WinningOverride(BaseRecord(r));
+
         // check for enable parent
         if ElementExists(r, 'XESP - Enable Parent') then begin
             parent := GetElementEditValues(r, 'XESP\Reference');
@@ -3792,9 +3796,28 @@ begin
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
             bHasEnableParent := True;
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
-        end;
+        // end else if (GetIsInitiallyDisabled(r) and GetIsPersistent(r)) then begin // Check for Initially Disabled flag (quests can sometimes toggle a ref, e.g. 001B026B)
+        //     refFormId := IntToHex(GetLoadOrderFormID(r), 8);
+        //     bCanBeRespected := LeftStr(refFormId, 2) = '00';
+        //     bRespectsEnableStateFlagSet := GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0;
+        //     bVisibleWhenDistant := GetIsVisibleWhenDistant(r);
+        //     if bCanBeRespected and ((not bRespectsEnableStateFlagSet) or (not bVisibleWhenDistant)) then begin
+        //         iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
+        //         iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
+        //         rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
+        //         rCell := GetHighestPossibleOverrideForFile(rCell, iCurrentPlugin);
+        //         iCurrentPlugin := RefMastersDeterminePlugin(rWrld, iCurrentPlugin);
+        //         iCurrentPlugin := RefMastersDeterminePlugin(rCell, iCurrentPlugin);
 
-        base := WinningOverride(BaseRecord(r));
+        //         pluginFileNameHere := GetFileName(iCurrentPlugin);
+        //         joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].A['AddRefToMyFormlist'].Add(tlFlst.IndexOf(flOverrides));
+        //         joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['LOD Respects Enable State'] := 1;
+        //         joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Set Is Persistent'] := 1;
+        //         joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Visible When Distant'] := 1;
+
+        //         AddMessage(#9 + 'Note: Respectable Initially Disabled reference LOD flags changed: ' + #9 + recordId);
+        //     end;
+        end;
 
         if ((Signature(base) <> 'SCOL') and (GetElementEditValues(r, 'Record Header\Record Flags\Is Full LOD') <> '0')) then begin
             if ElementExists(r, 'XATR') then begin
@@ -4363,7 +4386,7 @@ begin
             end;
         end;
         if Result then begin
-            CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, True);
+            CreateLODMaterialReplacement(lodMaterial, lodMaterial, f, '', True);
 
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
@@ -4371,7 +4394,7 @@ begin
             if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
             then begin
                 AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
-                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, True);
+                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, '', True);
             end;
         end else if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
@@ -4381,7 +4404,7 @@ begin
             if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe))
             then begin
                 AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
-                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, True);
+                CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, '', True);
             end;
         end;
     finally
@@ -4469,11 +4492,11 @@ begin
     //     joRasterizeMaterials.O[LODMaterial].S['GrayscaleToPaletteScale'] := paletteScale;
     // end;
     if (bGrayscaleToPalette and bLodUsesGrayscaleToPalette) then begin
-        if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
-        if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, True);
+        if not bTexturesAreVanilla then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, '', True);
+        if bLODMaterialNeedsFixed then CreateLODMaterialReplacement(LODMaterial, LODMaterial, f, '', True);
         if (not FileExists(sOutputDir + '\' + whatItShouldBe)) then if (not ResourceExists(whatItShouldBe)) then begin
             AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
-            CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, True);
+            CreateLODMaterialReplacement(LODMaterial, whatItShouldBe, f, '', True);
         end;
     end;
 end;
@@ -5269,11 +5292,18 @@ function CreateColorRemapBGSM(material, colorRemap: string): string;
     Returns the new material name.
 }
 var
-    materialBGSM: TwbBGSMFile;
-    renamedMaterial, materialAuto: string;
+    renamedMaterial, materialAuto, fullMat: string;
     bMaterialAutoGenerated: Boolean;
 begin
     Result := material;
+    renamedMaterial := TrimLeftChars(material, 5) + colorRemap + '.bgsm';
+    if ResourceExists(renamedMaterial) then begin
+        Result := renamedMaterial;
+        Exit;
+    end else if FileExists(sOutputDir + '\' + renamedMaterial) then begin
+        Result := renamedMaterial;
+        Exit;
+    end;
 
     if not ResourceExists(material) then begin
         if FileExists(sOutputDir + '\' + material) then begin
@@ -5285,19 +5315,11 @@ begin
         end;
     end;
 
-    materialBGSM := TwbBGSMFile.Create;
-    try
-        if not bMaterialAutoGenerated then materialBGSM.LoadFromResource(material) else materialBGSM.LoadFromFile(materialAuto);
-        if materialBGSM.EditValues['GrayscaleToPaletteColor'] <> 'yes' then Exit;
-        materialBGSM.EditValues['GrayscaleToPaletteScale'] := TrimRightChars(colorRemap, 1);
-        renamedMaterial := TrimLeftChars(material, 5) + colorRemap + '.bgsm';
-        EnsureDirectoryExists(sOutputDir + '\' + ExtractFilePath(renamedMaterial));
-        materialBGSM.SaveToFile(sOutputDir + '\' + renamedMaterial);
-        slMatFiles.Add(renamedMaterial); // Add the newly created color remapped material to the list of materials.
-        Result := renamedMaterial;
-    finally
-        materialBGSM.Free;
-    end;
+    if not joRasterizeMaterials.Contains(material) then Exit;
+    fullMat := joRasterizeMaterials.O[material].S['Full Material'];
+
+    if not CreateLODMaterialReplacement(material, renamedMaterial, fullMat, TrimRightChars(colorRemap, 1), false) then Exit;
+    Result := renamedMaterial;
 end;
 
 function LODMaterial(material, colorRemap: string; slTopPaths, slExistingSubstitutions, slPossibleLODPaths: TStringList): string;
