@@ -3796,12 +3796,14 @@ begin
             parentRef := WinningOverride(LinksTo(ElementByIndex(xesp, 0)));
             bHasEnableParent := True;
             if tlEnableParents.IndexOf(parentRef) = -1 then tlEnableParents.Add(parentRef);
-        // end else if (GetIsInitiallyDisabled(r) and GetIsPersistent(r)) then begin // Check for Initially Disabled flag (quests can sometimes toggle a ref, e.g. 001B026B)
+        // Check for Initially Disabled flag (quests can sometimes toggle a ref, e.g. 001B026B)
+        // This does not seem to be useful in practice.
+        // end else if GetIsInitiallyDisabled(r) then begin 
         //     refFormId := IntToHex(GetLoadOrderFormID(r), 8);
         //     bCanBeRespected := LeftStr(refFormId, 2) = '00';
         //     bRespectsEnableStateFlagSet := GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0;
         //     bVisibleWhenDistant := GetIsVisibleWhenDistant(r);
-        //     if bCanBeRespected and ((not bRespectsEnableStateFlagSet) or (not bVisibleWhenDistant)) then begin
+        //     if bCanBeRespected and ((not bRespectsEnableStateFlagSet) or (not bVisibleWhenDistant) or (not GetIsPersistent(r))) then begin
         //         iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
         //         iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
         //         rWrld := GetHighestPossibleOverrideForFile(rWrld, iCurrentPlugin);
@@ -4391,7 +4393,7 @@ begin
             paletteScale := FloatToStr(StrToFloatDef(bgsmVanilla.EditValues['GrayscaleToPaletteScale'], 0));
             stringToReplace := '_' + paletteScale + '.bgsm';
             whatItShouldBe := StringReplace(ChangeFullToLodDirectory(f), '.bgsm', stringToReplace, [rfIgnoreCase]);
-            if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)))
+            if ((not FileExists(sOutputDir + '\' + whatItShouldBe)) and (not ResourceExists(whatItShouldBe)) and bGrayscaleToPalette)
             then begin
                 AddMessage('Attempting to create missing Grayscale to Palette material:' + #9 + whatItShouldBe);
                 CreateLODMaterialReplacement(lodMaterial, whatItShouldBe, f, '', True);
