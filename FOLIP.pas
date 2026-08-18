@@ -4368,7 +4368,7 @@ begin
             bRuleExists := true;
         end;
         if bLodUsesGrayscaleToPalette then AddMessage(#9 + 'Note: ' + lodMaterial + ' is a grayscale to palette lod material.');
-        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        bGrayscaleToPalette := (bgsmModded.EditValues['GrayscaleToPaletteColor'] = 'yes') and (paletteTexture <> '');
         if bGrayscaleToPalette then AddMessage(#9 + 'Note: ' + f + ' is a grayscale to palette full material.');
         if (bGrayscaleToPalette and (not bLodUsesGrayscaleToPalette) and (not bRuleExists)) then begin
             joRasterizeMaterials.O[lodMaterial].S['Full Material'] := f;
