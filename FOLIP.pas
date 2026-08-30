@@ -390,7 +390,7 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
-    ListStringsInStringList(slEmittanceEnabledMaterials);
+    //ListStringsInStringList(slEmittanceEnabledMaterials);
 
     if bSkip then Exit;
     RasterizeAll;
@@ -4346,22 +4346,22 @@ begin
             Result := True;
         end;
 
-        bEmittance := (bgsmModded.EditValues['EmitEnabled'] = 'yes');
-        if bEmittance then begin
-            slEmittanceEnabledMaterials.Add('Emittance Enabled material' + #9 + f + #9 + lodMaterial);
-            if bgsmVanilla.EditValues['EmitEnabled'] <> bgsmModded.EditValues['EmitEnabled'] then begin
-                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance value.');
-                Result := True;
-            end;
-            if bgsmVanilla.EditValues['EmittanceColor'] <> bgsmModded.EditValues['EmittanceColor'] then begin
-                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
-                Result := True;
-            end;
-            if bgsmVanilla.EditValues['EmittanceMult'] <> bgsmModded.EditValues['EmittanceMult'] then begin
-                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
-                Result := True;
-            end;
-        end;
+        // bEmittance := (bgsmModded.EditValues['EmitEnabled'] = 'yes');
+        // if bEmittance then begin
+        //     slEmittanceEnabledMaterials.Add('Emittance Enabled material' + #9 + f + #9 + lodMaterial);
+        //     // if bgsmVanilla.EditValues['EmitEnabled'] <> bgsmModded.EditValues['EmitEnabled'] then begin
+        //     //     AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance value.');
+        //     //     Result := True;
+        //     // end;
+        //     // if bgsmVanilla.EditValues['EmittanceColor'] <> bgsmModded.EditValues['EmittanceColor'] then begin
+        //     //     AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
+        //     //     Result := True;
+        //     // end;
+        //     // if bgsmVanilla.EditValues['EmittanceMult'] <> bgsmModded.EditValues['EmittanceMult'] then begin
+        //     //     AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
+        //     //     Result := True;
+        //     // end;
+        // end;
 
         paletteTexture := bgsmModded.EditValues['Textures\Grayscale'];
         if bgsmVanilla.EditValues['Textures\Grayscale'] <> paletteTexture then begin
