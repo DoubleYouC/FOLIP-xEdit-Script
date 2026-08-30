@@ -3088,6 +3088,7 @@ begin
         replacementMatbgsm.EditValues['Textures\InnerLayer'] := '';
         replacementMatbgsm.EditValues['Textures\Wrinkles'] := '';
         replacementMatbgsm.EditValues['Textures\Displacement'] := '';
+        replacementMatbgsm.EditValues['EmitEnabled'] := 'no';
         replacementMatbgsm.EditValues['RimLighting'] := 'no';
         replacementMatbgsm.EditValues['SubsurfaceLighting'] := 'no';
         replacementMatbgsm.EditValues['AnisoLighting'] := 'no';
