@@ -18,7 +18,7 @@ var
     slMeshCheckNoMaterialSpecified, slMismatchedFullModelToLODMaterials, slTopLevelModPatternPaths, slMessages, slMissingLODMessages,
     slMissingColorRemaps, slFullLODMessages, slPluginFiles, slHasLOD, slFOLIPTexgen_noalpha, slFOLIPTexgen_copy, slFOLIPTexgen_alpha,
     slTexgen_copy, slTexgen_alpha, slTexgen_noalpha, slOutsideUVRange, slContainers, slVerifyLODModels, slMasterableMasters, slPatchMasters,
-    slMainMasters, slFakeStatics, slAddedTexGenTextures, slRasterizedDiffuses, slMswp: TStringList;
+    slMainMasters, slFakeStatics, slAddedTexGenTextures, slRasterizedDiffuses, slMswp, slEmittanceEnabledMaterials: TStringList;
 
     flOverrides, flMultiRefLOD, flParents, flNeverfades, flDecals, flFakeStatics, flRemoveIsFullLOD,
     flOverridesMaster, flMultiRefLODMaster, flParentsMaster, flNeverfadesMaster, flDecalsMaster, flFakeStaticsMaster, flRemoveIsFullLODMaster: IwbMainRecord;
@@ -133,6 +133,9 @@ begin
 
     slMainMasters := TStringList.Create;
     slMainMasters.Sorted := True;
+
+    slEmittanceEnabledMaterials := TStringList.Create;
+    slEmittanceEnabledMaterials.Sorted := True;
 
     slMasterableMasters := TStringList.Create;
 
@@ -308,6 +311,7 @@ begin
         slAddedTexGenTextures.Free;
         slRasterizedDiffuses.Free;
         slMswp.Free;
+        slEmittanceEnabledMaterials.Free;
 
         joRules.Free;
         joMswpMap.Free;
@@ -386,6 +390,7 @@ begin
     slContainers.Free;
     AddMessage('Found ' + IntToStr(slNifFiles.Count) + ' lod models.');
     AddMessage('Found ' + IntToStr(slMatFiles.Count) + ' lod materials.');
+    ListStringsInStringList(slEmittanceEnabledMaterials);
 
     if bSkip then Exit;
     RasterizeAll;
@@ -3086,7 +3091,6 @@ begin
         replacementMatbgsm.EditValues['RimLighting'] := 'no';
         replacementMatbgsm.EditValues['SubsurfaceLighting'] := 'no';
         replacementMatbgsm.EditValues['AnisoLighting'] := 'no';
-        replacementMatbgsm.EditValues['EmitEnabled'] := 'no';
         replacementMatbgsm.EditValues['ModelSpaceNormals'] := 'no';
         replacementMatbgsm.EditValues['ExternalEmittance'] := 'no';
         replacementMatbgsm.EditValues['ReceiveShadows'] := 'no';
@@ -4270,7 +4274,7 @@ var
     i: integer;
     bgsmModded, bgsmVanilla, bgsmLod: TwbBGSMFile;
     vanillaContainer, stringToReplace, whatItShouldBe, paletteScale, diffuseTexture, paletteTexture, lodTexture, correctLodTexture: string;
-    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists, bLODMaterialNeedsFixed: boolean;
+    bGrayscaleToPalette, bLodUsesGrayscaleToPalette, bRuleExists, bLODMaterialNeedsFixed, bEmittance: boolean;
 begin
     Result := False; //Assume no differences found.
     bRuleExists := False;
@@ -4340,6 +4344,23 @@ begin
         if bgsmVanilla.EditValues['Textures\SmoothSpec'] <> bgsmModded.EditValues['Textures\SmoothSpec'] then begin
             AddMessage(#9 + 'Warning: ' + f + ' has a modified Specular texture.');
             Result := True;
+        end;
+
+        bEmittance := (bgsmModded.EditValues['bEmitEnabled'] = 'yes');
+        if bEmittance then begin
+            slEmittanceEnabledMaterials.Add('Emittance Enabled material' + #9 + f + #9 + lodMaterial);
+            if bgsmVanilla.EditValues['bEmitEnabled'] <> bgsmModded.EditValues['bEmitEnabled'] then begin
+                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance value.');
+                Result := True;
+            end;
+            if bgsmVanilla.EditValues['cEmittanceColor'] <> bgsmModded.EditValues['cEmittanceColor'] then begin
+                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
+                Result := True;
+            end;
+            if bgsmVanilla.EditValues['fEmittanceMult'] <> bgsmModded.EditValues['fEmittanceMult'] then begin
+                AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
+                Result := True;
+            end;
         end;
 
         paletteTexture := bgsmModded.EditValues['Textures\Grayscale'];
