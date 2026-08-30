@@ -2989,7 +2989,7 @@ begin
         end;
 
         //Check if this uses Grayscale To Palette
-        bGrayscaleToPalette := (replacementMatbgsm.EditValues['GrayscaleToPaletteColor'] = 'yes');
+        bGrayscaleToPalette := (replacementMatbgsm.EditValues['GrayscaleToPaletteColor'] = 'yes') and (replacementMatbgsm.EditValues['Textures\Grayscale'] <> '');
 
         //Get lod diffuse texture of the original material
         omDiffuse := ombgsm.EditValues['Textures\Diffuse'];
