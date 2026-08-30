@@ -4346,18 +4346,18 @@ begin
             Result := True;
         end;
 
-        bEmittance := (bgsmModded.EditValues['bEmitEnabled'] = 'yes');
+        bEmittance := (bgsmModded.EditValues['EmitEnabled'] = 'yes');
         if bEmittance then begin
             slEmittanceEnabledMaterials.Add('Emittance Enabled material' + #9 + f + #9 + lodMaterial);
-            if bgsmVanilla.EditValues['bEmitEnabled'] <> bgsmModded.EditValues['bEmitEnabled'] then begin
+            if bgsmVanilla.EditValues['EmitEnabled'] <> bgsmModded.EditValues['EmitEnabled'] then begin
                 AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance value.');
                 Result := True;
             end;
-            if bgsmVanilla.EditValues['cEmittanceColor'] <> bgsmModded.EditValues['cEmittanceColor'] then begin
+            if bgsmVanilla.EditValues['EmittanceColor'] <> bgsmModded.EditValues['EmittanceColor'] then begin
                 AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
                 Result := True;
             end;
-            if bgsmVanilla.EditValues['fEmittanceMult'] <> bgsmModded.EditValues['fEmittanceMult'] then begin
+            if bgsmVanilla.EditValues['EmittanceMult'] <> bgsmModded.EditValues['EmittanceMult'] then begin
                 AddMessage(#9 + 'Warning: ' + f + ' has a modified Emittance Color value.');
                 Result := True;
             end;
