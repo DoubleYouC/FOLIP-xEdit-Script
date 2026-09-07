@@ -2491,6 +2491,7 @@ begin
         if IsInteriorCell(rCell) then continue;
         rWrld := LinksTo(ElementByIndex(rCell, 0));
         if IsWorldIgnored(rWrld) then continue;
+        recordId := RecordFormIdFileId(r);
 
         bXESP := ElementExists(r, 'XESP');
         if bXESP then begin
@@ -2503,7 +2504,7 @@ begin
             if not bXESP then continue;
             if (GetElementNativeValues(r, 'Record Header\Record Flags\LOD Respects Enable State') <> 0) then continue;
             if bRespect then continue;
-        end;
+        end else if (joRules.Contains(recordId) and not StrToBool(joRules.O[recordId].S['bisfulllod'])) then continue;
 
         iCurrentPlugin := CanOverrideDeterminesPlugin(r, iFolipMasterFile);
         iCurrentPlugin := RefMastersDeterminePlugin(r, iCurrentPlugin);
@@ -2515,7 +2516,7 @@ begin
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementEditValues(rCell, 'XCLC\X');
         cellY := GetElementEditValues(rCell, 'XCLC\Y');
-        recordId := RecordFormIdFileId(r);
+        
 
         pluginFileNameHere := GetFileName(iCurrentPlugin);
         joElements.O['references'].O[pluginFileNameHere].O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[recordId].S['Is Full LOD'] := 1;
