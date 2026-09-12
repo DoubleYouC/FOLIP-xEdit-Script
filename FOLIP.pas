@@ -4008,7 +4008,8 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             rWrld := ElementByIndex(g, j);
             recordId := RecordFormIdFileId(rWrld);
-            bIgnoredWorld := Pos(recordId, sIgnoredWorldspaces) <> 0;
+            //bIgnoredWorld := Pos(recordId, sIgnoredWorldspaces) <> 0;
+            //Skipping ignored worlds may cause failure to collect needed cells it would seem.
 
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
             joWinningCells.O[wrldEdid].S['RecordID'] := recordId;
@@ -4024,7 +4025,6 @@ begin
                     AddMessage('Found Persistent Worldspace Cell: ' + cellRecordId);
                     continue;
                 end;
-                if bIgnoredWorld then continue;
                 for subblockidx := 0 to Pred(ElementCount(block)) do begin
                     subblock := ElementByIndex(block, subblockidx);
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
