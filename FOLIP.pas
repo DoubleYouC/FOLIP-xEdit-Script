@@ -3914,6 +3914,7 @@ procedure CollectRecords;
 var
     i, j, idx, blockidx, subblockidx, cellidx: integer;
     recordId, wrldEdid, cellX, cellY, cellRecordId: string;
+    bIgnoredWorld: boolean;
     r, rCell, rWrld: IwbMainRecord;
     block, subblock: IwbElement;
     f: IwbFile;
@@ -4007,7 +4008,7 @@ begin
         for j := 0 to Pred(ElementCount(g)) do begin
             rWrld := ElementByIndex(g, j);
             recordId := RecordFormIdFileId(rWrld);
-            if Pos(recordId, sIgnoredWorldspaces) <> 0 then continue;
+            bIgnoredWorld := Pos(recordId, sIgnoredWorldspaces) <> 0;
 
             wrldEdid := GetElementEditValues(rWrld, 'EDID');
             joWinningCells.O[wrldEdid].S['RecordID'] := recordId;
@@ -4023,6 +4024,7 @@ begin
                     AddMessage('Found Persistent Worldspace Cell: ' + cellRecordId);
                     continue;
                 end;
+                if bIgnoredWorld then continue;
                 for subblockidx := 0 to Pred(ElementCount(block)) do begin
                     subblock := ElementByIndex(block, subblockidx);
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
